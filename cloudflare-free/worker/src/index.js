@@ -8,6 +8,7 @@
  *      lewat GitHub Contents API (cloudflare-free/compositions/<nama>/index.html),
  *   3. memicu repository_dispatch (event: render-video) ke repo fork,
  *   4. menyajikan hasil MP4 dari R2 (GET /video/:id) dan statusnya (GET /status/:id),
+ *      termasuk penanda gagal yang ditulis workflow (renders/<id>.failed.json),
  *   5. menyajikan halaman web (GET /) untuk memakai semuanya dari browser.
  *
  * Routing GET /:
@@ -21,13 +22,17 @@
  *   env.GITHUB_TOKEN secret, PAT fine-grained (Contents: Read and write)
  *   env.API_KEY      secret, kunci untuk POST /render
  *
- * Kunci objek di R2 HARUS sama dengan yang dipakai workflow: renders/<id>.mp4
+ * Kunci objek di R2 HARUS sama dengan yang dipakai workflow:
+ *   renders/<id>.mp4          hasil sukses
+ *   renders/<id>.failed.json  penanda gagal/dibatalkan
  */
 
 // Aturan input yang sama dipakai ulang di workflow (validasi dua lapis).
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
+// Tautan run yang boleh diteruskan ke klien dari penanda gagal (bentuk persis dari workflow).
+const RUN_URL_RE = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[0-9]+$/;
 const QUALITIES = new Set(["draft", "standard", "high"]);
 const DEFAULT_COMPOSITION = "contoh";
 // Body JSON /render. Tanpa `html` biasanya < 1 KB; dengan `html` bisa besar
@@ -38,6 +43,7 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_HTML_BYTES = 256 * 1024;
 
 const objectKey = (id) => `renders/${id}.mp4`;
+const failedKey = (id) => `renders/${id}.failed.json`;
 
 const json = (data, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(data), {
@@ -255,6 +261,15 @@ async function handleRender(request, env, origin) {
     commitSha = commit.sha;
   }
 
+  // id yang pernah gagal boleh dipakai ulang: hapus penanda lama supaya /status
+  // tidak langsung membalas "gagal" untuk render yang baru. Kegagalan di sini
+  // tidak menghentikan render (penanda lama paling buruk menampilkan status usang).
+  try {
+    await env.VIDEOS.delete(failedKey(id));
+  } catch (err) {
+    console.error("clear_failed_marker", err instanceof Error ? err.message : String(err));
+  }
+
   const clientPayload = { id, composition, quality };
   if (commitSha) clientPayload.sha = commitSha;
 
@@ -295,20 +310,54 @@ async function handleRender(request, env, origin) {
   return json(result, 202);
 }
 
-/** GET /status/:id — hanya cek keberadaan file di R2. */
+/**
+ * Baca penanda gagal yang ditulis workflow. Hanya field yang dikenal yang
+ * diteruskan, dan run_url harus cocok bentuk tautan run GitHub.
+ * Mengembalikan { reason, run_url? } atau null bila tidak ada.
+ */
+async function readFailure(env, id) {
+  const obj = await env.VIDEOS.get(failedKey(id));
+  if (!obj) return null;
+  let data = null;
+  try {
+    data = JSON.parse(await obj.text());
+  } catch {
+    data = null;
+  }
+  const failure = { reason: data && data.reason === "cancelled" ? "cancelled" : "failed" };
+  if (data && typeof data.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
+    failure.run_url = data.run_url;
+  }
+  return failure;
+}
+
+/**
+ * GET /status/:id
+ *   200 {status:"done"}    MP4 ada di R2
+ *   410 {status:"failed"}  workflow menulis penanda gagal/dibatalkan
+ *   404 {status:"not_ready"} selain itu (antre/render/id tak dikenal tidak dibedakan)
+ */
 async function handleStatus(env, id, origin) {
   const head = await env.VIDEOS.head(objectKey(id));
-  if (!head) {
-    // Tidak bisa membedakan "antre/sedang render" dari "id tidak pernah ada".
-    return json({ id, status: "not_ready" }, 404);
+  if (head) {
+    // MP4 selalu menang atas penanda gagal lama (mis. id dipakai ulang).
+    return json({
+      id,
+      status: "done",
+      size: head.size,
+      uploaded: head.uploaded.toISOString(),
+      video_url: `${origin}/video/${id}`,
+    });
   }
-  return json({
-    id,
-    status: "done",
-    size: head.size,
-    uploaded: head.uploaded.toISOString(),
-    video_url: `${origin}/video/${id}`,
-  });
+
+  const failure = await readFailure(env, id);
+  if (failure) {
+    const body = { id, status: "failed", reason: failure.reason };
+    if (failure.run_url) body.run_url = failure.run_url;
+    return json(body, 410);
+  }
+
+  return json({ id, status: "not_ready" }, 404);
 }
 
 /** GET|HEAD /video/:id — sajikan MP4 dari R2 (404 selama belum selesai). */
@@ -363,7 +412,8 @@ function contentRange(range, size) {
  *
  * Satu halaman statis tanpa dependensi eksternal. Script & style inline
  * dilindungi CSP berbasis nonce acak per respons; semua data dari server
- * dimasukkan ke DOM lewat textContent (tidak ada innerHTML).
+ * dimasukkan ke DOM lewat textContent (tidak ada innerHTML). Atribut style
+ * inline diblokir CSP ini, jadi semua gaya lewat class di blok <style>.
  * ------------------------------------------------------------------ */
 
 function makeNonce() {
@@ -376,7 +426,11 @@ function makeNonce() {
 
 function htmlPage() {
   const nonce = makeNonce();
-  const body = PAGE_HTML.split("__NONCE__").join(nonce);
+  const body = PAGE_HTML.split("__NONCE__")
+    .join(nonce)
+    // Templat disisipkan sebagai literal string JS; dilakukan SETELAH nonce diganti.
+    .split("__TEMPLATE_JSON__")
+    .join(TEMPLATE_JSON);
   return new Response(body, {
     status: 200,
     headers: {
@@ -434,10 +488,14 @@ header p{margin:0;color:var(--mut)}
   padding:16px;margin:0 0 16px;
 }
 .card h2{font-size:15px;margin:0 0 12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.card h2.m0{margin:0}
+.mt14{margin-top:14px}
+.mt10{margin-top:10px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:560px){.grid{grid-template-columns:1fr}}
 .field{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
 .field.full{grid-column:1/-1}
+.lbl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 label{font-size:13px;color:var(--mut)}
 input,select,textarea,button{font:inherit;color:inherit}
 input[type=text],input[type=password],select,textarea{
@@ -469,6 +527,7 @@ button.danger:hover:not(:disabled){border-color:var(--err);color:var(--err)}
 .msg{margin:12px 0 0;padding:10px 12px;border-radius:8px;font-size:14px;border:1px solid var(--line);background:var(--panel2)}
 .msg.err{border-color:var(--err);color:var(--err)}
 .msg.ok{border-color:var(--ok);color:var(--ok)}
+.msg.warn{border-color:var(--warn);color:var(--warn)}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 10px}
 .badge{
   display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
@@ -543,9 +602,12 @@ noscript .msg{margin:16px}
           <p class="hint">Disimpan di <code>cloudflare-free/compositions/&lt;nama&gt;/index.html</code>. Bila nama sudah ada, permintaan ditolak dan file lama tidak ditimpa.</p>
         </div>
         <div class="field">
-          <label for="html">Isi komposisi (index.html)</label>
+          <div class="lbl-row">
+            <label for="html">Isi komposisi (index.html)</label>
+            <button type="button" id="tplBtn" class="small">Isi dari contoh</button>
+          </div>
           <textarea id="html" spellcheck="false" autocapitalize="off" wrap="off"></textarea>
-          <p class="hint">Maks 256 KB. Setiap render menambah satu commit di branch utama repo. Isinya dijalankan sebagai kode di Chrome pada runner GitHub Actions, jadi tempel hanya kode yang Anda percaya.</p>
+          <p class="hint">Maks 256 KB. Setiap render menambah satu commit di branch utama repo. Isinya dijalankan sebagai kode di Chrome pada runner GitHub Actions, jadi tempel hanya kode yang Anda percaya. Tombol <em>Isi dari contoh</em> memuat templat komposisi 5 detik sebagai titik awal.</p>
         </div>
       </div>
 
@@ -591,6 +653,7 @@ noscript .msg{margin:16px}
     <video id="video" controls preload="metadata" playsinline hidden></video>
     <div class="actions">
       <a id="dl" class="btn" href="#" download hidden>Unduh MP4</a>
+      <a id="runLink" class="btn" href="#" target="_blank" rel="noopener noreferrer" hidden>Buka log di GitHub</a>
       <button type="button" id="copyVideo" hidden>Salin tautan video</button>
       <button type="button" id="copyPage" hidden>Salin tautan halaman</button>
       <button type="button" id="stop" class="danger" hidden>Berhenti memantau</button>
@@ -600,14 +663,14 @@ noscript .msg{margin:16px}
 
   <section class="card" aria-labelledby="t-hist">
     <div class="top">
-      <h2 id="t-hist" style="margin:0">Riwayat di perangkat ini</h2>
+      <h2 id="t-hist" class="m0">Riwayat di perangkat ini</h2>
       <button type="button" id="clearHist" class="small danger" hidden>Hapus riwayat</button>
     </div>
     <ul id="hist" class="hist"></ul>
     <p id="histEmpty" class="empty">Belum ada render.</p>
-    <details style="margin-top:14px">
+    <details class="mt14">
       <summary>Pantau ID yang sudah ada</summary>
-      <div class="row" style="margin-top:10px">
+      <div class="row mt10">
         <input id="manualId" type="text" maxlength="64" autocapitalize="off" spellcheck="false" placeholder="ID render">
         <button type="button" id="manualGo">Pantau</button>
       </div>
@@ -616,7 +679,7 @@ noscript .msg{margin:16px}
   </section>
 
   <footer>
-    Status gagal tidak bisa dideteksi dari sini. Bila render tak kunjung selesai, cek log workflow <em>Render video</em> di tab Actions GitHub.
+    Render yang gagal atau dibatalkan ditandai otomatis oleh workflow. Bila status tak kunjung berubah, cek log workflow <em>Render video</em> di tab Actions GitHub.
   </footer>
 </main>
 
@@ -625,6 +688,7 @@ noscript .msg{margin:16px}
   'use strict';
 
   var ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+  var RUN_URL_RE = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[0-9]+$/;
   var KEY_STORE = 'hf_api_key';
   var HIST_STORE = 'hf_history';
   var HIST_MAX = 12;
@@ -632,16 +696,19 @@ noscript .msg{margin:16px}
   var MAX_WAIT_MS = 35 * 60 * 1000; // workflow dibatasi 30 menit + antrean
   var STATUS_TIMEOUT_MS = 15000;
   var POST_TIMEOUT_MS = 25000;
+  // Templat komposisi 5 detik; disisipkan Worker (salinan compositions/contoh/index.html).
+  var TEMPLATE = __TEMPLATE_JSON__;
 
   function $(id) { return document.getElementById(id); }
   var el = {
     form: $('form'), apikey: $('apikey'), toggleKey: $('toggleKey'), remember: $('remember'),
-    mode: $('mode'), newBox: $('newBox'), newName: $('newName'), html: $('html'), fieldComp: $('fieldComp'),
+    mode: $('mode'), newBox: $('newBox'), newName: $('newName'), html: $('html'), tplBtn: $('tplBtn'),
+    fieldComp: $('fieldComp'),
     composition: $('composition'), quality: $('quality'), rid: $('rid'),
     submit: $('submit'), formMsg: $('formMsg'),
     jobCard: $('jobCard'), badge: $('badge'), elapsed: $('elapsed'),
     jId: $('jId'), jComp: $('jComp'), jQual: $('jQual'), jSize: $('jSize'), jNote: $('jNote'),
-    video: $('video'), dl: $('dl'), copyVideo: $('copyVideo'), copyPage: $('copyPage'),
+    video: $('video'), dl: $('dl'), runLink: $('runLink'), copyVideo: $('copyVideo'), copyPage: $('copyPage'),
     stop: $('stop'), recheck: $('recheck'),
     hist: $('hist'), histEmpty: $('histEmpty'), clearHist: $('clearHist'),
     manualId: $('manualId'), manualGo: $('manualGo')
@@ -686,7 +753,7 @@ noscript .msg{margin:16px}
         composition: (typeof it.composition === 'string' && ID_RE.test(it.composition)) ? it.composition : '-',
         quality: QUALS[it.quality] ? it.quality : '-',
         ts: (typeof it.ts === 'number' && isFinite(it.ts)) ? it.ts : Date.now(),
-        status: (it.status === 'done' || it.status === 'timeout') ? it.status : 'pending'
+        status: (it.status === 'done' || it.status === 'timeout' || it.status === 'failed') ? it.status : 'pending'
       });
     }
     return out;
@@ -711,7 +778,7 @@ noscript .msg{margin:16px}
     saveHist(loadHist().filter(function (x) { return x.id !== id; }));
   }
 
-  var STATUS_LABEL = { pending: 'diproses', done: 'selesai', timeout: 'tidak selesai' };
+  var STATUS_LABEL = { pending: 'diproses', done: 'selesai', timeout: 'tidak selesai', failed: 'gagal' };
   function fmtTime(ts) {
     try { return new Date(ts).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }); }
     catch (e) { return new Date(ts).toISOString(); }
@@ -756,7 +823,7 @@ noscript .msg{margin:16px}
       var open = document.createElement('button');
       open.type = 'button';
       open.className = 'small';
-      open.textContent = it.status === 'done' ? 'Putar' : 'Pantau';
+      open.textContent = it.status === 'done' ? 'Putar' : (it.status === 'failed' ? 'Detail' : 'Pantau');
       open.addEventListener('click', function () { track(it.id, it.composition, it.quality, it.ts); });
       var del = document.createElement('button');
       del.type = 'button';
@@ -851,6 +918,7 @@ noscript .msg{margin:16px}
     el.dl.hidden = !o.done;
     el.copyVideo.hidden = !o.done;
     el.copyPage.hidden = !o.done;
+    el.runLink.hidden = !o.link;
   }
   function resetVideo() {
     try { el.video.pause(); } catch (e) { /* abaikan */ }
@@ -922,6 +990,15 @@ noscript .msg{margin:16px}
       return;
     }
 
+    // 410: workflow menandai render ini gagal atau dibatalkan.
+    if (res && res.status === 410) {
+      var fd = {};
+      try { fd = await res.json(); } catch (e) { fd = {}; }
+      if (current !== job) return;
+      failJob(job, fd);
+      return;
+    }
+
     if (res && res.status === 404) {
       job.fails = 0;
     } else {
@@ -950,11 +1027,27 @@ noscript .msg{margin:16px}
     renderHist();
   }
 
+  function failJob(job, d) {
+    stopTimers(job);
+    var cancelled = !!(d && d.reason === 'cancelled');
+    setBadge('bad', cancelled ? 'Dibatalkan' : 'Gagal');
+    el.elapsed.textContent = '';
+    setNote(cancelled
+      ? 'Render dibatalkan di GitHub Actions. Jalankan lagi dari form bila perlu.'
+      : 'Render gagal di GitHub Actions. Buka log untuk melihat sebabnya, perbaiki komposisinya, lalu jalankan lagi.', 'err');
+    // Tautan hanya dipakai bila cocok bentuk tautan run GitHub (validasi ulang di klien).
+    var url = (d && typeof d.run_url === 'string' && RUN_URL_RE.test(d.run_url)) ? d.run_url : '';
+    if (url) el.runLink.href = url;
+    setButtons({ link: !!url });
+    upsertHist({ id: job.id, composition: job.comp, quality: job.qual, ts: job.start, status: 'failed' });
+    renderHist();
+  }
+
   function timeout(job) {
     stopTimers(job);
     setBadge('bad', 'Belum selesai');
     el.elapsed.textContent = '';
-    setNote('Belum selesai setelah 35 menit. Kemungkinan render gagal: cek log workflow "Render video" di tab Actions GitHub.', 'err');
+    setNote('Belum selesai setelah 35 menit dan tidak ada penanda gagal. Kemungkinan runner berhenti mendadak atau secret R2 belum diset: cek log workflow "Render video" di tab Actions GitHub.', 'err');
     setButtons({ recheck: true });
     setHistStatus(job.id, 'timeout');
     renderHist();
@@ -1017,6 +1110,13 @@ noscript .msg{margin:16px}
     el.fieldComp.hidden = isNew;
   }
   el.mode.addEventListener('change', applyMode);
+
+  el.tplBtn.addEventListener('click', function () {
+    if (el.html.value.trim() !== '' && !window.confirm('Ganti isi textarea dengan komposisi contoh?')) return;
+    el.html.value = TEMPLATE;
+    formMsg('');
+    el.html.focus();
+  });
 
   el.toggleKey.addEventListener('click', function () {
     var show = el.apikey.type === 'password';
@@ -1130,3 +1230,96 @@ noscript .msg{margin:16px}
 </body>
 </html>
 `;
+
+/**
+ * Templat komposisi untuk tombol "Isi dari contoh" di halaman web.
+ * Salinan cloudflare-free/compositions/contoh/index.html: perbarui keduanya bersamaan.
+ * Syarat: tanpa backtick dan tanpa ${ (literal String.raw), dan tanpa teks __NONCE__.
+ */
+const COMPOSITION_TEMPLATE = String.raw`<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <!-- Struktur mengikuti template resmi \`blank\` (packages/cli/src/templates/blank). -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --ground: #0b1020;
+        --ink: #ffffff;
+        --accent: #38bdf8;
+        --font-display: sans-serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--ground);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        font-family: var(--font-display);
+        background: linear-gradient(135deg, #0b1020 0%, #172554 100%);
+      }
+      #bar {
+        width: 480px;
+        height: 10px;
+        border-radius: 5px;
+        background: var(--accent);
+        transform-origin: left center;
+      }
+      #title {
+        color: var(--ink);
+        font-size: 120px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+      #subtitle {
+        color: #cbd5e1;
+        font-size: 48px;
+        font-weight: 400;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="5"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="bar" class="clip" data-start="0" data-duration="5" data-track-index="0"></div>
+      <h1 id="title" class="clip" data-start="0" data-duration="5" data-track-index="1">Halo, HyperFrames</h1>
+      <p id="subtitle" class="clip" data-start="0.6" data-duration="4.4" data-track-index="2">
+        Dirender di Cloudflare Free + GitHub Actions
+      </p>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      // Aksen sudah tampil di frame 0 (thumbnail tidak kosong), lalu melebar.
+      tl.fromTo("#bar", { scaleX: 0.2 }, { scaleX: 1, duration: 1.2, ease: "power3.out" }, 0);
+      tl.fromTo("#title", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.9, ease: "power3.out" }, 0.1);
+      tl.fromTo("#subtitle", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }, 0.6);
+      // Gerak lambat sampai akhir supaya tidak ada "dead stretch" > 3 detik.
+      tl.to("#root", { backgroundPosition: "20% 20%", duration: 5, ease: "none" }, 0);
+      tl.to("#title", { scale: 1.04, duration: 3.8, ease: "none" }, 1.2);
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
+`;
+
+// Literal string JS aman untuk disisipkan di <script>: "<" di-escape agar tak ada "</script>" atau "<!--" mentah.
+const TEMPLATE_JSON = JSON.stringify(COMPOSITION_TEMPLATE).replace(/</g, "\\u003c");
