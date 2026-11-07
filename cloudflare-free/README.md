@@ -24,7 +24,7 @@ client ◀── GET /video/:id, /status/:id ─┘ (lewat Worker; 404 selama be
 
 | Path | Fungsi |
 | --- | --- |
-| `worker/src/index.js` | Worker: `/render`, `/status/:id`, `/video/:id` |
+| `worker/src/index.js` | Worker: halaman web `/`, `/api`, `/render`, `/status/:id`, `/video/:id` |
 | `worker/wrangler.jsonc` | Binding R2 `VIDEOS`, var `GITHUB_REPO` |
 | `compositions/contoh/` | Komposisi contoh 5 detik (1920×1080) |
 | `../.github/workflows/render-video.yml` | Workflow render (dipicu `repository_dispatch` / manual) |
@@ -38,11 +38,32 @@ root dengan `data-composition-id`, timeline GSAP `paused` yang didaftarkan di
 
 | Endpoint | Auth | Keterangan |
 | --- | --- | --- |
+| `GET /` | — | Browser (header `Accept` memuat `text/html`) → halaman web. Selain itu (curl, skrip) → JSON info layanan, sama seperti sebelumnya. |
+| `GET /api` | — | Selalu JSON info layanan. |
 | `POST /render` | header `x-api-key` | Body JSON opsional: `id`, `composition` (default `contoh`), `quality` (`draft`/`standard`/`high`). `id` kosong → UUID otomatis. Balas `202`. `409` bila `id` sudah ada. |
 | `GET /status/:id` | — | `200 {status:"done"}` bila file ada di R2, selain itu `404 {status:"not_ready"}` (antre/render/id tak dikenal tidak dibedakan). |
 | `GET /video/:id` | — | Menyajikan MP4 (mendukung Range). `404` selama belum selesai. |
 
 Karena `/status` dan `/video` publik, pakai `id` yang sulit ditebak (biarkan UUID otomatis).
+
+## Halaman web
+
+Buka `https://hyperframes-render.<SUBDOMAIN-ANDA>.workers.dev/` di browser. Fungsinya:
+
+- Form render: API key, komposisi, kualitas, dan ID opsional → memanggil `POST /render`.
+- Memantau `/status/:id` otomatis (4 dtk, melambat ke 8 dtk setelah 2 menit dan 15 dtk setelah 10 menit),
+  lalu memutar video dan menyediakan tombol unduh serta salin tautan.
+- Berhenti memantau dengan sendirinya setelah 35 menit (workflow dibatasi 30 menit). Status *gagal*
+  tidak bisa dideteksi karena `/status` hanya mengecek keberadaan file; bila tak kunjung selesai,
+  lihat log workflow *Render video* di tab Actions.
+- Riwayat 12 render terakhir disimpan di `localStorage` perangkat itu saja. Halaman bisa dibuka
+  langsung ke satu hasil lewat `/?id=<id>` (tanpa API key).
+- API key hanya dikirim sebagai header `x-api-key`. Opsi "ingat" memakai `sessionStorage` (hilang saat
+  tab ditutup); tanpa opsi itu, key tidak disimpan sama sekali.
+- Satu file tanpa dependensi eksternal. Script dan style inline dilindungi CSP dengan nonce acak per
+  respons (`default-src 'none'`), plus `X-Frame-Options: DENY`, `nosniff`, dan `Referrer-Policy: no-referrer`.
+
+Perilaku API untuk `curl`/skrip tidak berubah: `GET /` tanpa `Accept: text/html` tetap membalas JSON.
 
 ## Setup
 
@@ -78,6 +99,8 @@ curl -sS "$WORKER/status/<id>"
 curl -sS -o hasil.mp4 "$WORKER/video/<id>"
 ```
 
+Atau cukup buka `$WORKER/` di browser (lihat *Halaman web*).
+
 ## Batas gratis (perkiraan, cek halaman harga resmi)
 
 - **Workers Free**: 100.000 request/hari, 10 ms CPU per invocation. Satu render = 1 request `/render` + beberapa polling.
@@ -93,6 +116,7 @@ curl -sS -o hasil.mp4 "$WORKER/video/<id>"
 - Bandingkan `x-api-key` dengan `crypto.subtle.timingSafeEqual`.
 - Versi CLI (`hyperframes`, `wrangler`) dan SHA action dipin di workflow; naikkan secara sadar.
 - Fork publik: siapa pun bisa membaca workflow, tetapi tanpa `GITHUB_TOKEN` Worker tidak ada yang bisa memicu dispatch.
+- Halaman web: CSP berbasis nonce, data dari server hanya dimasukkan ke DOM lewat `textContent`, ID dari server maupun `localStorage` divalidasi ulang dengan regex yang sama sebelum dipakai.
 
 ## Pemecahan masalah
 
@@ -101,3 +125,4 @@ curl -sS -o hasil.mp4 "$WORKER/video/<id>"
 - Deploy gagal `Authentication error`: izin *Workers Scripts: Edit* belum ada di `CLOUDFLARE_API_TOKEN`.
 - Render gagal: lihat step *hyperframes doctor* dan *Render komposisi* di log; jalankan `npx hyperframes lint` lokal pada komposisinya.
 - Upload R2 gagal: periksa dua GitHub Secrets Cloudflare dan nama bucket.
+- Halaman web tidak muncul dan hanya JSON: Worker lama belum di-deploy ulang, atau klien tidak mengirim `Accept: text/html`.
