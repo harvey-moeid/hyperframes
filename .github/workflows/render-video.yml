@@ -8,6 +8,10 @@
 #       cloudflare-free/compositions/<composition> dengan CLI publik (`npx hyperframes`)
 #       -> artifact cadangan -> upload ke R2: renders/<id>.mp4
 #
+# Komposisi yang ditulis lewat halaman web di-commit Worker ke repo lebih dulu;
+# SHA commit-nya dikirim di client_payload.sha dan di-checkout persis, supaya
+# render tidak bergantung pada kecepatan GitHub memperbarui default branch.
+#
 # Secret yang dibutuhkan (Settings > Secrets and variables > Actions):
 #   CLOUDFLARE_API_TOKEN  (izin R2 edit)   CLOUDFLARE_ACCOUNT_ID
 # Input TIDAK diinterpolasi langsung ke shell: semuanya lewat `env:` lalu divalidasi.
@@ -64,6 +68,9 @@ jobs:
       - name: Checkout (hanya folder komposisi)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          # client_payload.sha (40 hex) diisi Worker bila komposisi baru baru saja di-commit;
+          # selain itu (dispatch manual / komposisi lama) pakai SHA default branch.
+          ref: ${{ github.event.client_payload.sha || github.sha }}
           sparse-checkout: cloudflare-free/compositions
           persist-credentials: false
 

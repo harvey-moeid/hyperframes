@@ -4,9 +4,11 @@
  * Peran Worker ini sengaja kecil: ia TIDAK merender apa pun. Render dilakukan
  * oleh GitHub Actions (.github/workflows/render-video.yml); Worker hanya
  *   1. menerima permintaan render (POST /render, dilindungi x-api-key),
- *   2. memicu repository_dispatch (event: render-video) ke repo fork,
- *   3. menyajikan hasil MP4 dari R2 (GET /video/:id) dan statusnya (GET /status/:id),
- *   4. menyajikan halaman web (GET /) untuk memakai ketiganya dari browser.
+ *   2. bila body memuat `html`: meng-commit isinya ke repo sebagai komposisi baru
+ *      lewat GitHub Contents API (cloudflare-free/compositions/<nama>/index.html),
+ *   3. memicu repository_dispatch (event: render-video) ke repo fork,
+ *   4. menyajikan hasil MP4 dari R2 (GET /video/:id) dan statusnya (GET /status/:id),
+ *   5. menyajikan halaman web (GET /) untuk memakai semuanya dari browser.
  *
  * Routing GET /:
  *   - browser (header Accept memuat text/html) -> halaman web
@@ -15,7 +17,7 @@
  *
  * Binding & secret (lihat wrangler.jsonc):
  *   env.VIDEOS       R2 bucket "hyperframes-renders"
- *   env.GITHUB_REPO  var "owner/repo" tujuan dispatch
+ *   env.GITHUB_REPO  var "owner/repo" tujuan commit & dispatch
  *   env.GITHUB_TOKEN secret, PAT fine-grained (Contents: Read and write)
  *   env.API_KEY      secret, kunci untuk POST /render
  *
@@ -25,9 +27,15 @@
 // Aturan input yang sama dipakai ulang di workflow (validasi dua lapis).
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const SHA_RE = /^[0-9a-f]{40}$/;
 const QUALITIES = new Set(["draft", "standard", "high"]);
 const DEFAULT_COMPOSITION = "contoh";
-const MAX_BODY_BYTES = 2048; // body /render hanya JSON kecil
+// Body JSON /render. Tanpa `html` biasanya < 1 KB; dengan `html` bisa besar
+// (karakter di-escape JSON), jadi batas kasarnya 1 MiB dan batas isi HTML di bawah.
+const MAX_BODY_BYTES = 1024 * 1024;
+// Batas isi komposisi (index.html). Dijaga kecil agar encode base64 tetap
+// jauh di bawah 10 ms CPU per invocation di Workers Free.
+const MAX_HTML_BYTES = 256 * 1024;
 
 const objectKey = (id) => `renders/${id}.mp4`;
 
@@ -58,6 +66,25 @@ async function safeEqual(a, b) {
   ]);
   return crypto.subtle.timingSafeEqual(ha, hb);
 }
+
+/** String UTF-8 -> base64 (Contents API mewajibkan base64). */
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+const githubHeaders = (env) => ({
+  accept: "application/vnd.github+json",
+  authorization: `Bearer ${env.GITHUB_TOKEN}`,
+  "content-type": "application/json",
+  "user-agent": "hyperframes-render-worker", // wajib untuk GitHub API
+  "x-github-api-version": "2022-11-28",
+});
 
 export default {
   async fetch(request, env) {
@@ -122,7 +149,44 @@ async function route(request, env) {
   return json({ error: "not_found" }, 404);
 }
 
-/** POST /render  body: { id?, composition?, quality? } → 202 */
+/**
+ * Commit cloudflare-free/compositions/<composition>/index.html ke default branch
+ * lewat Contents API. Tanpa `sha` di body, GitHub menolak (422) bila file sudah
+ * ada, sehingga komposisi yang sudah ada tidak pernah tertimpa.
+ * Mengembalikan { ok: true, sha } atau { ok: false, status }.
+ */
+async function commitComposition(env, composition, html) {
+  const path = `cloudflare-free/compositions/${composition}/index.html`;
+  const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${path}`, {
+    method: "PUT",
+    headers: githubHeaders(env),
+    body: JSON.stringify({
+      message: `chore(cloudflare-free): komposisi ${composition} dari halaman web`,
+      content: toBase64(html),
+    }),
+  });
+
+  if (res.status !== 201) {
+    const detail = (await res.text()).slice(0, 200);
+    console.error("commit_failed", res.status, detail);
+    return { ok: false, status: res.status };
+  }
+
+  let sha = "";
+  try {
+    const data = await res.json();
+    sha = data && data.commit && typeof data.commit.sha === "string" ? data.commit.sha : "";
+  } catch {
+    sha = "";
+  }
+  if (!SHA_RE.test(sha)) {
+    console.error("commit_sha_missing");
+    return { ok: false, status: 502 };
+  }
+  return { ok: true, sha };
+}
+
+/** POST /render  body: { id?, composition?, quality?, html? } → 202 */
 async function handleRender(request, env, origin) {
   if (!env.API_KEY || !env.GITHUB_TOKEN || !REPO_RE.test(env.GITHUB_REPO ?? "")) {
     return json({ error: "server_not_configured" }, 500);
@@ -151,7 +215,10 @@ async function handleRender(request, env, origin) {
 
   // id otomatis berupa UUID (tak mudah ditebak) bila tidak diberikan.
   const id = body.id ?? crypto.randomUUID();
-  const composition = body.composition ?? DEFAULT_COMPOSITION;
+  const hasHtml = body.html !== undefined;
+  // Komposisi baru dari `html` tanpa nama -> web-<id> (maks 64 karakter).
+  const composition =
+    body.composition ?? (hasHtml ? `web-${typeof id === "string" ? id.slice(0, 60) : ""}` : DEFAULT_COMPOSITION);
   const quality = body.quality ?? "standard";
 
   if (typeof id !== "string" || !ID_RE.test(id)) return json({ error: "invalid_id" }, 400);
@@ -161,24 +228,42 @@ async function handleRender(request, env, origin) {
   if (typeof quality !== "string" || !QUALITIES.has(quality)) {
     return json({ error: "invalid_quality", allowed: [...QUALITIES] }, 400);
   }
+  if (hasHtml) {
+    if (typeof body.html !== "string" || body.html.trim() === "") {
+      return json({ error: "invalid_html" }, 400);
+    }
+    if (new TextEncoder().encode(body.html).length > MAX_HTML_BYTES) {
+      return json({ error: "html_too_large", max_bytes: MAX_HTML_BYTES }, 413);
+    }
+  }
 
   // Jangan menimpa hasil yang sudah ada.
   if (await env.VIDEOS.head(objectKey(id))) {
     return json({ error: "id_already_exists", id }, 409);
   }
 
+  // Komposisi baru: commit dulu, supaya file sudah ada saat workflow checkout.
+  let commitSha;
+  if (hasHtml) {
+    const commit = await commitComposition(env, composition, body.html);
+    if (!commit.ok) {
+      if (commit.status === 422) {
+        return json({ error: "composition_already_exists", composition }, 409);
+      }
+      return json({ error: "commit_failed", github_status: commit.status }, 502);
+    }
+    commitSha = commit.sha;
+  }
+
+  const clientPayload = { id, composition, quality };
+  if (commitSha) clientPayload.sha = commitSha;
+
   const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
     method: "POST",
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${env.GITHUB_TOKEN}`,
-      "content-type": "application/json",
-      "user-agent": "hyperframes-render-worker", // wajib untuk GitHub API
-      "x-github-api-version": "2022-11-28",
-    },
+    headers: githubHeaders(env),
     body: JSON.stringify({
       event_type: "render-video",
-      client_payload: { id, composition, quality },
+      client_payload: clientPayload,
     }),
   });
 
@@ -186,20 +271,28 @@ async function handleRender(request, env, origin) {
   if (res.status !== 204) {
     const detail = (await res.text()).slice(0, 200);
     console.error("dispatch_failed", res.status, detail);
-    return json({ error: "dispatch_failed", github_status: res.status }, 502);
+    const failure = { error: "dispatch_failed", github_status: res.status };
+    // Komposisi sudah ter-commit; beri tahu klien agar bisa mencoba lagi tanpa commit baru.
+    if (commitSha) {
+      failure.committed = true;
+      failure.composition = composition;
+    }
+    return json(failure, 502);
   }
 
-  return json(
-    {
-      id,
-      composition,
-      quality,
-      status: "queued",
-      status_url: `${origin}/status/${id}`,
-      video_url: `${origin}/video/${id}`,
-    },
-    202,
-  );
+  const result = {
+    id,
+    composition,
+    quality,
+    status: "queued",
+    status_url: `${origin}/status/${id}`,
+    video_url: `${origin}/video/${id}`,
+  };
+  if (commitSha) {
+    result.committed = true;
+    result.commit_sha = commitSha;
+  }
+  return json(result, 202);
 }
 
 /** GET /status/:id — hanya cek keberadaan file di R2. */
@@ -346,12 +439,16 @@ header p{margin:0;color:var(--mut)}
 .field{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
 .field.full{grid-column:1/-1}
 label{font-size:13px;color:var(--mut)}
-input,select,button{font:inherit;color:inherit}
-input[type=text],input[type=password],select{
+input,select,textarea,button{font:inherit;color:inherit}
+input[type=text],input[type=password],select,textarea{
   width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);
   background:var(--panel2);color:var(--text);min-height:42px;
 }
-input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{
+textarea{
+  font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  min-height:220px;resize:vertical;white-space:pre;overflow:auto;
+}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{
   outline:2px solid var(--acc);outline-offset:2px;
 }
 .row{display:flex;gap:8px}
@@ -431,8 +528,29 @@ noscript .msg{margin:16px}
       </div>
       <label class="check"><input type="checkbox" id="remember"> Ingat API key hanya di tab ini (hilang saat tab ditutup)</label>
 
-      <div class="grid">
+      <div class="field">
+        <label for="mode">Sumber komposisi</label>
+        <select id="mode">
+          <option value="existing" selected>Komposisi yang sudah ada di repo</option>
+          <option value="new">Tulis komposisi baru (di-commit ke repo)</option>
+        </select>
+      </div>
+
+      <div id="newBox" hidden>
         <div class="field">
+          <label for="newName">Nama komposisi (opsional)</label>
+          <input id="newName" type="text" maxlength="64" autocapitalize="off" spellcheck="false" placeholder="kosongkan untuk web-ID otomatis">
+          <p class="hint">Disimpan di <code>cloudflare-free/compositions/&lt;nama&gt;/index.html</code>. Bila nama sudah ada, permintaan ditolak dan file lama tidak ditimpa.</p>
+        </div>
+        <div class="field">
+          <label for="html">Isi komposisi (index.html)</label>
+          <textarea id="html" spellcheck="false" autocapitalize="off" wrap="off"></textarea>
+          <p class="hint">Maks 256 KB. Setiap render menambah satu commit di branch utama repo. Isinya dijalankan sebagai kode di Chrome pada runner GitHub Actions, jadi tempel hanya kode yang Anda percaya.</p>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="field" id="fieldComp">
           <label for="composition">Komposisi</label>
           <input id="composition" type="text" value="contoh" maxlength="64" autocapitalize="off" spellcheck="false" required>
           <p class="hint">Nama folder di <code>cloudflare-free/compositions/</code></p>
@@ -510,6 +628,7 @@ noscript .msg{margin:16px}
   var KEY_STORE = 'hf_api_key';
   var HIST_STORE = 'hf_history';
   var HIST_MAX = 12;
+  var MAX_HTML_BYTES = 256 * 1024; // sama dengan batas di Worker
   var MAX_WAIT_MS = 35 * 60 * 1000; // workflow dibatasi 30 menit + antrean
   var STATUS_TIMEOUT_MS = 15000;
   var POST_TIMEOUT_MS = 25000;
@@ -517,6 +636,7 @@ noscript .msg{margin:16px}
   function $(id) { return document.getElementById(id); }
   var el = {
     form: $('form'), apikey: $('apikey'), toggleKey: $('toggleKey'), remember: $('remember'),
+    mode: $('mode'), newBox: $('newBox'), newName: $('newName'), html: $('html'), fieldComp: $('fieldComp'),
     composition: $('composition'), quality: $('quality'), rid: $('rid'),
     submit: $('submit'), formMsg: $('formMsg'),
     jobCard: $('jobCard'), badge: $('badge'), elapsed: $('elapsed'),
@@ -608,6 +728,10 @@ noscript .msg{margin:16px}
     s = s % 60;
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
+  function byteLen(str) {
+    try { return new TextEncoder().encode(str).length; }
+    catch (e) { return str.length; }
+  }
 
   function renderHist() {
     var list = loadHist();
@@ -667,13 +791,29 @@ noscript .msg{margin:16px}
       case 'invalid_quality': return 'Kualitas tidak valid.';
       case 'invalid_json': return 'Permintaan tidak valid.';
       case 'body_too_large': return 'Permintaan terlalu besar.';
+      case 'invalid_html': return 'Isi komposisi tidak valid atau kosong.';
+      case 'html_too_large': return 'Isi komposisi terlalu besar (maks 256 KB).';
+      case 'composition_already_exists': return 'Nama komposisi sudah ada di repo dan tidak ditimpa. Kosongkan nama (otomatis) atau pilih nama lain.';
+      case 'commit_failed': {
+        var c = data && data.github_status;
+        var cbase = 'Gagal meng-commit komposisi ke repo' + (c ? ' (GitHub ' + c + ')' : '') + '.';
+        if (c === 404) return cbase + ' Token salah atau tidak punya akses ke repo.';
+        if (c === 403) return cbase + ' Izin token Contents belum Read and write.';
+        if (c === 401) return cbase + ' GITHUB_TOKEN tidak valid atau kedaluwarsa.';
+        if (c === 409) return cbase + ' Ada commit lain yang bersamaan, coba lagi.';
+        return cbase;
+      }
       case 'dispatch_failed': {
         var g = data && data.github_status;
         var base = 'Gagal memicu GitHub Actions' + (g ? ' (GitHub ' + g + ')' : '') + '.';
-        if (g === 404) return base + ' Token salah atau tidak punya akses ke repo.';
-        if (g === 403) return base + ' Izin token Contents belum Read and write.';
-        if (g === 401) return base + ' GITHUB_TOKEN tidak valid atau kedaluwarsa.';
-        return base;
+        var tail = '';
+        if (g === 404) tail = ' Token salah atau tidak punya akses ke repo.';
+        else if (g === 403) tail = ' Izin token Contents belum Read and write.';
+        else if (g === 401) tail = ' GITHUB_TOKEN tidak valid atau kedaluwarsa.';
+        var note = (data && data.committed && typeof data.composition === 'string')
+          ? ' Komposisi "' + data.composition + '" sudah ter-commit; coba lagi lewat mode komposisi yang sudah ada.'
+          : '';
+        return base + tail + note;
       }
       default: return 'Gagal (HTTP ' + status + ').';
     }
@@ -871,6 +1011,13 @@ noscript .msg{margin:16px}
   });
 
   /* ---------- form ---------- */
+  function applyMode() {
+    var isNew = el.mode.value === 'new';
+    el.newBox.hidden = !isNew;
+    el.fieldComp.hidden = isNew;
+  }
+  el.mode.addEventListener('change', applyMode);
+
   el.toggleKey.addEventListener('click', function () {
     var show = el.apikey.type === 'password';
     el.apikey.type = show ? 'text' : 'password';
@@ -883,22 +1030,36 @@ noscript .msg{margin:16px}
     formMsg('');
 
     var key = el.apikey.value.trim();
-    var comp = el.composition.value.trim() || 'contoh';
+    var isNew = el.mode.value === 'new';
+    var comp = '';
+    var html = '';
     var qual = el.quality.value;
     var rid = el.rid.value.trim();
 
     if (!key) { formMsg('API key wajib diisi.', 'err'); el.apikey.focus(); return; }
-    if (!ID_RE.test(comp)) { formMsg('Nama komposisi tidak valid (huruf, angka, _ dan -, maks 64).', 'err'); el.composition.focus(); return; }
+
+    if (isNew) {
+      comp = el.newName.value.trim();
+      html = el.html.value;
+      if (comp && !ID_RE.test(comp)) { formMsg('Nama komposisi tidak valid (huruf, angka, _ dan -, maks 64).', 'err'); el.newName.focus(); return; }
+      if (!html.trim()) { formMsg('Isi komposisi wajib diisi.', 'err'); el.html.focus(); return; }
+      if (byteLen(html) > MAX_HTML_BYTES) { formMsg('Isi komposisi terlalu besar (maks 256 KB).', 'err'); el.html.focus(); return; }
+    } else {
+      comp = el.composition.value.trim() || 'contoh';
+      if (!ID_RE.test(comp)) { formMsg('Nama komposisi tidak valid (huruf, angka, _ dan -, maks 64).', 'err'); el.composition.focus(); return; }
+    }
     if (!QUALS[qual]) { formMsg('Kualitas tidak valid.', 'err'); return; }
     if (rid && !ID_RE.test(rid)) { formMsg('ID tidak valid (huruf, angka, _ dan -, maks 64).', 'err'); el.rid.focus(); return; }
 
     if (el.remember.checked) sSet('session', KEY_STORE, key); else sDel('session', KEY_STORE);
 
-    var payload = { composition: comp, quality: qual };
+    var payload = { quality: qual };
+    if (comp) payload.composition = comp;
+    if (isNew) payload.html = html;
     if (rid) payload.id = rid;
 
     el.submit.disabled = true;
-    el.submit.textContent = 'Mengirim…';
+    el.submit.textContent = isNew ? 'Meng-commit & mengirim…' : 'Mengirim…';
     var ctrl = new AbortController();
     var to = setTimeout(function () { ctrl.abort(); }, POST_TIMEOUT_MS);
     try {
@@ -914,10 +1075,12 @@ noscript .msg{margin:16px}
 
       if (res.status === 202 && data && typeof data.id === 'string' && ID_RE.test(data.id)) {
         var started = Date.now();
-        upsertHist({ id: data.id, composition: comp, quality: qual, ts: started, status: 'pending' });
+        // Nama komposisi otomatis (web-ID) hanya diketahui server; pakai balasannya.
+        var usedComp = (typeof data.composition === 'string' && ID_RE.test(data.composition)) ? data.composition : (comp || '-');
+        upsertHist({ id: data.id, composition: usedComp, quality: qual, ts: started, status: 'pending' });
         renderHist();
         el.rid.value = '';
-        track(data.id, comp, qual, started);
+        track(data.id, usedComp, qual, started);
       } else {
         formMsg(describeError(res.status, data), 'err');
       }
@@ -952,6 +1115,7 @@ noscript .msg{margin:16px}
   /* ---------- init ---------- */
   var savedKey = sGet('session', KEY_STORE);
   if (savedKey) { el.apikey.value = savedKey; el.remember.checked = true; }
+  applyMode();
   renderHist();
 
   try {
