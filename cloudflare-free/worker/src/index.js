@@ -5,7 +5,13 @@
  * oleh GitHub Actions (.github/workflows/render-video.yml); Worker hanya
  *   1. menerima permintaan render (POST /render, dilindungi x-api-key),
  *   2. memicu repository_dispatch (event: render-video) ke repo fork,
- *   3. menyajikan hasil MP4 dari R2 (GET /video/:id) dan statusnya (GET /status/:id).
+ *   3. menyajikan hasil MP4 dari R2 (GET /video/:id) dan statusnya (GET /status/:id),
+ *   4. menyajikan halaman web (GET /) untuk memakai ketiganya dari browser.
+ *
+ * Routing GET /:
+ *   - browser (header Accept memuat text/html) -> halaman web
+ *   - selain itu (curl, skrip)                 -> JSON info layanan (perilaku lama)
+ *   - GET /api selalu JSON info layanan
  *
  * Binding & secret (lihat wrangler.jsonc):
  *   env.VIDEOS       R2 bucket "hyperframes-renders"
@@ -65,6 +71,19 @@ export default {
   },
 };
 
+const serviceInfo = () =>
+  json(
+    {
+      service: "hyperframes-render",
+      endpoints: ["POST /render", "GET /status/:id", "GET /video/:id"],
+    },
+    200,
+    { vary: "accept" },
+  );
+
+/** Browser mengirim Accept yang memuat text/html; curl/skrip biasanya tidak. */
+const wantsHtml = (request) => (request.headers.get("accept") ?? "").includes("text/html");
+
 async function route(request, env) {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -90,11 +109,14 @@ async function route(request, env) {
       : handleVideo(request, env, id);
   }
 
-  if (pathname === "/" && (method === "GET" || method === "HEAD")) {
-    return json({
-      service: "hyperframes-render",
-      endpoints: ["POST /render", "GET /status/:id", "GET /video/:id"],
-    });
+  if (pathname === "/") {
+    if (method !== "GET" && method !== "HEAD") return methodNotAllowed(["GET", "HEAD"]);
+    return wantsHtml(request) ? htmlPage() : serviceInfo();
+  }
+
+  if (pathname === "/api") {
+    if (method !== "GET" && method !== "HEAD") return methodNotAllowed(["GET", "HEAD"]);
+    return serviceInfo();
   }
 
   return json({ error: "not_found" }, 404);
@@ -242,3 +264,44 @@ function contentRange(range, size) {
   }
   return `bytes ${start}-${end}/${size}`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Halaman web (GET /)
+ *
+ * Satu halaman statis tanpa dependensi eksternal. Script & style inline
+ * dilindungi CSP berbasis nonce acak per respons; semua data dari server
+ * dimasukkan ke DOM lewat textContent (tidak ada innerHTML).
+ * ------------------------------------------------------------------ */
+
+function makeNonce() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+function htmlPage() {
+  const nonce = makeNonce();
+  const body = PAGE_HTML.split("__NONCE__").join(nonce);
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      vary: "accept",
+      "content-security-policy":
+        "default-src 'none'; " +
+        `script-src 'nonce-${nonce}'; ` +
+        `style-src 'nonce-${nonce}'; ` +
+        "connect-src 'self'; media-src 'self'; img-src 'self' data:; " +
+        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "no-referrer",
+    },
+  });
+}
+
+// String.raw: backslash apa adanya. JANGAN pakai backtick atau ${ di dalam blok ini.
+const PAGE_HTML = String.raw`PLACEHOLDER_REPLACED_BELOW`;
