@@ -1,0 +1,289 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BYGA AI - Future of Work</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #080D19;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#root {
+  width: 1080px;
+  height: 1920px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 85% 40%, #12316b 0%, transparent 48%),
+    linear-gradient(145deg, #080D19, #101b35);
+  color: white;
+}
+
+.glow {
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  border-radius: 50%;
+  background: #246BFD;
+  filter: blur(180px);
+  opacity: .17;
+  left: 450px;
+  top: 500px;
+}
+
+.brand {
+  position: absolute;
+  top: 95px;
+  left: 75px;
+  font-size: 43px;
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: #fff;
+}
+
+.brand span {
+  color: #4285FF;
+}
+
+.tag {
+  position: absolute;
+  top: 175px;
+  left: 78px;
+  color: #83AFFF;
+  font-size: 22px;
+  letter-spacing: 5px;
+}
+
+.avatar {
+  position: absolute;
+  width: 850px;
+  height: 1120px;
+  left: 115px;
+  top: 350px;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.bottom-gradient {
+  position: absolute;
+  inset: 900px 0 0 0;
+  background: linear-gradient(
+    transparent,
+    rgba(8,13,25,.96) 35%,
+    #080D19
+  );
+}
+
+.scene {
+  position: absolute;
+  left: 75px;
+  right: 75px;
+  bottom: 240px;
+}
+
+.eyebrow {
+  font-size: 25px;
+  color: #4285FF;
+  letter-spacing: 6px;
+  font-weight: bold;
+  margin-bottom: 30px;
+}
+
+.heading {
+  font-size: 91px;
+  line-height: 1.08;
+  font-weight: 900;
+  letter-spacing: -3px;
+}
+
+.heading span {
+  color: #4285FF;
+}
+
+.description {
+  font-size: 35px;
+  line-height: 1.45;
+  color: #B9C7DF;
+  margin-top: 35px;
+  max-width: 900px;
+}
+
+.footer {
+  position: absolute;
+  left: 75px;
+  bottom: 90px;
+  font-size: 23px;
+  color: #8292AD;
+  letter-spacing: 3px;
+}
+
+.line {
+  position: absolute;
+  width: 930px;
+  height: 5px;
+  background: #1D2C49;
+  bottom: 165px;
+  left: 75px;
+}
+
+.line:after {
+  content: "";
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: #246BFD;
+}
+</style>
+</head>
+
+<body>
+
+<div id="root"
+     data-composition-id="byga-ai-video"
+     data-start="0"
+     data-width="1080"
+     data-height="1920">
+
+  <div class="glow"></div>
+
+  <div class="brand">BYGA<span>.AI</span></div>
+  <div class="tag">BUILD THE FUTURE</div>
+
+  <!-- HeyGen avatar video -->
+  <video
+    class="clip avatar"
+    src="assets/heygen-avatar.mp4"
+    data-start="0"
+    data-duration="30"
+    data-track-index="0"
+    muted
+    playsinline>
+  </video>
+
+  <div class="bottom-gradient"></div>
+
+  <!-- SCENE 1: INTRO -->
+  <div class="clip scene"
+       data-start="0"
+       data-duration="5"
+       data-track-index="1">
+
+    <div class="eyebrow">THE AI REVOLUTION</div>
+
+    <div class="heading">
+      MASA DEPAN<br>
+      SUDAH <span>DIMULAI.</span>
+    </div>
+
+    <div class="description">
+      Dunia sedang berubah. Dan kecerdasan buatan
+      menjadi salah satu penggerak terbesarnya.
+    </div>
+  </div>
+
+  <!-- SCENE 2: PROBLEM -->
+  <div class="clip scene"
+       data-start="5"
+       data-duration="7"
+       data-track-index="2">
+
+    <div class="eyebrow">01 / THE CHALLENGE</div>
+
+    <div class="heading">
+      BEKERJA<br>
+      LEBIH KERAS<br>
+      BUKAN LAGI<br>
+      <span>SOLUSINYA.</span>
+    </div>
+
+    <div class="description">
+      Banyak pekerjaan masih dilakukan secara
+      manual, memakan waktu dan energi.
+    </div>
+  </div>
+
+  <!-- SCENE 3: SOLUTION -->
+  <div class="clip scene"
+       data-start="12"
+       data-duration="8"
+       data-track-index="3">
+
+    <div class="eyebrow">02 / THE SOLUTION</div>
+
+    <div class="heading">
+      KENALKAN<br>
+      KEKUATAN<br>
+      <span>ARTIFICIAL</span><br>
+      INTELLIGENCE.
+    </div>
+
+    <div class="description">
+      AI membantu kita membangun aplikasi,
+      mengolah data, membuat konten dan
+      mengotomatisasi pekerjaan.
+    </div>
+  </div>
+
+  <!-- SCENE 4: BENEFITS -->
+  <div class="clip scene"
+       data-start="20"
+       data-duration="6"
+       data-track-index="4">
+
+    <div class="eyebrow">03 / THE OPPORTUNITY</div>
+
+    <div class="heading">
+      IDE KECIL.<br>
+      EKSEKUSI<br>
+      <span>TANPA BATAS.</span>
+    </div>
+
+    <div class="description">
+      Bukan tentang menggantikan manusia.
+      Tetapi tentang membuat manusia
+      mampu melakukan lebih banyak hal.
+    </div>
+  </div>
+
+  <!-- SCENE 5: CTA -->
+  <div class="clip scene"
+       data-start="26"
+       data-duration="4"
+       data-track-index="5">
+
+    <div class="eyebrow">YOUR FUTURE STARTS NOW</div>
+
+    <div class="heading">
+      JANGAN HANYA<br>
+      MENONTON<br>
+      <span>MASA DEPAN.</span>
+    </div>
+
+    <div class="description">
+      Bangun masa depan bersama AI.
+      Follow @byga.ai
+    </div>
+  </div>
+
+  <div class="line"></div>
+
+  <div class="footer">
+    BYGA.AI — BUILD • CREATE • INNOVATE
+  </div>
+
+</div>
+
+</body>
+</html>
