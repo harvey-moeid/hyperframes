@@ -1233,15 +1233,16 @@ noscript .msg{margin:16px}
 
 /**
  * Templat komposisi untuk tombol "Isi dari contoh" di halaman web.
- * Salinan cloudflare-free/compositions/contoh/index.html: perbarui keduanya bersamaan.
- * Syarat: tanpa backtick dan tanpa ${ (literal String.raw), dan tanpa teks __NONCE__.
+ * Salinan cloudflare-free/compositions/contoh/index.html; satu-satunya beda: komentar
+ * di <head> ditulis tanpa backtick. Perbarui keduanya bersamaan bila contoh berubah.
+ * Syarat isi: tanpa backtick dan tanpa ${ (literal String.raw), tanpa teks __NONCE__.
  */
 const COMPOSITION_TEMPLATE = String.raw`<!doctype html>
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <!-- Struktur mengikuti template resmi \`blank\` (packages/cli/src/templates/blank). -->
+    <!-- Struktur mengikuti template resmi "blank" (packages/cli/src/templates/blank). -->
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
     <style>
       :root {
