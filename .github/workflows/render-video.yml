@@ -8,6 +8,10 @@
 #       cloudflare-free/compositions/<composition> dengan CLI publik (`npx hyperframes`)
 #       -> artifact cadangan -> upload ke R2: renders/<id>.mp4
 #
+# Bila job gagal atau dibatalkan, step terakhir menulis penanda renders/<id>.failed.json
+# ke R2 (berisi alasan + tautan run). Worker membacanya di GET /status/:id (410),
+# sehingga halaman web bisa langsung menampilkan "gagal" tanpa menunggu timeout.
+#
 # Komposisi yang ditulis lewat halaman web di-commit Worker ke repo lebih dulu;
 # SHA commit-nya dikirim di client_payload.sha dan di-checkout persis, supaya
 # render tidak bergantung pada kecepatan GitHub memperbarui default branch.
@@ -158,3 +162,48 @@ jobs:
             --content-type video/mp4 \
             --remote --force
           echo "Terupload: renders/$RENDER_ID.mp4" >> "$GITHUB_STEP_SUMMARY"
+
+      # ---- Penanda gagal ------------------------------------------------------
+      # Dua step di bawah hanya jalan bila job gagal atau dibatalkan. Id diambil
+      # langsung dari input (bukan dari RENDER_ID) supaya kegagalan paling awal,
+      # mis. komposisi tidak ditemukan, juga tertandai. Id divalidasi ulang di shell.
+      - name: Setup Node.js 22 (penanda gagal)
+        if: ${{ always() && job.status != 'success' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Tulis penanda gagal ke R2
+        if: ${{ always() && job.status != 'success' }}
+        # Kegagalan menulis penanda tidak boleh mengubah hasil job (sudah gagal).
+        continue-on-error: true
+        env:
+          INPUT_ID: ${{ github.event.client_payload.id || inputs.id }}
+          JOB_STATUS: ${{ job.status }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          re='^[a-zA-Z0-9_-]{1,64}$'
+          if ! [[ "${INPUT_ID:-}" =~ $re ]]; then
+            echo "::warning::id tidak valid, penanda gagal dilewati"
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::Secret Cloudflare belum diset, penanda gagal dilewati"
+            exit 0
+          fi
+          case "$JOB_STATUS" in
+            cancelled) reason=cancelled ;;
+            *) reason=failure ;;
+          esac
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          marker="$RUNNER_TEMP/failed.json"
+          printf '{"status":"failed","reason":"%s","run_url":"%s","failed_at":"%s"}\n' \
+            "$reason" "$run_url" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker"
+          npx --yes "wrangler@$WRANGLER_VERSION" r2 object put \
+            "$R2_BUCKET/renders/$INPUT_ID.failed.json" \
+            --file "$marker" \
+            --content-type application/json \
+            --remote --force
+          echo "Penanda gagal ($reason): renders/$INPUT_ID.failed.json" >> "$GITHUB_STEP_SUMMARY"
