@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #14122b; }
+
+  #stage {
+    position: relative; width: 1080px; height: 1920px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 38%, #3b1f4a 0%, #14122b 70%);
+    font-family: Georgia, "Times New Roman", serif;
+    color: #efe6d2;
+  }
+
+  /* bintang latar */
+  .dot { position: absolute; border-radius: 50%; background: #efe6d2; }
+
+  /* teks */
+  .scene {
+    position: absolute; left: 0; right: 0; text-align: center; padding: 0 90px;
+  }
+  .big   { font-size: 108px; line-height: 1.15; font-weight: 400; letter-spacing: .01em; }
+  .mid   { font-size: 56px; line-height: 1.4; color: #d9cfb8; }
+  .gold  { color: #c9a24b; }
+
+  /* kartu */
+  #card-wrap {
+    position: absolute; left: 240px; top: 430px; width: 600px; height: 1000px;
+    perspective: 2000px;
+  }
+  #card {
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d;
+  }
+  .face {
+    position: absolute; inset: 0; border-radius: 28px;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    border: 6px solid #c9a24b; overflow: hidden;
+  }
+  .back  { background: #2a1838; }
+  .front { background: #efe6d2; color: #14122b; transform: rotateY(180deg); }
+  .face svg { width: 100%; height: 100%; display: block; }
+  .front .num  { position: absolute; top: 34px; width: 100%; text-align: center; font-size: 44px; color: #8a6a22; }
+  .front .name { position: absolute; bottom: 40px; width: 100%; text-align: center; font-size: 64px; }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="tarot" data-start="0" data-width="1080" data-height="1920">
+
+  <!-- Adegan 1: pembuka (0–3 dtk) -->
+  <div id="s1" class="clip scene" style="top: 760px;" data-start="0" data-duration="3" data-track-index="1">
+    <div id="t1" class="big">Satu kartu<br>untukmu hari ini</div>
+  </div>
+
+  <!-- Kartu: terlihat 2–12 dtk, terbalik lalu terbuka -->
+  <div id="card-wrap" class="clip" data-start="2" data-duration="10" data-track-index="2">
+    <div id="card">
+      <div class="face back">
+        <svg viewBox="0 0 600 1000">
+          <g fill="none" stroke="#c9a24b" stroke-width="3">
+            <circle cx="300" cy="500" r="60"/>
+            <circle cx="300" cy="500" r="120"/>
+            <circle cx="300" cy="500" r="180"/>
+            <circle cx="300" cy="500" r="240"/>
+            <path d="M300 220 L340 460 L300 500 L260 460 Z"/>
+            <path d="M300 780 L340 540 L300 500 L260 540 Z"/>
+            <path d="M20 500 L240 460 L300 500 L240 540 Z"/>
+            <path d="M580 500 L360 460 L300 500 L360 540 Z"/>
+          </g>
+          <rect x="30" y="30" width="540" height="940" rx="14" fill="none" stroke="#c9a24b" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="face front">
+        <div class="num">XVII</div>
+        <svg viewBox="0 0 600 1000">
+          <!-- bintang besar 8 sudut -->
+          <g transform="translate(300 400)" fill="#c9a24b">
+            <polygon points="0,-190 28,-28 190,0 28,28 0,190 -28,28 -190,0 -28,-28"/>
+            <polygon transform="rotate(45)" points="0,-130 20,-20 130,0 20,20 0,130 -20,20 -130,0 -20,-20" fill="#b4465c"/>
+          </g>
+          <!-- bintang kecil -->
+          <g fill="#c9a24b">
+            <circle cx="95" cy="190" r="12"/><circle cx="505" cy="190" r="12"/>
+            <circle cx="70" cy="420" r="12"/><circle cx="530" cy="420" r="12"/>
+            <circle cx="130" cy="640" r="12"/><circle cx="470" cy="640" r="12"/>
+            <circle cx="300" cy="150" r="10"/>
+          </g>
+          <!-- air -->
+          <g fill="none" stroke="#14122b" stroke-width="5" stroke-linecap="round">
+            <path d="M60 740 Q135 700 210 740 T360 740 T540 740"/>
+            <path d="M60 790 Q135 750 210 790 T360 790 T540 790"/>
+            <path d="M60 840 Q135 800 210 840 T360 840 T540 840"/>
+          </g>
+        </svg>
+        <div class="name">Bintang</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Adegan 2: makna (7–12 dtk) -->
+  <div id="s2" class="clip scene" style="top: 1500px;" data-start="7" data-duration="5" data-track-index="3">
+    <div id="t2" class="mid">Harapan baru setelah masa sulit.<br><span class="gold">Percaya pada arahmu sendiri.</span></div>
+  </div>
+
+  <!-- Adegan 3: penutup (12–15 dtk) -->
+  <div id="s3" class="clip scene" style="top: 760px;" data-start="12" data-duration="3" data-track-index="1">
+    <div id="t3" class="big">Tarik kartumu<br>hari ini</div>
+  </div>
+
+  <!-- Opsional: musik latar -->
+  <!-- <audio class="clip" data-start="0" data-duration="15" data-track-index="4" data-volume="0.4" src="music.mp3"></audio> -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script>
+  // Bintang latar: posisi tetap supaya render deterministik
+  const stage = document.getElementById("stage");
+  const seeds = [
+    [80,120,4],[240,300,3],[900,180,5],[980,520,3],[140,760,4],[960,900,3],
+    [60,1180,5],[1010,1300,4],[200,1620,3],[820,1760,5],[540,90,3],[700,1840,4]
+  ];
+  seeds.forEach(([x, y, s], i) => {
+    const d = document.createElement("div");
+    d.className = "dot"; d.id = "dot" + i;
+    d.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;`;
+    stage.prepend(d);
+  });
+
+  const tl = gsap.timeline({ paused: true });
+
+  // kelap-kelip bintang (satu kali, bukan loop tak hingga)
+  seeds.forEach((_, i) => {
+    tl.fromTo("#dot" + i, { opacity: 0.2 }, { opacity: 1, duration: 1.5, yoyo: true, repeat: 9, ease: "sine.inOut" }, (i % 4) * 0.3);
+  });
+
+  // Adegan 1
+  tl.from("#t1", { opacity: 0, y: 50, duration: 1.0, ease: "power2.out" }, 0.3)
+    .to("#t1", { opacity: 0, duration: 0.5 }, 2.4);
+
+  // Kartu masuk (2–3.5 dtk), melayang pelan, lalu terbuka (5–6.5 dtk)
+  tl.from("#card-wrap", { opacity: 0, y: 120, duration: 1.2, ease: "power3.out" }, 2.0)
+    .to("#card-wrap", { y: -20, duration: 2.5, ease: "sine.inOut" }, 3.4)
+    .to("#card", { rotationY: 180, duration: 1.4, ease: "power2.inOut" }, 5.0)
+    .to("#card-wrap", { scale: 0.82, y: -140, duration: 1.0, ease: "power2.inOut" }, 6.6)
+    .to("#card-wrap", { opacity: 0, duration: 0.6 }, 11.4);
+
+  // Adegan 2: makna
+  tl.from("#t2", { opacity: 0, y: 40, duration: 0.9, ease: "power2.out" }, 7.4)
+    .to("#t2", { opacity: 0, duration: 0.5 }, 11.5);
+
+  // Adegan 3: penutup
+  tl.from("#t3", { opacity: 0, scale: 0.92, duration: 1.0, ease: "power2.out" }, 12.3);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["tarot"] = tl;
+</script>
+</body>
+</html>
