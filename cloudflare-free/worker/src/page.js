@@ -135,6 +135,7 @@ body::before{
 .topbar{
   position:sticky;top:0;z-index:20;
   padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
+  background:var(--bg);
   background:color-mix(in srgb,var(--bg) 72%,transparent);
   -webkit-backdrop-filter:saturate(160%) blur(14px);backdrop-filter:saturate(160%) blur(14px);
   border-bottom:1px solid var(--line);
@@ -162,7 +163,11 @@ main{
   display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
   color:var(--mut);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);
 }
-.eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent)}
+.eyebrow i{
+  width:7px;height:7px;border-radius:50%;background:var(--ok);
+  box-shadow:0 0 0 4px var(--line);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent);
+}
 h1{
   margin:16px 0 10px;font-size:clamp(30px,7.2vw,46px);line-height:1.08;letter-spacing:-.025em;font-weight:800;
   color:var(--text);
@@ -186,6 +191,7 @@ h1{
 .card:nth-of-type(3){animation-delay:.12s}
 .card:nth-of-type(4){animation-delay:.18s}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+#jobCard{scroll-margin-top:72px}
 .sec-h{display:flex;align-items:center;gap:12px;margin:0 0 18px}
 .sec-h h2{margin:0;font-size:17px;letter-spacing:-.01em;font-weight:700}
 .sec-h p{margin:2px 0 0;font-size:13px;color:var(--mut)}
@@ -293,16 +299,16 @@ a.btn.solid{border:0;background:var(--grad);color:var(--on-acc);box-shadow:var(-
   margin:14px 0 0;padding:11px 14px;border-radius:var(--r-sm);font-size:14px;line-height:1.5;
   border:1px solid var(--line);border-left-width:3px;background:var(--field);
 }
-.msg.err{border-color:color-mix(in srgb,var(--err) 45%,transparent);border-left-color:var(--err);color:var(--err)}
-.msg.ok{border-color:color-mix(in srgb,var(--ok) 45%,transparent);border-left-color:var(--ok);color:var(--ok)}
-.msg.warn{border-color:color-mix(in srgb,var(--warn) 45%,transparent);border-left-color:var(--warn);color:var(--warn)}
+.msg.err{border-color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,transparent);border-left-color:var(--err);color:var(--err)}
+.msg.ok{border-color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);border-left-color:var(--ok);color:var(--ok)}
+.msg.warn{border-color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);border-left-color:var(--warn);color:var(--warn)}
 .badge{
   display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;
   font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--field);
 }
-.badge.run{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
-.badge.done{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,transparent)}
-.badge.bad{color:var(--err);border-color:color-mix(in srgb,var(--err) 50%,transparent)}
+.badge.run{color:var(--warn);border-color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
+.badge.done{color:var(--ok);border-color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,transparent)}
+.badge.bad{color:var(--err);border-color:var(--err);border-color:color-mix(in srgb,var(--err) 50%,transparent)}
 .spin{width:11px;height:11px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .prog{height:4px;border-radius:99px;background:var(--line);overflow:hidden;position:relative;margin:0 0 16px}
@@ -329,9 +335,9 @@ ul.hist li{
 }
 ul.hist li:hover{border-color:var(--line-strong)}
 .dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--faint)}
-li.st-done .dot{background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
-li.st-pending .dot{background:var(--warn);box-shadow:0 0 0 4px color-mix(in srgb,var(--warn) 20%,transparent)}
-li.st-failed .dot,li.st-timeout .dot{background:var(--err);box-shadow:0 0 0 4px color-mix(in srgb,var(--err) 20%,transparent)}
+li.st-done .dot{background:var(--ok);box-shadow:0 0 0 4px var(--line);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
+li.st-pending .dot{background:var(--warn);box-shadow:0 0 0 4px var(--line);box-shadow:0 0 0 4px color-mix(in srgb,var(--warn) 20%,transparent)}
+li.st-failed .dot,li.st-timeout .dot{background:var(--err);box-shadow:0 0 0 4px var(--line);box-shadow:0 0 0 4px color-mix(in srgb,var(--err) 20%,transparent)}
 .h-info{min-width:0;flex:1 1 200px}
 .h-info code{display:block;word-break:break-all;font-weight:600}
 .h-btns{display:flex;gap:6px}
@@ -346,10 +352,15 @@ noscript .msg{margin:16px}
 @media (max-width:640px){
   body{font-size:15px}
   main{padding-top:20px}
-  .card{padding:18px 16px;border-radius:16px}
+  /* Tanpa blur di HP: backdrop-filter pada banyak kartu membuat scroll berat di perangkat kelas bawah. */
+  .card{
+    padding:18px 16px;border-radius:16px;background:var(--surface-solid);
+    -webkit-backdrop-filter:none;backdrop-filter:none;
+  }
   .grid{grid-template-columns:1fr}
+  /* 16px juga untuk textarea agar iOS tidak zoom saat fokus. */
   input[type=text],input[type=password],textarea{font-size:16px}
-  textarea{font-size:13px;min-height:200px}
+  textarea{min-height:200px}
   .kv{grid-template-columns:1fr 1fr}
   .actions>*{flex:1 1 calc(50% - 8px)}
   .actions>a.btn.solid{flex-basis:100%}
@@ -393,7 +404,7 @@ noscript .msg{margin:16px}
 </header>
 
 <main>
-  <section class="hero">
+  <div class="hero">
     <span class="eyebrow"><i aria-hidden="true"></i>Cloudflare Free &middot; GitHub Actions &middot; R2</span>
     <h1>Render video, langsung dari browser.</h1>
     <p class="lead">Kirim komposisi HTML, dirender otomatis lewat GitHub Actions, hasil MP4 siap diputar dan diunduh dari R2.</p>
@@ -402,7 +413,7 @@ noscript .msg{margin:16px}
       <li>3 level kualitas</li>
       <li>Pantau status real-time</li>
     </ul>
-  </section>
+  </div>
 
   <noscript><div class="msg err">Halaman ini membutuhkan JavaScript. API tetap bisa dipakai lewat curl (lihat <code>/api</code>).</div></noscript>
 
@@ -1211,9 +1222,9 @@ noscript .msg{margin:16px}
       assetMsg('Tag untuk "' + lastAssetUpload.src + '" sepertinya sudah ada di isi komposisi.', 'warn');
       return;
     }
-    var current = el.html.value;
-    var idx = current.lastIndexOf('</body>');
-    el.html.value = idx === -1 ? (current + '\n' + tag) : (current.slice(0, idx) + tag + current.slice(idx));
+    var cur = el.html.value;
+    var idx = cur.lastIndexOf('</body>');
+    el.html.value = idx === -1 ? (cur + '\n' + tag) : (cur.slice(0, idx) + tag + cur.slice(idx));
     updateCount();
     assetMsg('Tag <video> disisipkan ke isi komposisi. Sesuaikan posisi/atribut data-start, data-duration, dst sesuai kebutuhan.', 'ok');
     el.html.focus();
