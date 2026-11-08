@@ -66,16 +66,6 @@ html, body {
   letter-spacing: 5px;
 }
 
-.avatar {
-  position: absolute;
-  width: 850px;
-  height: 1120px;
-  left: 115px;
-  top: 350px;
-  object-fit: contain;
-  object-position: center bottom;
-}
-
 .bottom-gradient {
   position: absolute;
   inset: 900px 0 0 0;
@@ -153,6 +143,7 @@ html, body {
 <div id="root"
      data-composition-id="byga-ai-video"
      data-start="0"
+     data-duration="30"
      data-width="1080"
      data-height="1920">
 
@@ -160,17 +151,6 @@ html, body {
 
   <div class="brand">BYGA<span>.AI</span></div>
   <div class="tag">BUILD THE FUTURE</div>
-
-  <!-- HeyGen avatar video -->
-  <video
-    class="clip avatar"
-    src="assets/heygen-avatar.mp4"
-    data-start="0"
-    data-duration="30"
-    data-track-index="0"
-    muted
-    playsinline>
-  </video>
 
   <div class="bottom-gradient"></div>
 
