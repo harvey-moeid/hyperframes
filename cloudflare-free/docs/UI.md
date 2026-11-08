@@ -18,18 +18,24 @@ pada `wrangler.jsonc` maupun workflow deploy.
 
 1. **Mobile-first.** Layout dasar satu kolom; grid dua kolom baru dipakai di layar > 640px.
    - Target sentuh minimal 44px (tombol utama 52px).
-   - Font input 16px di HP, supaya iOS Safari tidak zoom otomatis saat fokus.
+   - Font input **dan textarea** 16px di HP, supaya iOS Safari tidak zoom otomatis saat fokus.
    - `viewport-fit=cover` + `env(safe-area-inset-*)` untuk notch dan home indicator.
    - Tinggi memakai `dvh` agar tidak loncat saat address bar HP naik-turun.
    - Tombol aksi di kartu status membungkus 2 kolom (tombol Unduh MP4 selalu satu baris penuh).
+   - Kartu Status memakai `scroll-margin-top` supaya tidak tertutup topbar sticky saat di-scroll otomatis.
 2. **Tampilan premium.** Latar gelap dengan aurora gradient (satu lapisan `position:fixed`, ringan),
-   kartu kaca (`backdrop-filter` dengan fallback warna solid-transparan), gradient aksen
-   indigo-violet-cyan, tipografi system font dengan judul besar `clamp()`, ikon merek SVG inline.
+   kartu kaca (`backdrop-filter`), gradient aksen indigo-violet-cyan, tipografi system font dengan
+   judul besar `clamp()`, ikon merek SVG inline.
+   - **Di layar <= 640px blur kartu dimatikan** dan kartu memakai warna solid (`--surface-solid`),
+     karena `backdrop-filter` pada banyak kartu membuat scroll berat di HP kelas bawah.
 3. **Tema terang otomatis** lewat `prefers-color-scheme`. Semua warna lewat CSS variable di `:root`,
    jadi satu tempat untuk mengubah palet.
 4. **Aksesibilitas.** Fokus terlihat (ring), `aria-pressed` pada segmented control, `role=status`
    pada badge, `prefers-reduced-motion` mematikan animasi, `prefers-contrast: more` menebalkan garis.
 5. **Tanpa ketergantungan eksternal.** Tidak ada font web, gambar, atau CDN; semua inline.
+6. **Kompatibilitas browser lama.** Setiap pemakaian `color-mix()` didahului deklarasi warna biasa
+   (mis. `border-color:var(--err)`), jadi browser/WebView yang belum mendukungnya (sebelum Chrome 111 /
+   Safari 16.2) tetap mendapat warna yang wajar.
 
 ## Yang sengaja TIDAK diubah (keamanan)
 
@@ -56,6 +62,8 @@ pada `wrangler.jsonc` maupun workflow deploy.
 - Jangan menaruh teks `__NONCE__` atau `__TEMPLATE_JSON__` selain di tempat penanda yang sudah ada.
 - `COMPOSITION_TEMPLATE` adalah salinan `compositions/contoh/index.html`; perbarui keduanya bersamaan.
 - Pertahankan semua `id` elemen; JS klien mengaksesnya lewat `$(id)`.
+- Animasi masuk kartu memakai `.card:nth-of-type(n)`; jangan menaruh elemen `<section>` non-kartu
+  sebelum kartu pertama di `<main>` (hero memakai `<div>` karena itu).
 
 ## Cara mencoba
 
