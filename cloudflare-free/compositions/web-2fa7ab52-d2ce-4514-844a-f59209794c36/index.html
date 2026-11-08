@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, initial-scale=1">
+<title>NICHiREI CHINA - Pemberitahuan</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+:root {
+  --ground:#0b1020;
+  --ink:#ffffff;
+  --blue:#246bdf;
+  --cyan:#38bdf8;
+  --yellow:#f59e0b;
+  --red:#ef2929;
+  --green:#16a34a;
+  --font:Arial,Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;width:1080px;height:1920px;overflow:hidden;
+  background:var(--ground);color:var(--ink);font-family:var(--font)
+}
+#root{
+  width:1080px;height:1920px;position:relative;overflow:hidden;
+  background:
+  radial-gradient(ellipse at 50% 20%,#234e8c 0%,transparent 50%),
+  radial-gradient(ellipse at 10% 90%,#123b77 0%,transparent 45%),
+  var(--ground)
+}
+#camera{
+  position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;
+  transform-origin:center center
+}
+.bg-glow,.bg-grid,.bg-particles{
+  position:absolute;inset:0;pointer-events:none
+}
+.bg-glow{
+  background:radial-gradient(circle at 80% 20%,#38bdf82a,transparent 35%),
+  radial-gradient(circle at 15% 80%,#246bdf35,transparent 40%)
+}
+.bg-grid{
+  opacity:.12;
+  background-image:linear-gradient(#fff2 1px,transparent 1px),
+  linear-gradient(90deg,#fff2 1px,transparent 1px);
+  background-size:65px 65px
+}
+.bg-particles{width:100%;height:100%}
+.content{
+  position:absolute;inset:65px 55px;
+  display:flex;align-items:center;justify-content:center
+}
+.clip{
+  position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;
+  pointer-events:none
+}
+.inner{
+  width:100%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center
+}
+.logo{
+  display:flex;align-items:center;justify-content:center;gap:15px
+}
+.logo-symbol{
+  color:var(--red);font-size:82px;font-weight:900;font-style:italic
+}
+.logo-name{
+  color:var(--red);font-size:65px;font-weight:900;
+  letter-spacing:-3px
+}
+.logo-sub{
+  text-align:center;font-size:27px;font-weight:800;
+  letter-spacing:8px
+}
+.eyebrow{
+  color:var(--cyan);font-size:26px;font-weight:800;
+  letter-spacing:6px
+}
+.headline{
+  font-size:100px;line-height:1.05;text-align:center;
+  font-weight:900;letter-spacing:-5px
+}
+.yellow{color:#facc15}
+.red{color:#ff4444}
+.subtitle{
+  color:#dce8fa;font-size:40px;line-height:1.35;
+  text-align:center;font-weight:700
+}
+.line{
+  width:0;height:8px;border-radius:10px;
+  background:var(--yellow);margin:28px auto
+}
+.hero-icon{
+  width:160px;height:160px;border-radius:40px;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(145deg,#2563eb,#102b60);
+  font-size:90px;border:2px solid #ffffff35;
+  box-shadow:0 20px 50px #0005
+}
+.section-title{
+  font-size:67px;line-height:1.12;font-weight:900;
+  letter-spacing:-3px;text-align:center
+}
+.section-desc{
+  font-size:30px;color:#bdcde5;text-align:center;
+  line-height:1.4
+}
+.problem-list{
+  display:flex;flex-direction:column;gap:22px;
+  width:100%;margin-top:45px
+}
+.problem-card{
+  display:flex;align-items:center;gap:25px;
+  padding:25px;border-radius:25px;
+  background:linear-gradient(110deg,#1c3459,#101b31);
+  border:1px solid #ffffff25;min-height:160px
+}
+.problem-icon{
+  width:85px;height:85px;flex:none;border-radius:22px;
+  display:flex;align-items:center;justify-content:center;
+  background:#ef292925;font-size:45px
+}
+.problem-title{font-size:34px;font-weight:900}
+.problem-desc{font-size:25px;color:#bdcde5;margin-top:8px}
+.date-list{
+  width:100%;display:flex;flex-direction:column;
+  gap:15px;margin-top:42px
+}
+.date-row{
+  position:relative;overflow:hidden;
+  display:grid;grid-template-columns:90px 1fr 165px;
+  align-items:center;gap:12px;
+  height:177px;padding:18px;
+  border-radius:24px;
+  background:linear-gradient(110deg,#1a2e4c,#111c34);
+  border:2px solid #ffffff30
+}
+.date-row:before{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(100deg,var(--tape-color),transparent 80%);
+  opacity:.13
+}
+.calendar{
+  position:relative;width:75px;height:75px;
+  border-radius:17px;background:var(--tape-color);
+  display:flex;align-items:center;justify-content:center;
+  color:white;font-size:35px;font-weight:900
+}
+.date-info{position:relative}
+.date-label{
+  color:#b9c9e2;font-size:18px;letter-spacing:3px;
+  font-weight:700;margin-bottom:10px
+}
+.date-value{
+  font-size:38px;font-weight:900;letter-spacing:-1px
+}
+.color-pill{
+  position:relative;border-radius:40px;
+  padding:17px 8px;text-align:center;
+  font-size:25px;font-weight:900;
+  background:var(--tape-color);color:var(--pill-ink,#fff)
+}
+.tape{
+  position:absolute;right:145px;top:50%;
+  width:90px;height:90px;margin-top:-45px;
+  border:14px solid var(--tape-color);
+  border-radius:50%;
+  background:radial-gradient(circle,#0b1020 0 30%,#b8c9dc 35% 43%,white 47% 50%,#263b59 55%);
+  box-shadow:0 10px 25px #0008
+}
+.reminder{
+  width:100%;padding:32px;margin-top:35px;
+  border-radius:30px;background:linear-gradient(135deg,#fff1a8,#facc15);
+  color:#17233a;box-shadow:0 20px 45px #0005
+}
+.reminder-title{
+  color:#bd2525;font-size:45px;font-weight:900;
+  margin-bottom:16px
+}
+.reminder-text{font-size:30px;font-weight:800;line-height:1.4}
+.check-list{
+  width:100%;display:flex;flex-direction:column;
+  gap:20px;margin-top:30px
+}
+.check-item{
+  display:flex;align-items:center;gap:20px;
+  font-size:29px;font-weight:700
+}
+.check{
+  flex:none;width:52px;height:52px;border-radius:50%;
+  background:#2563eb;display:flex;align-items:center;
+  justify-content:center;font-size:30px;font-weight:900
+}
+.cta-box{
+  width:100%;padding:55px 30px;
+  border-radius:35px;
+  background:linear-gradient(145deg,#19458d,#0d1c3d);
+  border:2px solid #ffffff30;
+  box-shadow:0 25px 65px #0007
+}
+.cta-title{
+  font-size:85px;font-weight:900;
+  line-height:1.08;text-align:center;letter-spacing:-4px
+}
+.cta-message{
+  margin-top:30px;font-size:34px;
+  font-weight:700;line-height:1.4;text-align:center
+}
+.brand-footer{
+  margin-top:35px;text-align:center;
+  font-size:22px;font-weight:800;
+  letter-spacing:4px;color:#b9c9e2
+}
+.footer-note{
+  font-size:26px;color:#c6d7ef;
+  text-align:center;margin-top:35px
+}
+</style>
+</head>
+<body>
+
+<div id="root" data-composition-id="main"
+data-start="0" data-duration="20"
+data-width="1080" data-height="1920">
+
+<div class="bg-glow" id="glow"></div>
+<div class="bg-grid" id="grid"></div>
+
+<svg class="bg-particles" viewBox="0 0 1080 1920">
+<g fill="#fff">
+<circle cx="90" cy="250" r="4"/>
+<circle cx="920" cy="350" r="5"/>
+<circle cx="160" cy="760" r="3"/>
+<circle cx="950" cy="920" r="4"/>
+<circle cx="120" cy="1350" r="5"/>
+<circle cx="850" cy="1510" r="3"/>
+<circle cx="500" cy="180" r="3"/>
+<circle cx="700" cy="1150" r="4"/>
+</g>
+</svg>
+
+<div id="camera">
+<main class="content">
+
+<!-- HOOK 0–3 DETIK -->
+<section id="hook" class="clip"
+data-start="0" data-duration="3" data-track-index="1">
+<div class="inner">
+
+<div class="logo hook-logo">
+<div class="logo-symbol">N</div>
+<div>
+<div class="logo-name">NICHiREI</div>
+<div class="logo-sub">CHINA</div>
+</div>
+</div>
+
+<div class="line hook-line"></div>
+
+<div class="eyebrow hook-eyebrow">PEMBERITAHUAN PENTING</div>
+
+<div class="headline hook-title">
+SATU WARNA.<br>
+<span class="yellow">SATU TANGGAL.</span>
+</div>
+
+<div class="subtitle hook-sub">
+Jangan sampai salah<br>memilih lakban.
+</div>
+
+<div class="hero-icon hook-icon">📢</div>
+
+</div>
+</section>
+
+<!-- MASALAH 3–8 DETIK -->
+<section id="problem" class="clip"
+data-start="2.7" data-duration="5.3" data-track-index="2">
+<div class="inner">
+
+<div class="eyebrow problem-eyebrow">PERHATIKAN</div>
+
+<div class="section-title problem-title">
+HINDARI KESALAHAN<br>PENGGUNAAN LAKBAN
+</div>
+
+<div class="section-desc problem-sub">
+Perhatikan tiga hal berikut.
+</div>
+
+<div class="problem-list">
+
+<div class="problem-card problem-card-1">
+<div class="problem-icon">⚠️</div>
+<div>
+<div class="problem-title">Salah warna lakban</div>
+<div class="problem-desc">Tidak sesuai tanggal expired.</div>
+</div>
+</div>
+
+<div class="problem-card problem-card-2">
+<div class="problem-icon">📅</div>
+<div>
+<div class="problem-title">Salah membaca tanggal</div>
+<div class="problem-desc">Periksa tanggal sebelum digunakan.</div>
+</div>
+</div>
+
+<div class="problem-card problem-card-3">
+<div class="problem-icon">📦</div>
+<div>
+<div class="problem-title">Risiko tertukar</div>
+<div class="problem-desc">Gunakan identifikasi yang tepat.</div>
+</div>
+</div>
+
+</div>
+</div>
+</section>
+
+<!-- SOLUSI 8–14 DETIK -->
+<section id="solution" class="clip"
+data-start="7.7" data-duration="6.3" data-track-index="3">
+<div class="inner">
+
+<div class="eyebrow solution-eyebrow">PANDUAN RESMI</div>
+
+<div class="section-title solution-title">
+COCOKKAN TANGGAL<br>DENGAN WARNA LAKBAN
+</div>
+
+<div class="section-desc solution-sub">
+Gunakan sesuai daftar berikut.
+</div>
+
+<div class="date-list">
+
+<div class="date-row row-1" style="--tape-color:#ef2929">
+<div class="calendar">16</div>
+<div class="date-info">
+<div class="date-label">EXPIRED DATE</div>
+<div class="date-value">2028.10.16</div>
+</div>
+<div class="color-pill">MERAH</div>
+<div class="tape"></div>
+</div>
+
+<div class="date-row row-2" style="--tape-color:#dce6f2;--pill-ink:#17233a">
+<div class="calendar">01</div>
+<div class="date-info">
+<div class="date-label">EXPIRED DATE</div>
+<div class="date-value">2028.11.01</div>
+</div>
+<div class="color-pill">BENING</div>
+<div class="tape"></div>
+</div>
+
+<div class="date-row row-3" style="--tape-color:#1266d5">
+<div class="calendar">16</div>
+<div class="date-info">
+<div class="date-label">EXPIRED DATE</div>
+<div class="date-value">2028.11.16</div>
+</div>
+<div class="color-pill">BIRU</div>
+<div class="tape"></div>
+</div>
+
+<div class="date-row row-4" style="--tape-color:#facc15;--pill-ink:#17233a">
+<div class="calendar">01</div>
+<div class="date-info">
+<div class="date-label">EXPIRED DATE</div>
+<div class="date-value">2028.12.01</div>
+</div>
+<div class="color-pill">KUNING</div>
+<div class="tape"></div>
+</div>
+
+<div class="date-row row-5" style="--tape-color:#16a34a">
+<div class="calendar">16</div>
+<div class="date-info">
+<div class="date-label">EXPIRED DATE</div>
+<div class="date-value">2028.12.16</div>
+</div>
+<div class="color-pill">HIJAU</div>
+<div class="tape"></div>
+</div>
+
+</div>
+</div>
+</section>
+
+<!-- BUKTI DAN PENGINGAT 14–18 DETIK -->
+<section id="proof" class="clip"
+data-start="13.7" data-duration="4.3" data-track-index="4">
+<div class="inner">
+
+<div class="eyebrow proof-eyebrow">CEK SEBELUM DIGUNAKAN</div>
+
+<div class="section-title proof-title">
+LIMA TANGGAL.<br><span class="yellow">LIMA WARNA.</span>
+</div>
+
+<div class="section-desc proof-sub">
+Pastikan semuanya sesuai.
+</div>
+
+<div class="reminder proof-reminder">
+<div class="reminder-title">INGAT!</div>
+<div class="reminder-text">
+Gunakan lakban sesuai warna berdasarkan tanggal expired-nya.
+</div>
+</div>
+
+<div class="check-list">
+<div class="check-item check-1">
+<div class="check">✓</div>
+<div>Periksa tanggal expired.</div>
+</div>
+<div class="check-item check-2">
+<div class="check">✓</div>
+<div>Pastikan warna lakban tepat.</div>
+</div>
+<div class="check-item check-3">
+<div class="check">✓</div>
+<div>Jaga kualitas produk.</div>
+</div>
+</div>
+
+</div>
+</section>
+
+<!-- CTA 18–20 DETIK -->
+<section id="cta" class="clip"
+data-start="17.7" data-duration="2.3" data-track-index="5">
+<div class="inner">
+
+<div class="cta-box">
+
+<div class="logo cta-logo">
+<div class="logo-symbol">N</div>
+<div>
+<div class="logo-name">NICHiREI</div>
+<div class="logo-sub">CHINA</div>
+</div>
+</div>
+
+<div class="line cta-line"></div>
+
+<div class="cta-title cta-main">
+TERIMA<br><span class="yellow">KASIH!</span>
+</div>
+
+<div class="cta-message">
+Mari gunakan lakban<br>
+<span class="yellow">dengan tepat dan teliti.</span>
+</div>
+
+<div class="brand-footer">
+QUALITY • SAFETY • TEAMWORK
+</div>
+
+</div>
+
+<div class="footer-note cta-footer">
+Atas perhatian dan kerjasamanya.
+</div>
+
+</div>
+</section>
+
+</main>
+</div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const root = document.getElementById("root");
+const duration = Number(root.dataset.duration);
+const camera = document.getElementById("camera");
+
+if (!window.gsap) {
+throw new Error("GSAP gagal dimuat");
+}
+
+// Timeline tunggal dan paused untuk render per frame.
+const tl = gsap.timeline({paused:true});
+
+// Push-in kamera sepanjang video.
+tl.fromTo(camera,
+{scale:1},
+{scale:1.06,duration:duration,ease:"none"},0);
+
+// Parallax tiga lapisan latar.
+tl.to("#glow",
+{x:35,y:-45,duration:duration,ease:"none"},0);
+
+tl.to("#grid",
+{x:-25,y:35,duration:duration,ease:"none"},0);
+
+tl.to(".bg-particles",
+{y:-55,x:15,duration:duration,ease:"none"},0);
+
+// Gerakan latar lembut.
+tl.to(".bg-glow",
+{scale:1.03,duration:3,repeat:5,yoyo:true,ease:"sine.inOut"},0);
+
+// Validasi semua elemen clip.
+const clips=[...document.querySelectorAll(".clip")];
+
+clips.forEach(clip=>{
+const start=Number(clip.dataset.start);
+const length=Number(clip.dataset.duration);
+const end=start+length;
+const inner=clip.querySelector(".inner");
+
+if(!clip.id || !clip.dataset.trackIndex ||
+!Number.isFinite(start) || !Number.isFinite(length) ||
+start<0 || length<=0 || end>duration){
+throw new Error("Clip tidak valid: "+clip.id);
+}
+
+// Fade in dan fade out pada anak clip.
+tl.fromTo(inner,
+{opacity:0,y:40,scale:.98},
+{opacity:1,y:0,scale:1,duration:.45,ease:"power3.out"},
+start);
+
+tl.to(inner,
+{opacity:0,y:-40,duration:.4,ease:"power2.in"},
+end-.4);
+});
+
+// HOOK.
+tl.from(".hook-logo",
+{y:-45,opacity:0,duration:.45,ease:"power3.out"},.12);
+
+tl.to(".hook-line",
+{width:430,duration:.65,ease:"power3.out"},.45);
+
+tl.from(".hook-eyebrow",
+{y:25,opacity:0,duration:.4,ease:"power3.out"},.65);
+
+tl.from(".hook-title",
+{y:55,opacity:0,scale:.94,duration:.55,ease:"power3.out"},.9);
+
+tl.from(".hook-sub",
+{y:35,opacity:0,duration:.4,ease:"power3.out"},1.25);
+
+tl.from(".hook-icon",
+{scale:.6,rotation:-12,opacity:0,duration:.5,ease:"back.out(1.7)"},1.55);
+
+// MASALAH.
+tl.from(".problem-eyebrow",
+{y:25,opacity:0,duration:.35,ease:"power3.out"},2.85);
+
+tl.from(".problem-title",
+{y:35,opacity:0,duration:.45,ease:"power3.out"},3.05);
+
+tl.from(".problem-sub",
+{opacity:0,y:20,duration:.35,ease:"power3.out"},3.3);
+
+tl.from(".problem-card",
+{x:90,opacity:0,duration:.5,stagger:.15,ease:"power3.out"},3.55);
+
+// SOLUSI.
+tl.from(".solution-eyebrow",
+{opacity:0,y:20,duration:.3,ease:"power3.out"},7.95);
+
+tl.from(".solution-title",
+{opacity:0,y:40,duration:.45,ease:"power3.out"},8.1);
+
+tl.from(".solution-sub",
+{opacity:0,y:20,duration:.35,ease:"power3.out"},8.35);
+
+// Lima tanggal muncul bergantian.
+tl.from(".date-row",
+{x:100,opacity:0,duration:.48,stagger:.2,ease:"power3.out"},8.55);
+
+tl.from(".date-row .tape",
+{scale:.65,rotation:-35,opacity:0,duration:.55,
+stagger:.2,ease:"back.out(1.5)"},8.7);
+
+// Highlight tanggal secara berurutan.
+[9.25,9.65,10.05,10.45,10.85].forEach((time,index)=>{
+const row=document.querySelector(".row-"+(index+1));
+
+tl.to(row,
+{scale:1.025,duration:.18,ease:"sine.inOut"},time);
+
+tl.to(row,
+{scale:1,duration:.2,ease:"sine.inOut"},time+.18);
+});
+
+// PENGINGAT.
+tl.from(".proof-eyebrow",
+{y:20,opacity:0,duration:.3,ease:"power3.out"},13.9);
+
+tl.from(".proof-title",
+{y:35,opacity:0,duration:.4,ease:"power3.out"},14.05);
+
+tl.from(".proof-sub",
+{y:20,opacity:0,duration:.3,ease:"power3.out"},14.3);
+
+tl.from(".proof-reminder",
+{y:45,opacity:0,scale:.96,duration:.45,ease:"power3.out"},14.5);
+
+tl.from(".check-1",
+{x:-40,opacity:0,duration:.35,ease:"power3.out"},15.25);
+
+tl.from(".check-2",
+{x:-40,opacity:0,duration:.35,ease:"power3.out"},15.65);
+
+tl.from(".check-3",
+{x:-40,opacity:0,duration:.35,ease:"power3.out"},16.05);
+
+// CTA.
+tl.from(".cta-logo",
+{y:-25,opacity:0,duration:.4,ease:"power3.out"},17.9);
+
+tl.to(".cta-line",
+{width:380,duration:.4,ease:"power3.out"},18.05);
+
+tl.from(".cta-main",
+{y:35,opacity:0,scale:.96,duration:.45,ease:"power3.out"},18.15);
+
+tl.from(".cta-message",
+{y:25,opacity:0,duration:.4,ease:"power3.out"},18.35);
+
+tl.from(".cta-footer",
+{y:20,opacity:0,duration:.3,ease:"power3.out"},18.55);
+
+// HOLD akhir 1.2 detik dengan visual tetap.
+window.__timelines=window.__timelines||{};
+window.__timelines["main"]=tl;
+
+// Posisi awal tidak kosong.
+tl.seek(0);
+})();
+</script>
+</body>
+</html>
