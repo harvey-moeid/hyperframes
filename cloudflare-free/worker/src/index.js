@@ -38,7 +38,8 @@ const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 // Tautan run yang boleh diteruskan ke klien dari penanda gagal (bentuk persis dari workflow).
-const RUN_URL_RE = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[0-9]+$/;
+const RUN_URL_RE =
+  /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[0-9]+$/;
 const QUALITIES = new Set(["draft", "standard", "high"]);
 const DEFAULT_COMPOSITION = "contoh";
 // Body JSON /render. Tanpa `html` biasanya < 1 KB; dengan `html` bisa besar
@@ -386,7 +387,8 @@ async function handleRender(request, env, origin) {
   const hasHtml = body.html !== undefined;
   // Komposisi baru dari `html` tanpa nama -> web-<id> (maks 64 karakter).
   const composition =
-    body.composition ?? (hasHtml ? `web-${typeof id === "string" ? id.slice(0, 60) : ""}` : DEFAULT_COMPOSITION);
+    body.composition ??
+    (hasHtml ? `web-${typeof id === "string" ? id.slice(0, 60) : ""}` : DEFAULT_COMPOSITION);
   const quality = body.quality ?? "standard";
 
   if (typeof id !== "string" || !ID_RE.test(id)) return json({ error: "invalid_id" }, 400);

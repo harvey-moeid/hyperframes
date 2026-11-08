@@ -16,7 +16,7 @@ jobs:
       - name: Delete all but the 10 newest runs
         env:
           GH_TOKEN: ${{ github.token }}
-          KEEP: '10'
+          KEEP: "10"
         run: |
           set -uo pipefail
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
