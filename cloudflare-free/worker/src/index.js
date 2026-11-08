@@ -6,6 +6,8 @@
  *   1. menerima permintaan render (POST /render, dilindungi x-api-key),
  *   2. bila body memuat `html`: meng-commit isinya ke repo sebagai komposisi baru
  *      lewat GitHub Contents API (cloudflare-free/compositions/<nama>/index.html),
+ *   2b. menerima aset biner (mis. video avatar HeyGen) lewat POST /asset dan
+ *      meng-commit-nya ke cloudflare-free/compositions/<nama>/assets/<file>,
  *   3. memicu repository_dispatch (event: render-video) ke repo fork,
  *   4. menyajikan hasil MP4 dari R2 (GET /video/:id) dan statusnya (GET /status/:id),
  *      termasuk penanda gagal yang ditulis workflow (renders/<id>.failed.json),
@@ -41,6 +43,13 @@ const MAX_BODY_BYTES = 1024 * 1024;
 // Batas isi komposisi (index.html). Dijaga kecil agar encode base64 tetap
 // jauh di bawah 10 ms CPU per invocation di Workers Free.
 const MAX_HTML_BYTES = 256 * 1024;
+// Nama file aset (mis. assets/heygen-avatar.mp4): huruf/angka/._- , tanpa "/", maks 128 karakter.
+const ASSET_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
+// Batas ukuran satu aset (video avatar dsb). GitHub Contents API menerima file lebih besar,
+// tetapi dijaga kecil di sini agar aman terhadap batas CPU/memori Workers Free saat decode base64.
+const MAX_ASSET_BYTES = 8 * 1024 * 1024; // 8 MiB
+// Body JSON /asset: base64 menambah ~37% ukuran, plus sedikit ruang untuk field lain.
+const MAX_ASSET_BODY_BYTES = Math.ceil((MAX_ASSET_BYTES * 4) / 3) + 4096;
 
 const objectKey = (id) => `renders/${id}.mp4`;
 const failedKey = (id) => `renders/${id}.failed.json`;
@@ -75,13 +84,28 @@ async function safeEqual(a, b) {
 
 /** String UTF-8 -> base64 (Contents API mewajibkan base64). */
 function toBase64(text) {
-  const bytes = new TextEncoder().encode(text);
+  return bytesToBase64(new TextEncoder().encode(text));
+}
+
+/** Uint8Array -> base64, per-chunk agar tidak melebihi batas argumen fromCharCode. */
+function bytesToBase64(bytes) {
   let bin = "";
   const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   }
   return btoa(bin);
+}
+
+/**
+ * base64 standar -> Uint8Array. Melempar error bila bukan base64 valid
+ * (termasuk base64url dengan "-"/"_", yang sengaja ditolak di sini).
+ */
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
 const githubHeaders = (env) => ({
@@ -108,7 +132,7 @@ const serviceInfo = () =>
   json(
     {
       service: "hyperframes-render",
-      endpoints: ["POST /render", "GET /status/:id", "GET /video/:id"],
+      endpoints: ["POST /render", "POST /asset", "GET /status/:id", "GET /video/:id"],
     },
     200,
     { vary: "accept" },
@@ -125,6 +149,11 @@ async function route(request, env) {
   if (pathname === "/render") {
     if (method !== "POST") return methodNotAllowed(["POST"]);
     return handleRender(request, env, url.origin);
+  }
+
+  if (pathname === "/asset") {
+    if (method !== "POST") return methodNotAllowed(["POST"]);
+    return handleAsset(request, env);
   }
 
   const match = pathname.match(/^\/(status|video)\/([^/]+)$/);
@@ -190,6 +219,135 @@ async function commitComposition(env, composition, html) {
     return { ok: false, status: 502 };
   }
   return { ok: true, sha };
+}
+
+/**
+ * Cari sha file yang sudah ada di repo (untuk update/overwrite lewat Contents API).
+ * Mengembalikan sha (string) bila file ada, atau "" bila belum ada (404) / gagal dibaca.
+ */
+async function getExistingSha(env, path) {
+  const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${path}`, {
+    method: "GET",
+    headers: githubHeaders(env),
+  });
+  if (res.status !== 200) return "";
+  try {
+    const data = await res.json();
+    return data && typeof data.sha === "string" ? data.sha : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Commit cloudflare-free/compositions/<composition>/assets/<filename> ke default branch.
+ * Berbeda dari commitComposition: aset BOLEH ditimpa (upload ulang avatar yang sama),
+ * jadi sha file lama (bila ada) dicari lebih dulu dan disertakan di body PUT.
+ * Mengembalikan { ok: true, sha, path } atau { ok: false, status }.
+ */
+async function commitAsset(env, composition, filename, bytes) {
+  const path = `cloudflare-free/compositions/${composition}/assets/${filename}`;
+  const existingSha = await getExistingSha(env, path);
+
+  const body = {
+    message: `chore(cloudflare-free): aset ${filename} untuk komposisi ${composition}`,
+    content: bytesToBase64(bytes),
+  };
+  if (existingSha) body.sha = existingSha;
+
+  const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${path}`, {
+    method: "PUT",
+    headers: githubHeaders(env),
+    body: JSON.stringify(body),
+  });
+
+  // 201 = file baru, 200 = file ditimpa (sha disertakan).
+  if (res.status !== 201 && res.status !== 200) {
+    const detail = (await res.text()).slice(0, 200);
+    console.error("commit_asset_failed", res.status, detail);
+    return { ok: false, status: res.status };
+  }
+
+  let sha = "";
+  try {
+    const data = await res.json();
+    sha = data && data.commit && typeof data.commit.sha === "string" ? data.commit.sha : "";
+  } catch {
+    sha = "";
+  }
+  if (!SHA_RE.test(sha)) {
+    console.error("commit_asset_sha_missing");
+    return { ok: false, status: 502 };
+  }
+  return { ok: true, sha, path };
+}
+
+/** POST /asset  body: { composition, filename, data(base64) } → 201 */
+async function handleAsset(request, env) {
+  if (!env.API_KEY || !env.GITHUB_TOKEN || !REPO_RE.test(env.GITHUB_REPO ?? "")) {
+    return json({ error: "server_not_configured" }, 500);
+  }
+
+  const provided = request.headers.get("x-api-key") ?? "";
+  if (!(await safeEqual(provided, env.API_KEY))) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > MAX_ASSET_BODY_BYTES) {
+    return json({ error: "body_too_large" }, 413);
+  }
+  let body = {};
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return json({ error: "invalid_json" }, 400);
+  }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return json({ error: "invalid_json" }, 400);
+  }
+
+  const { composition, filename, data } = body;
+  if (typeof composition !== "string" || !ID_RE.test(composition)) {
+    return json({ error: "invalid_composition" }, 400);
+  }
+  if (typeof filename !== "string" || !ASSET_NAME_RE.test(filename)) {
+    return json({ error: "invalid_filename" }, 400);
+  }
+  if (typeof data !== "string" || data.trim() === "") {
+    return json({ error: "invalid_data" }, 400);
+  }
+
+  let bytes;
+  try {
+    bytes = base64ToBytes(data);
+  } catch {
+    return json({ error: "invalid_base64" }, 400);
+  }
+  if (bytes.length === 0) {
+    return json({ error: "invalid_data" }, 400);
+  }
+  if (bytes.length > MAX_ASSET_BYTES) {
+    return json({ error: "asset_too_large", max_bytes: MAX_ASSET_BYTES }, 413);
+  }
+
+  const commit = await commitAsset(env, composition, filename, bytes);
+  if (!commit.ok) {
+    return json({ error: "commit_failed", github_status: commit.status }, 502);
+  }
+
+  return json(
+    {
+      ok: true,
+      composition,
+      filename,
+      path: commit.path,
+      src: `assets/${filename}`,
+      commit_sha: commit.sha,
+      bytes: bytes.length,
+    },
+    201,
+  );
 }
 
 /** POST /render  body: { id?, composition?, quality?, html? } → 202 */
@@ -637,6 +795,41 @@ noscript .msg{margin:16px}
     </form>
   </section>
 
+  <section class="card" aria-labelledby="t-asset">
+    <h2 id="t-asset">Aset avatar (opsional)</h2>
+    <p class="hint">Unggah video avatar (mis. hasil HeyGen) sebagai aset komposisi, lewat commit terpisah
+      ke <code>cloudflare-free/compositions/&lt;komposisi&gt;/assets/&lt;nama file&gt;</code>.
+      Lakukan ini <strong>sebelum</strong> menekan "Mulai render" di atas, supaya filenya sudah ada di repo
+      saat komposisi dirender.</p>
+    <div class="field">
+      <label for="assetComp">Nama komposisi</label>
+      <input id="assetComp" type="text" maxlength="64" autocapitalize="off" spellcheck="false" placeholder="sama dengan nama komposisi di atas">
+      <p class="hint">Harus sudah ditentukan (tidak boleh kosong/otomatis). Tersalin otomatis dari field
+        "Komposisi" / "Nama komposisi" di atas bila kosong saat tombol diklik.</p>
+    </div>
+    <div class="field">
+      <label for="assetFile">File video</label>
+      <input id="assetFile" type="file" accept="video/mp4,video/*">
+    </div>
+    <div class="field">
+      <label for="assetName">Nama file di repo</label>
+      <input id="assetName" type="text" maxlength="128" autocapitalize="off" spellcheck="false" placeholder="mis. heygen-avatar.mp4">
+      <p class="hint">Huruf, angka, <code>.</code> <code>_</code> <code>-</code>, maks 128, maks 8 MB. Terisi
+        otomatis dari nama file saat dipilih. Mengunggah ulang nama yang sama menimpa aset lama (berbeda
+        dari komposisi <code>index.html</code>, yang tidak pernah ditimpa).</p>
+    </div>
+    <button type="button" id="assetUploadBtn">Unggah aset</button>
+    <div id="assetMsg" class="msg" role="alert" hidden></div>
+    <div id="assetResult" class="mt14" hidden>
+      <p class="hint">Tempel ini sebagai <code>src</code> di tag <code>&lt;video&gt;</code> komposisi:</p>
+      <div class="row">
+        <input id="assetSrc" type="text" readonly spellcheck="false">
+        <button type="button" id="assetCopySrc" class="small">Salin</button>
+      </div>
+      <button type="button" id="assetInsertBtn" class="small mt10" hidden>Sisipkan tag &lt;video&gt; ke isi komposisi</button>
+    </div>
+  </section>
+
   <section class="card" id="jobCard" aria-labelledby="t-job" hidden>
     <h2 id="t-job">Status</h2>
     <div class="top">
@@ -693,6 +886,8 @@ noscript .msg{margin:16px}
   var HIST_STORE = 'hf_history';
   var HIST_MAX = 12;
   var MAX_HTML_BYTES = 256 * 1024; // sama dengan batas di Worker
+  var MAX_ASSET_BYTES = 8 * 1024 * 1024; // sama dengan batas di Worker
+  var ASSET_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
   var MAX_WAIT_MS = 35 * 60 * 1000; // workflow dibatasi 30 menit + antrean
   var STATUS_TIMEOUT_MS = 15000;
   var POST_TIMEOUT_MS = 25000;
@@ -706,6 +901,10 @@ noscript .msg{margin:16px}
     fieldComp: $('fieldComp'),
     composition: $('composition'), quality: $('quality'), rid: $('rid'),
     submit: $('submit'), formMsg: $('formMsg'),
+    assetComp: $('assetComp'), assetFile: $('assetFile'), assetName: $('assetName'),
+    assetUploadBtn: $('assetUploadBtn'), assetMsg: $('assetMsg'),
+    assetResult: $('assetResult'), assetSrc: $('assetSrc'), assetCopySrc: $('assetCopySrc'),
+    assetInsertBtn: $('assetInsertBtn'),
     jobCard: $('jobCard'), badge: $('badge'), elapsed: $('elapsed'),
     jId: $('jId'), jComp: $('jComp'), jQual: $('jQual'), jSize: $('jSize'), jNote: $('jNote'),
     video: $('video'), dl: $('dl'), runLink: $('runLink'), copyVideo: $('copyVideo'), copyPage: $('copyPage'),
@@ -1123,6 +1322,159 @@ noscript .msg{margin:16px}
     el.apikey.type = show ? 'text' : 'password';
     el.toggleKey.textContent = show ? 'Sembunyikan' : 'Tampilkan';
     el.toggleKey.setAttribute('aria-pressed', show ? 'true' : 'false');
+  });
+
+  /* ---------- aset avatar ---------- */
+  function assetMsg(text, kind) {
+    if (!text) { el.assetMsg.hidden = true; el.assetMsg.textContent = ''; return; }
+    el.assetMsg.className = 'msg' + (kind ? ' ' + kind : '');
+    el.assetMsg.textContent = text;
+    el.assetMsg.hidden = false;
+  }
+
+  function describeAssetError(status, data) {
+    var code = data && typeof data.error === 'string' ? data.error : '';
+    switch (code) {
+      case 'unauthorized': return 'API key salah.';
+      case 'server_not_configured': return 'Server belum dikonfigurasi.';
+      case 'invalid_composition': return 'Nama komposisi tidak valid atau kosong (huruf, angka, _ dan -, maks 64).';
+      case 'invalid_filename': return 'Nama file tidak valid (huruf, angka, titik, _ dan -, maks 128, harus diawali huruf/angka).';
+      case 'invalid_data':
+      case 'invalid_base64': return 'File gagal dibaca. Coba pilih ulang filenya.';
+      case 'body_too_large':
+      case 'asset_too_large': return 'File terlalu besar (maks 8 MB).';
+      case 'invalid_json': return 'Permintaan tidak valid.';
+      case 'commit_failed': {
+        var c = data && data.github_status;
+        var base = 'Gagal meng-commit aset ke repo' + (c ? ' (GitHub ' + c + ')' : '') + '.';
+        if (c === 404) return base + ' Token salah atau tidak punya akses ke repo.';
+        if (c === 403) return base + ' Izin token Contents belum Read and write.';
+        if (c === 401) return base + ' GITHUB_TOKEN tidak valid atau kedaluwarsa.';
+        if (c === 409) return base + ' Ada commit lain yang bersamaan, coba lagi.';
+        return base;
+      }
+      default: return 'Gagal (HTTP ' + status + ').';
+    }
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('read_failed')); };
+      reader.onload = function () {
+        try {
+          var bytes = new Uint8Array(reader.result);
+          var bin = '';
+          var CHUNK = 0x8000;
+          for (var i = 0; i < bytes.length; i += CHUNK) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+          }
+          resolve({ base64: btoa(bin), size: bytes.length });
+        } catch (e) { reject(e); }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Nama file -> hanya karakter yang diterima server; sisanya dibuang.
+  function sanitizeFilename(name) {
+    var cleaned = String(name || '').replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 128);
+    cleaned = cleaned.replace(/^-+/, '');
+    return cleaned || 'avatar.mp4';
+  }
+
+  el.assetFile.addEventListener('change', function () {
+    var f = el.assetFile.files && el.assetFile.files[0];
+    if (f && !el.assetName.value.trim()) el.assetName.value = sanitizeFilename(f.name);
+    assetMsg('');
+    el.assetResult.hidden = true;
+  });
+
+  var lastAssetUpload = null; // { composition, filename, src }
+
+  el.assetUploadBtn.addEventListener('click', async function () {
+    assetMsg('');
+    el.assetResult.hidden = true;
+
+    var key = el.apikey.value.trim();
+    if (!key) { assetMsg('Isi API key di atas dulu.', 'err'); el.apikey.focus(); return; }
+
+    var comp = el.assetComp.value.trim();
+    if (!comp) {
+      // Sinkron dari field komposisi yang sedang aktif sesuai mode saat ini.
+      comp = (el.mode.value === 'new' ? el.newName.value.trim() : el.composition.value.trim());
+      el.assetComp.value = comp;
+    }
+    if (!comp || !ID_RE.test(comp)) {
+      assetMsg('Nama komposisi wajib diisi dan valid (huruf, angka, _ dan -, maks 64). Tidak bisa kosong/otomatis untuk aset.', 'err');
+      el.assetComp.focus();
+      return;
+    }
+
+    var file = el.assetFile.files && el.assetFile.files[0];
+    if (!file) { assetMsg('Pilih file video dulu.', 'err'); el.assetFile.focus(); return; }
+    if (file.size > MAX_ASSET_BYTES) { assetMsg('File terlalu besar (maks 8 MB).', 'err'); return; }
+
+    var filename = el.assetName.value.trim() || sanitizeFilename(file.name);
+    if (!ASSET_NAME_RE.test(filename)) {
+      assetMsg('Nama file tidak valid (huruf, angka, titik, _ dan -, maks 128).', 'err');
+      el.assetName.focus();
+      return;
+    }
+
+    el.assetUploadBtn.disabled = true;
+    el.assetUploadBtn.textContent = 'Mengunggah…';
+    var ctrl = new AbortController();
+    var to = setTimeout(function () { ctrl.abort(); }, POST_TIMEOUT_MS);
+    try {
+      var read = await readFileAsBase64(file);
+      var res = await fetch('/asset', {
+        method: 'POST',
+        headers: { 'x-api-key': key, 'content-type': 'application/json' },
+        body: JSON.stringify({ composition: comp, filename: filename, data: read.base64 }),
+        cache: 'no-store',
+        signal: ctrl.signal
+      });
+      var data = {};
+      try { data = await res.json(); } catch (e) { data = {}; }
+
+      if (res.status === 201 && data && typeof data.src === 'string') {
+        assetMsg('Aset terunggah ke komposisi "' + comp + '".', 'ok');
+        el.assetSrc.value = data.src;
+        el.assetResult.hidden = false;
+        lastAssetUpload = { composition: comp, filename: filename, src: data.src };
+        var canInsert = el.mode.value === 'new' && !el.newBox.hidden;
+        el.assetInsertBtn.hidden = !canInsert;
+      } else {
+        assetMsg(describeAssetError(res.status, data), 'err');
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') assetMsg('Server tidak merespons (timeout). Coba lagi.', 'err');
+      else assetMsg('Gagal mengunggah. Periksa koneksi lalu coba lagi.', 'err');
+    } finally {
+      clearTimeout(to);
+      el.assetUploadBtn.disabled = false;
+      el.assetUploadBtn.textContent = 'Unggah aset';
+    }
+  });
+
+  el.assetCopySrc.addEventListener('click', function () {
+    if (el.assetSrc.value) copyText(el.assetSrc.value, el.assetCopySrc);
+  });
+
+  el.assetInsertBtn.addEventListener('click', function () {
+    if (!lastAssetUpload) return;
+    var tag = '<video class="clip avatar" src="' + lastAssetUpload.src + '" data-start="0" ' +
+      'data-duration="5" data-track-index="0" muted playsinline></video>\n';
+    if (el.html.value.indexOf(lastAssetUpload.src) !== -1) {
+      assetMsg('Tag untuk "' + lastAssetUpload.src + '" sepertinya sudah ada di isi komposisi.', 'warn');
+      return;
+    }
+    var current = el.html.value;
+    var idx = current.lastIndexOf('</body>');
+    el.html.value = idx === -1 ? (current + '\n' + tag) : (current.slice(0, idx) + tag + current.slice(idx));
+    assetMsg('Tag <video> disisipkan ke isi komposisi. Sesuaikan posisi/atribut data-start, data-duration, dst sesuai kebutuhan.', 'ok');
+    el.html.focus();
   });
 
   el.form.addEventListener('submit', async function (ev) {
