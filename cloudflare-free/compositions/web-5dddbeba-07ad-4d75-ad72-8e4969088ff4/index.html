@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>BYGA MCP - Bikin Web & Aplikasi dari HP (60 detik)</title>
+<!-- Satu-satunya skrip eksternal. Semua visual lain = CSS/SVG inline. -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+/* ===== TOKEN: warna & teks utama hanya di :root ===== */
+:root{
+  --ground:#0b1020; --ink:#ffffff; --accent:#38bdf8; --warm:#f59e0b;
+  --ink-soft:rgba(255,255,255,.72); --panel:rgba(255,255,255,.06); --edge:rgba(255,255,255,.16);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; --mono:monospace;
+  --s-xl:128px; --s-l:88px; --s-m:52px; --s-s:32px;   /* skala tipografi vertikal 1080x1920 */
+
+  /* Teks (maks 7 kata per layar) */
+  --t-tag:"BYGA";
+  --t-h1a:"Bikin web"; --t-h1b:"& aplikasi"; --t-h1c:"cuma HP.";
+  --t-p1:"Laptop mahal"; --t-p2:"Coding ribet"; --t-p3:"Server bingung";
+  --t-k1:"Kenalan"; --t-k2:"BYGA MCP";
+  --t-n1:"1"; --t-a1:"Buka Claude"; --t-a2:"di HP"; --t-c1:"Login, siap.";
+  --t-n2:"2"; --t-b1:"Sambung"; --t-b2:"konektor BYGA"; --t-c2:"Pilih byga.ai.";
+  --t-n3:"3"; --t-d1:"Ketik ide"; --t-d2:"aplikasimu"; --t-c3:"BYGA yang kerja.";
+  --t-n4:"4"; --t-e1:"Langsung"; --t-e2:"online"; --t-c4:"GitHub + Cloudflare";
+  --t-r0:"Bisa bikin:"; --t-r1:"Web toko"; --t-r2:"Aplikasi kasir"; --t-r3:"Dashboard";
+  --t-brand:"BYGA MCP"; --t-cta:"Coba sekarang di HP";
+}
+
+/* ===== DASAR ===== */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--ground);font-family:var(--font);color:var(--ink)}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--ground)}
+.clip,#cam{position:absolute;inset:0}
+
+/* ===== LATAR: 3 lapisan parallax ===== */
+.bg-layer{position:absolute;inset:-300px}
+#bg-glow{background:
+  radial-gradient(800px 900px at 30% 25%,rgba(56,189,248,.26),transparent 70%),
+  radial-gradient(760px 860px at 75% 78%,rgba(245,158,11,.16),transparent 70%)}
+#bg-grid{background-image:
+  linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+  background-size:96px 96px}
+#bg-dots{position:absolute;left:-300px;top:-300px;width:1680px;height:2520px}
+.d-acc{fill:var(--accent)} .d-ink{fill:var(--ink)} .d-warm{fill:var(--warm)}
+#bg-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 58%,rgba(11,16,32,.7) 100%)}
+
+/* ===== PANGGUNG: aman TikTok (bawah 340px & atas 192px dikosongkan untuk UI aplikasi) ===== */
+.stage{position:absolute;inset:192px 108px 340px 108px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.tx{display:inline-block;white-space:nowrap}
+.h-xl{font-size:var(--s-xl);font-weight:700;letter-spacing:-.03em;line-height:1.02}
+.h-l{font-size:var(--s-l);font-weight:700;letter-spacing:-.03em;line-height:1.05}
+.h-m{font-size:var(--s-m);font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.b-m{font-size:var(--s-m);font-weight:400;line-height:1.1;color:var(--ink-soft)}
+.ln{display:flex;flex-direction:column;align-items:center;text-align:center}
+.acc{color:var(--accent)}
+.t-tag::before{content:var(--t-tag)}
+.t-h1a::before{content:var(--t-h1a)} .t-h1b::before{content:var(--t-h1b)} .t-h1c::before{content:var(--t-h1c)}
+.t-p1::before{content:var(--t-p1)} .t-p2::before{content:var(--t-p2)} .t-p3::before{content:var(--t-p3)}
+.t-k1::before{content:var(--t-k1)} .t-k2::before{content:var(--t-k2)}
+.t-n1::before{content:var(--t-n1)} .t-n2::before{content:var(--t-n2)} .t-n3::before{content:var(--t-n3)} .t-n4::before{content:var(--t-n4)}
+.t-a1::before{content:var(--t-a1)} .t-a2::before{content:var(--t-a2)} .t-c1::before{content:var(--t-c1)}
+.t-b1::before{content:var(--t-b1)} .t-b2::before{content:var(--t-b2)} .t-c2::before{content:var(--t-c2)}
+.t-d1::before{content:var(--t-d1)} .t-d2::before{content:var(--t-d2)} .t-c3::before{content:var(--t-c3)}
+.t-e1::before{content:var(--t-e1)} .t-e2::before{content:var(--t-e2)} .t-c4::before{content:var(--t-c4)}
+.t-r0::before{content:var(--t-r0)} .t-r1::before{content:var(--t-r1)} .t-r2::before{content:var(--t-r2)} .t-r3::before{content:var(--t-r3)}
+.t-brand::before{content:var(--t-brand)} .t-cta::before{content:var(--t-cta)}
+
+/* ===== 1. HOOK ===== */
+#s-hook .stage{align-items:flex-start}
+.tag{font-family:var(--mono);font-size:var(--s-s);letter-spacing:.18em;color:var(--accent);margin-bottom:40px}
+#hook-title{display:flex;flex-direction:column;align-items:flex-start}
+.w3{color:var(--warm)}
+#hook-line{margin-top:56px;width:560px;height:8px;border-radius:4px;background:var(--accent)}
+
+/* ===== 2. MASALAH ===== */
+#pains{display:flex;flex-direction:column;gap:40px}
+.p-card{width:864px;height:250px;padding:0 56px;border-radius:28px;background:var(--panel);border:2px solid var(--edge);display:flex;align-items:center;gap:44px}
+.p-ic{width:104px;height:104px;flex:none}
+.p-ic *{fill:none;stroke:var(--warm);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== 3. SOLUSI: mockup chat di HP -> hasil web ===== */
+#phone{position:relative;width:520px;height:720px;margin-top:48px;padding:40px 32px;border-radius:56px;background:rgba(255,255,255,.05);border:2px solid var(--edge);display:flex;flex-direction:column;gap:24px}
+.bub{width:78%;padding:24px;border-radius:28px;display:flex;flex-direction:column;gap:14px}
+.bub.user{align-self:flex-end;background:rgba(56,189,248,.2);border:2px solid var(--accent)}
+.bub.bot{align-self:flex-start;background:var(--panel);border:2px solid var(--edge)}
+.bl{display:block;height:14px;border-radius:7px;background:var(--ink-soft)}
+.w80{width:80%} .w55{width:55%} .w70{width:70%} .w45{width:45%}
+#site{position:relative;flex:1;padding:24px;border-radius:28px;background:var(--panel);border:2px solid var(--edge);display:flex;flex-direction:column;gap:18px}
+.s-head{display:block;height:30px;border-radius:10px;background:var(--edge)}
+.s-hero{display:block;height:120px;border-radius:18px;background:var(--warm)}
+.s-row{display:flex;gap:18px;flex:1}
+.s-row i{display:block;flex:1;border-radius:16px;background:var(--accent)}
+.hl{position:absolute;inset:-8px;border-radius:34px;border:4px solid var(--accent);opacity:0;pointer-events:none}
+
+/* ===== 4-7. LANGKAH 1-4 ===== */
+.num{width:200px;height:200px;margin-bottom:56px;border-radius:100px;border:6px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:var(--s-xl);font-weight:700;color:var(--accent)}
+.step .ln{margin-bottom:28px}
+.big-ic{width:220px;height:220px;margin-top:56px}
+.big-ic *{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== 8. HASIL ===== */
+#rows{display:flex;flex-direction:column;gap:32px;width:800px;margin-top:56px}
+.row{display:flex;align-items:center;gap:36px;height:150px;padding:0 44px;border-radius:28px;background:var(--panel);border:2px solid var(--edge)}
+.ck{width:72px;height:72px;flex:none}
+.ck *{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== 9. CTA ===== */
+#s-cta .stage{gap:72px}
+#lockup{display:flex;flex-direction:column;align-items:center;gap:40px}
+#mark{width:200px;height:200px}
+.mk-bg{fill:var(--accent)} .mk-bar{fill:var(--ground)} .mk-dot{fill:var(--warm)}
+.pill{display:flex;align-items:center;padding:32px 64px;border-radius:999px;background:var(--warm);color:var(--ground);font-size:var(--s-m);font-weight:700;letter-spacing:-.02em}
+</style>
+</head>
+<body>
+<!-- Root: durasi video = data-duration (60 s). Tiap bagian = satu .clip; overlap 0.4 s untuk crossfade. -->
+<div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1080" data-height="1920">
+
+  <div id="bg" class="clip" data-start="0" data-duration="60" data-track-index="0">
+    <div id="bg-glow" class="bg-layer"></div>
+    <div id="bg-grid" class="bg-layer"></div>
+    <svg id="bg-dots" viewBox="0 0 1680 2520" aria-hidden="true"></svg>
+    <div id="bg-vig"></div>
+  </div>
+
+  <!-- Wrapper kamera: push-in 1.00 -> 1.06 sepanjang video -->
+  <div id="cam">
+
+    <!-- 1. HOOK 0-5 -->
+    <div id="s-hook" class="clip" data-start="0" data-duration="5.4" data-track-index="1">
+      <div class="stage">
+        <div class="tag tx t-tag"></div>
+        <div id="hook-title">
+          <div class="h-xl"><span class="w w1 tx t-h1a"></span></div>
+          <div class="h-xl"><span class="w w2 tx t-h1b"></span></div>
+          <div class="h-xl"><span class="w w3 tx t-h1c"></span></div>
+        </div>
+        <div id="hook-line"></div>
+      </div>
+    </div>
+
+    <!-- 2. MASALAH 5-13 -->
+    <div id="s-masalah" class="clip" data-start="5" data-duration="8.4" data-track-index="2">
+      <div class="stage">
+        <div id="pains">
+          <div class="p-card">
+            <svg class="p-ic" viewBox="0 0 104 104" aria-hidden="true"><rect x="20" y="24" width="64" height="44" rx="6"/><path d="M10 82 94 82"/></svg>
+            <div class="h-m"><span class="tx t-p1"></span></div>
+          </div>
+          <div class="p-card">
+            <svg class="p-ic" viewBox="0 0 104 104" aria-hidden="true"><path d="M38 30 16 52 38 74"/><path d="M66 30 88 52 66 74"/><path d="M58 22 46 82"/></svg>
+            <div class="h-m"><span class="tx t-p2"></span></div>
+          </div>
+          <div class="p-card">
+            <svg class="p-ic" viewBox="0 0 104 104" aria-hidden="true"><rect x="18" y="16" width="68" height="28" rx="6"/><rect x="18" y="58" width="68" height="28" rx="6"/><path d="M32 30 34 30"/><path d="M32 72 34 72"/></svg>
+            <div class="h-m"><span class="tx t-p3"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. SOLUSI 13-21: chat di HP -> web jadi -->
+    <div id="s-solusi" class="clip" data-start="13" data-duration="8.4" data-track-index="3">
+      <div class="stage">
+        <div id="sol-title" class="ln h-l"><span class="tx t-k1"></span><span class="tx t-k2 acc"></span></div>
+        <div id="phone">
+          <div id="ub" class="bub user"><i class="bl w70"></i><i class="bl w45"></i></div>
+          <div id="bb" class="bub bot"><i class="bl w80"></i><i class="bl w55"></i></div>
+          <div id="site">
+            <i class="s-head"></i><i class="s-hero"></i>
+            <div class="s-row"><i></i><i></i></div>
+            <div class="hl"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. LANGKAH 1: 21-29 -->
+    <div id="s-l1" class="clip" data-start="21" data-duration="8.4" data-track-index="4">
+      <div class="stage step">
+        <div class="num t-n1"></div>
+        <div class="ln h-l"><span class="tx t-a1"></span><span class="tx t-a2"></span></div>
+        <div class="b-m tx t-c1"></div>
+        <svg class="big-ic" viewBox="0 0 120 120" aria-hidden="true"><rect x="34" y="10" width="52" height="100" rx="10"/><path d="M52 98 68 98"/></svg>
+      </div>
+    </div>
+
+    <!-- 5. LANGKAH 2: 29-37 -->
+    <div id="s-l2" class="clip" data-start="29" data-duration="8.4" data-track-index="5">
+      <div class="stage step">
+        <div class="num t-n2"></div>
+        <div class="ln h-l"><span class="tx t-b1"></span><span class="tx t-b2 acc"></span></div>
+        <div class="b-m tx t-c2"></div>
+        <svg class="big-ic" viewBox="0 0 120 120" aria-hidden="true"><rect x="10" y="44" width="52" height="32" rx="16"/><rect x="58" y="44" width="52" height="32" rx="16"/><path d="M48 60 72 60"/></svg>
+      </div>
+    </div>
+
+    <!-- 6. LANGKAH 3: 37-45 -->
+    <div id="s-l3" class="clip" data-start="37" data-duration="8.4" data-track-index="6">
+      <div class="stage step">
+        <div class="num t-n3"></div>
+        <div class="ln h-l"><span class="tx t-d1"></span><span class="tx t-d2"></span></div>
+        <div class="b-m tx t-c3"></div>
+        <svg class="big-ic" viewBox="0 0 120 120" aria-hidden="true"><path d="M16 22 104 22 104 80 56 80 34 100 34 80 16 80Z"/><path d="M34 44 86 44"/><path d="M34 60 66 60"/></svg>
+      </div>
+    </div>
+
+    <!-- 7. LANGKAH 4: 45-52 -->
+    <div id="s-l4" class="clip" data-start="45" data-duration="7.4" data-track-index="7">
+      <div class="stage step">
+        <div class="num t-n4"></div>
+        <div class="ln h-l"><span class="tx t-e1"></span><span class="tx t-e2 acc"></span></div>
+        <div class="b-m tx t-c4"></div>
+        <svg class="big-ic" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="46"/><path d="M14 60 106 60"/><ellipse cx="60" cy="60" rx="20" ry="46"/></svg>
+      </div>
+    </div>
+
+    <!-- 8. HASIL 52-56 -->
+    <div id="s-hasil" class="clip" data-start="52" data-duration="4.4" data-track-index="8">
+      <div class="stage">
+        <div id="r-title" class="h-l tx t-r0"></div>
+        <div id="rows">
+          <div class="row"><svg class="ck" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path d="M22 37 32 47 51 26"/></svg><span class="h-m tx t-r1"></span></div>
+          <div class="row"><svg class="ck" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path d="M22 37 32 47 51 26"/></svg><span class="h-m tx t-r2"></span></div>
+          <div class="row"><svg class="ck" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path d="M22 37 32 47 51 26"/></svg><span class="h-m tx t-r3"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. CTA 56-60 (tween konten terakhir selesai 58.8, lalu HOLD 1.2 s) -->
+    <div id="s-cta" class="clip" data-start="56" data-duration="4" data-track-index="9">
+      <div class="stage">
+        <div id="lockup">
+          <svg id="mark" viewBox="0 0 160 160" aria-hidden="true">
+            <rect class="mk-bg" width="160" height="160" rx="40"/>
+            <rect class="mk-bar" x="34" y="88" width="22" height="36" rx="6"/>
+            <rect class="mk-bar" x="69" y="68" width="22" height="56" rx="6"/>
+            <rect class="mk-bar" x="104" y="46" width="22" height="78" rx="6"/>
+            <circle class="mk-dot" cx="115" cy="30" r="10"/>
+          </svg>
+          <div class="wordmark h-xl tx t-brand"></div>
+        </div>
+        <div id="cta-pill" class="pill"><span class="tx t-cta"></span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var IN = "power3.out", OUT = "power2.in", LOOP = "sine.inOut";   /* easing: masuk / keluar / napas */
+
+  /* --- Partikel latar: PRNG ber-seed (mulberry32), deterministik --- */
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  var rnd = mulberry32(20261109), dots = document.getElementById("bg-dots"), NS = "http://www.w3.org/2000/svg";
+  for (var i = 0; i < 80; i++) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", (rnd() * 1680).toFixed(1));
+    c.setAttribute("cy", (rnd() * 2520).toFixed(1));
+    c.setAttribute("r", (1.5 + rnd() * 3.5).toFixed(1));
+    c.setAttribute("opacity", (0.2 + rnd() * 0.5).toFixed(2));
+    c.setAttribute("class", i % 9 === 0 ? "d-warm" : i % 3 === 0 ? "d-ink" : "d-acc");
+    dots.appendChild(c);
+  }
+
+  var tl = gsap.timeline({paused: true});
+
+  /* --- LATAR 0-60: drift linear (parallax) + napas glow (4 lintasan x 15 s) --- */
+  tl.fromTo("#bg-glow", {x:-50, y:20},  {x:50,   y:-20, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-grid", {x:0,   y:0},   {x:-150, y:-80, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-dots", {x:80,  y:40},  {x:-180, y:-90, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-glow", {scale:1}, {scale:1.12, duration:15, ease:LOOP, yoyo:true, repeat:3}, 0);
+
+  /* --- KAMERA: push-in 1.00 -> 1.06 sepanjang 60 s --- */
+  tl.fromTo("#cam", {scale:1}, {scale:1.06, transformOrigin:"50% 50%", duration:60, ease:"power1.inOut"}, 0);
+
+  /* --- 1. HOOK 0-5: frame 0 sudah berisi (tag, garis, kata pertama samar) --- */
+  tl.fromTo("#hook-line", {scaleX:.12, transformOrigin:"0% 50%"}, {scaleX:1, duration:1.2, ease:IN}, 0.2);
+  tl.from(".w1", {y:60, opacity:.35, duration:.7, ease:IN}, 0.15);
+  tl.from(".w2", {y:60, opacity:0, duration:.7, ease:IN}, 0.4);
+  tl.from(".w3", {y:60, opacity:0, scale:.92, transformOrigin:"0% 50%", duration:.8, ease:IN}, 0.95);
+  tl.to("#hook-title", {scale:1.03, transformOrigin:"0% 50%", duration:1.4, ease:LOOP, yoyo:true, repeat:1}, 1.8);  /* napas 1.8-4.6 */
+  tl.to("#s-hook .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, 5.0);
+
+  /* --- 2. MASALAH 5-13: 3 kartu bergantian (stagger .2), lalu napas --- */
+  tl.fromTo("#s-masalah .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, 5.0);
+  tl.from(".p-card", {y:60, opacity:0, duration:.7, ease:IN, stagger:.2}, 5.3);
+  tl.from(".p-ic", {scale:.6, opacity:0, duration:.5, ease:IN, stagger:.2}, 5.6);
+  tl.to(".p-card", {scale:1.03, duration:1.4, ease:LOOP, yoyo:true, repeat:3, stagger:.15}, 6.8);   /* sampai ~12.7 */
+  tl.to("#s-masalah .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, 13.0);
+
+  /* --- 3. SOLUSI 13-21: judul, lalu chat -> balasan -> web jadi, sorot di 17.6 --- */
+  tl.fromTo("#s-solusi .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, 13.0);
+  tl.from("#sol-title", {y:40, opacity:0, duration:.6, ease:IN}, 13.2);
+  tl.from("#phone", {y:60, opacity:0, duration:.7, ease:IN}, 13.3);
+  tl.from("#ub", {x:40, opacity:0, duration:.5, ease:IN}, 14.2);
+  tl.from("#bb", {x:-40, opacity:0, duration:.5, ease:IN}, 15.4);
+  tl.from("#site", {y:40, opacity:0, duration:.6, ease:IN}, 16.4);
+  tl.from("#site i", {opacity:0, y:16, duration:.4, ease:IN, stagger:.15}, 16.8);
+  tl.to("#site .hl", {opacity:1, duration:.4, ease:IN}, 17.8);
+  tl.to("#phone", {scale:1.03, duration:1.2, ease:LOOP, yoyo:true, repeat:1}, 18.4);                /* napas 18.4-20.8 */
+  tl.to("#s-solusi .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, 21.0);
+
+  /* --- 4-7. LANGKAH 1-4: pola sama (angka, judul, isi, ikon), ikon bernapas 4 kali --- */
+  [["#s-l1", 21, 29], ["#s-l2", 29, 37], ["#s-l3", 37, 45], ["#s-l4", 45, 52]].forEach(function (p) {
+    var s = p[1], q = function (x) { return p[0] + " " + x; };
+    tl.fromTo(p[0] + " .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, s);
+    tl.from(q(".num"), {scale:.5, opacity:0, duration:.6, ease:IN}, s + .15);
+    tl.from(q(".ln"), {y:50, opacity:0, duration:.6, ease:IN}, s + .4);
+    tl.from(q(".b-m"), {y:30, opacity:0, duration:.5, ease:IN}, s + .8);
+    tl.from(q(".big-ic"), {scale:.7, opacity:0, duration:.6, ease:IN}, s + 1.1);
+    tl.to(q(".big-ic"), {scale:1.06, duration:1.3, ease:LOOP, yoyo:true, repeat:3}, s + 1.8);      /* s+1.8 sampai s+7.0 */
+    tl.to(p[0] + " .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, p[2]);
+  });
+
+  /* --- 8. HASIL 52-56: 3 baris centang bergantian --- */
+  tl.fromTo("#s-hasil .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, 52.0);
+  tl.from("#r-title", {y:40, opacity:0, duration:.5, ease:IN}, 52.2);
+  tl.from(".row", {x:60, opacity:0, duration:.5, ease:IN, stagger:.25}, 52.4);
+  tl.from(".ck", {scale:0, duration:.4, ease:IN, stagger:.25}, 52.6);
+  tl.to(".row", {scale:1.03, duration:.7, ease:LOOP, yoyo:true, repeat:1, stagger:.12}, 53.4);
+  tl.to("#s-hasil .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, 56.0);
+
+  /* --- 9. CTA 56-60: mendarat <= 56.8, napas pil 57.6-58.8, HOLD 1.2 s --- */
+  tl.fromTo("#s-cta .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, 56.0);
+  tl.from("#mark", {scale:.6, opacity:0, duration:.5, ease:IN}, 56.05);
+  tl.from(".wordmark", {y:30, opacity:0, duration:.5, ease:IN}, 56.15);
+  tl.from("#cta-pill", {y:40, opacity:0, duration:.5, ease:IN}, 56.3);
+  tl.to("#cta-pill", {scale:1.04, duration:.6, ease:LOOP, yoyo:true, repeat:1}, 57.6);
+
+  /* --- Daftarkan SETELAH tween terakhir, lalu seek(0) --- */
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+  tl.seek(0);
+})();
+</script>
+</body>
+</html>
