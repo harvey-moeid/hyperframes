@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<title>Bikin Web dengan MCP byga.ai sampai Deploy</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #151c33;
+    --line: #2a3556;
+    --text: #eef2ff;
+    --muted: #94a3c4;
+    --accent: #6ee7b7;
+    --accent2: #60a5fa;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #000; }
+  #root {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: radial-gradient(1200px 700px at 15% 10%, #1b2a5c 0%, transparent 60%),
+                radial-gradient(1000px 700px at 90% 95%, #0f4a45 0%, transparent 55%), var(--bg);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: var(--text);
+  }
+  .scene {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 80px 140px; text-align: center;
+  }
+  .step {
+    font-size: 30px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent);
+    font-weight: 700; margin-bottom: 18px;
+  }
+  h1 { font-size: 104px; line-height: 1.08; margin: 0 0 28px; font-weight: 800; }
+  h2 { font-size: 72px; margin: 0 0 48px; font-weight: 800; }
+  .sub { font-size: 44px; color: var(--muted); margin: 0; }
+  .grad { background: linear-gradient(90deg, var(--accent2), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .card {
+    background: var(--panel); border: 2px solid var(--line); border-radius: 28px;
+    padding: 48px 56px; text-align: left; box-shadow: 0 30px 80px rgba(0,0,0,.45);
+  }
+  .label { font-size: 28px; color: var(--muted); margin-bottom: 12px; }
+  .field {
+    font-family: "Courier New", monospace; font-size: 40px; background: #0b1226;
+    border: 2px solid var(--line); border-radius: 16px; padding: 24px 28px; min-height: 96px;
+    word-break: break-all;
+  }
+  .btnwrap { position: relative; height: 96px; margin-top: 36px; }
+  .btn {
+    position: absolute; inset: 0; border-radius: 16px; display: flex; align-items: center;
+    justify-content: center; font-size: 40px; font-weight: 700;
+  }
+  .btn-idle { background: var(--accent2); color: #06122b; }
+  .btn-ok { background: var(--accent); color: #052e22; opacity: 0; }
+  .crumbs { font-size: 34px; color: var(--muted); margin-bottom: 36px; }
+  .crumbs b { color: var(--text); }
+  .chat { width: 1400px; }
+  .chat .field { font-family: inherit; font-size: 42px; line-height: 1.4; min-height: 300px; }
+  .send {
+    margin-top: 28px; align-self: flex-end; background: var(--accent2); color: #06122b;
+    font-weight: 800; font-size: 38px; padding: 20px 48px; border-radius: 16px; display: inline-block; float: right;
+  }
+  .term { width: 1500px; font-family: "Courier New", monospace; font-size: 38px; }
+  .tline { display: flex; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--line); opacity: 0; }
+  .tline span:first-child { color: var(--accent2); }
+  .tline .ok { color: var(--accent); font-weight: 700; }
+  .bar { height: 22px; border-radius: 12px; background: #0b1226; margin-top: 36px; overflow: hidden; border: 2px solid var(--line); }
+  .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+  .browser { width: 1500px; background: #fff; border-radius: 24px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.55); text-align: left; }
+  .bhead { background: #e5e7eb; padding: 20px 28px; display: flex; align-items: center; gap: 20px; }
+  .dots { display: flex; gap: 10px; }
+  .dots i { width: 18px; height: 18px; border-radius: 50%; background: #f87171; }
+  .dots i:nth-child(2) { background: #fbbf24; } .dots i:nth-child(3) { background: #34d399; }
+  .url { flex: 1; background: #fff; border-radius: 12px; padding: 12px 22px; font-size: 30px; color: #111827; font-family: "Courier New", monospace; }
+  .live { background: #16a34a; color: #fff; font-weight: 800; font-size: 26px; padding: 10px 22px; border-radius: 999px; }
+  .page { padding: 70px 80px; background: linear-gradient(135deg, #eef2ff, #ecfdf5); color: #0f172a; height: 430px; }
+  .page h3 { font-size: 72px; margin: 0 0 14px; }
+  .page p { font-size: 36px; margin: 0 0 30px; color: #334155; }
+  .page .cta { display: inline-block; background: #2563eb; color: #fff; padding: 20px 44px; border-radius: 14px; font-size: 34px; font-weight: 700; }
+  .recap { display: flex; flex-direction: column; gap: 22px; margin: 10px 0 50px; text-align: left; }
+  .recap div { font-size: 52px; opacity: 0; }
+  .recap b { color: var(--accent); margin-right: 18px; }
+  .progress { position: absolute; left: 0; bottom: 0; height: 10px; width: 0; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+  .brand { position: absolute; top: 40px; right: 60px; font-size: 30px; color: var(--muted); font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="50">
+
+  <!-- 0-6s: Intro -->
+  <section id="s1" class="clip scene" data-start="0" data-duration="6" data-track-index="1">
+    <div class="step" id="s1-step">Tutorial</div>
+    <h1 id="s1-title">Bikin Website dengan<br /><span class="grad">MCP byga.ai</span></h1>
+    <p class="sub" id="s1-sub">Dari prompt sampai live di internet</p>
+  </section>
+
+  <!-- 6-16s: Hubungkan MCP -->
+  <section id="s2" class="clip scene" data-start="6" data-duration="10" data-track-index="1">
+    <div class="step">Langkah 1</div>
+    <h2>Hubungkan MCP ke Claude</h2>
+    <div class="crumbs" id="s2-crumbs">Settings &rsaquo; <b>Connectors</b> &rsaquo; <b>Tambah custom connector</b></div>
+    <div class="card" id="s2-card" style="width:1300px">
+      <div class="label">URL server MCP</div>
+      <div class="field" id="s2-url"></div>
+      <div class="btnwrap">
+        <div class="btn btn-idle" id="s2-btn">Connect</div>
+        <div class="btn btn-ok" id="s2-ok">&#10003; Terhubung</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16-26s: Prompt -->
+  <section id="s3" class="clip scene" data-start="16" data-duration="10" data-track-index="1">
+    <div class="step">Langkah 2</div>
+    <h2>Tulis prompt dengan jelas</h2>
+    <div class="card chat" id="s3-card">
+      <div class="label">Pesan ke Claude</div>
+      <div class="field" id="s3-text"></div>
+      <div class="send" id="s3-send">Kirim &#10148;</div>
+      <div style="clear:both"></div>
+    </div>
+  </section>
+
+  <!-- 26-37s: AI bekerja lewat MCP -->
+  <section id="s4" class="clip scene" data-start="26" data-duration="11" data-track-index="1">
+    <div class="step">Langkah 3</div>
+    <h2>AI bekerja lewat tool MCP</h2>
+    <div class="card term" id="s4-card">
+      <div class="tline" id="t1"><span>create_repository</span><span class="ok">portofolio-web &#10003;</span></div>
+      <div class="tline" id="t2"><span>push_files</span><span class="ok">index.html, style.css, script.js &#10003;</span></div>
+      <div class="tline" id="t3"><span>deploy_and_push</span><span class="ok">Cloudflare Pages &#10003;</span></div>
+      <div class="tline" id="t4"><span>pages_project_get</span><span class="ok">status: sukses &#10003;</span></div>
+      <div class="bar"><i id="s4-bar"></i></div>
+    </div>
+  </section>
+
+  <!-- 37-45s: Web live -->
+  <section id="s5" class="clip scene" data-start="37" data-duration="8" data-track-index="1">
+    <div class="step">Langkah 4</div>
+    <h2>Website sudah live!</h2>
+    <div class="browser" id="s5-browser">
+      <div class="bhead">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="url">https://portofolio-web.pages.dev</div>
+        <div class="live" id="s5-live">LIVE</div>
+      </div>
+      <div class="page">
+        <h3>Halo, saya Budi</h3>
+        <p>Web developer &mdash; dibuat otomatis lewat MCP.</p>
+        <span class="cta">Lihat Proyek</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 45-50s: Outro -->
+  <section id="s6" class="clip scene" data-start="45" data-duration="5" data-track-index="1">
+    <h2 id="s6-title">Ringkasnya</h2>
+    <div class="recap">
+      <div id="r1"><b>1</b>Hubungkan MCP</div>
+      <div id="r2"><b>2</b>Tulis prompt</div>
+      <div id="r3"><b>3</b>AI buat &amp; push kode</div>
+      <div id="r4"><b>4</b>Deploy &rarr; live</div>
+    </div>
+  </section>
+
+  <div class="brand">byga.ai</div>
+  <div class="progress" id="progress"></div>
+</div>
+
+<script>
+  window.__timelines = window.__timelines || {};
+  const tl = gsap.timeline({ paused: true });
+
+  // helper: muncul dari bawah
+  function pop(sel, start, dur) {
+    tl.fromTo(sel, { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: dur || 0.6, ease: "power3.out" }, start);
+  }
+  // helper: efek mengetik (seekable)
+  function typeText(sel, text, start, dur) {
+    const el = document.querySelector(sel);
+    const o = { n: 0 };
+    tl.fromTo(o, { n: 0 }, {
+      n: text.length, duration: dur, ease: "none",
+      onUpdate() { el.textContent = text.slice(0, Math.round(o.n)); }
+    }, start);
+  }
+
+  // Progress bar global
+  tl.fromTo("#progress", { width: "0%" }, { width: "100%", duration: 50, ease: "none" }, 0);
+
+  // S1 (0-6)
+  pop("#s1-step", 0.2);
+  pop("#s1-title", 0.5, 0.9);
+  pop("#s1-sub", 1.6);
+
+  // S2 (6-16)
+  pop("#s2 .step", 6.1, 0.5);
+  pop("#s2 h2", 6.3, 0.6);
+  pop("#s2-crumbs", 7.0, 0.6);
+  pop("#s2-card", 7.6, 0.7);
+  typeText("#s2-url", "https://mcpnew.muidsoft.com/mcp", 8.8, 3.0);
+  tl.fromTo("#s2-btn", { scale: 1 }, { scale: 0.94, duration: 0.15, yoyo: true, repeat: 1 }, 12.4);
+  tl.fromTo("#s2-btn", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 12.9);
+  tl.fromTo("#s2-ok", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 12.9);
+
+  // S3 (16-26)
+  pop("#s3 .step", 16.1, 0.5);
+  pop("#s3 h2", 16.3, 0.6);
+  pop("#s3-card", 17.0, 0.7);
+  typeText("#s3-text",
+    "Buatkan landing page portofolio sederhana (HTML, CSS, JS). Simpan ke repo GitHub baru, lalu deploy ke Cloudflare Pages.",
+    18.0, 5.0);
+  tl.fromTo("#s3-send", { scale: 1 }, { scale: 1.12, duration: 0.25, yoyo: true, repeat: 1 }, 24.0);
+
+  // S4 (26-37)
+  pop("#s4 .step", 26.1, 0.5);
+  pop("#s4 h2", 26.3, 0.6);
+  pop("#s4-card", 27.0, 0.6);
+  tl.fromTo("#t1", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5 }, 28.0);
+  tl.fromTo("#t2", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5 }, 30.0);
+  tl.fromTo("#t3", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5 }, 32.5);
+  tl.fromTo("#t4", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5 }, 34.5);
+  tl.fromTo("#s4-bar", { width: "0%" }, { width: "100%", duration: 8, ease: "none" }, 27.5);
+
+  // S5 (37-45)
+  pop("#s5 .step", 37.1, 0.5);
+  pop("#s5 h2", 37.3, 0.6);
+  pop("#s5-browser", 38.0, 0.8);
+  tl.fromTo("#s5-live", { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(3)" }, 39.5);
+  tl.fromTo("#s5-live", { scale: 1 }, { scale: 1.12, duration: 0.5, yoyo: true, repeat: 5, ease: "sine.inOut" }, 40.2);
+
+  // S6 (45-50)
+  pop("#s6-title", 45.1, 0.5);
+  pop("#r1", 45.6, 0.4);
+  pop("#r2", 46.1, 0.4);
+  pop("#r3", 46.6, 0.4);
+  pop("#r4", 47.1, 0.4);
+
+  // jaga durasi timeline = data-duration root
+  tl.set({}, {}, 50);
+
+  window.__timelines["main"] = tl;
+</script>
+</body>
+</html>
