@@ -1,9 +1,9 @@
 export function HyperframesLogo() {
-  // byga logo: PNG mascot asset served from the studio's public dir.
+  // byga logo: SVG (berisi PNG maskot) dari public dir studio.
   const height = 28;
   return (
     <img
-      src="/byga-logo.png"
+      src="/byga-logo.svg"
       alt="byga"
       height={height}
       width={height}
