@@ -451,6 +451,12 @@ noscript .msg{margin:16px}
           <p class="hint">Disimpan di <code>cloudflare-free/compositions/&lt;nama&gt;/index.html</code>. Bila nama sudah ada, permintaan ditolak dan file lama tidak ditimpa.</p>
         </div>
         <div class="field">
+          <label for="htmlFile">Unggah file komposisi (.html)</label>
+          <input id="htmlFile" type="file" accept=".html,.htm,text/html">
+          <p class="hint">Isi file dimuat ke kotak di bawah (tidak langsung dikirim), jadi bisa dicek dan diedit dulu. Maks 256 KB. Bila nama komposisi kosong, terisi otomatis dari nama file.</p>
+          <div id="htmlFileMsg" class="msg" role="alert" hidden></div>
+        </div>
+        <div class="field">
           <div class="lbl-row">
             <label for="html">Isi komposisi (index.html)</label>
             <button type="button" id="tplBtn" class="small">Isi dari contoh</button>
@@ -607,7 +613,7 @@ noscript .msg{margin:16px}
   var el = {
     form: $('form'), apikey: $('apikey'), toggleKey: $('toggleKey'), remember: $('remember'),
     mode: $('mode'), newBox: $('newBox'), newName: $('newName'), html: $('html'), tplBtn: $('tplBtn'),
-    htmlCount: $('htmlCount'),
+    htmlCount: $('htmlCount'), htmlFile: $('htmlFile'), htmlFileMsg: $('htmlFileMsg'),
     fieldComp: $('fieldComp'),
     composition: $('composition'), quality: $('quality'), rid: $('rid'),
     submit: $('submit'), formMsg: $('formMsg'),
@@ -1060,6 +1066,54 @@ noscript .msg{margin:16px}
     el.fieldComp.hidden = isNew;
   }
   el.mode.addEventListener('change', applyMode);
+
+  /* ---------- unggah file komposisi (.html) ----------
+   * File dibaca di browser (FileReader) dan dimasukkan ke textarea; pengiriman tetap lewat
+   * form "Mulai render" (POST /render dengan field html), jadi tidak ada endpoint baru. */
+  function fileMsg(text, kind) {
+    if (!text) { el.htmlFileMsg.hidden = true; el.htmlFileMsg.textContent = ''; return; }
+    el.htmlFileMsg.className = 'msg' + (kind ? ' ' + kind : '');
+    el.htmlFileMsg.textContent = text;
+    el.htmlFileMsg.hidden = false;
+  }
+  function nameFromFile(name) {
+    var base = String(name || '').replace(/\.[^.]*$/, '');
+    var cleaned = base.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/^-+/, '').slice(0, 64);
+    return ID_RE.test(cleaned) ? cleaned : '';
+  }
+  el.htmlFile.addEventListener('change', function () {
+    fileMsg('');
+    var f = el.htmlFile.files && el.htmlFile.files[0];
+    if (!f) return;
+    if (f.size > MAX_HTML_BYTES) {
+      fileMsg('File terlalu besar (' + fmtBytes(f.size) + '). Maks 256 KB.', 'err');
+      el.htmlFile.value = '';
+      return;
+    }
+    if (el.html.value.trim() !== '' && !window.confirm('Ganti isi kotak komposisi dengan isi file "' + f.name + '"?')) {
+      el.htmlFile.value = '';
+      return;
+    }
+    var reader = new FileReader();
+    reader.onerror = function () { fileMsg('File gagal dibaca. Coba pilih ulang.', 'err'); };
+    reader.onload = function () {
+      var text = typeof reader.result === 'string' ? reader.result : '';
+      if (!text.trim()) { fileMsg('File kosong.', 'err'); return; }
+      el.html.value = text;
+      updateCount();
+      var suggested = nameFromFile(f.name);
+      var filled = false;
+      if (!el.newName.value.trim() && suggested && suggested.toLowerCase() !== 'index') {
+        el.newName.value = suggested;
+        filled = true;
+      }
+      formMsg('');
+      fileMsg('File "' + f.name + '" dimuat (' + fmtBytes(f.size) + ').' +
+        (filled ? ' Nama komposisi diisi "' + suggested + '".' : '') +
+        ' Cek isinya, lalu tekan "Mulai render".', 'ok');
+    };
+    reader.readAsText(f);
+  });
 
   el.tplBtn.addEventListener('click', function () {
     if (el.html.value.trim() !== '' && !window.confirm('Ganti isi textarea dengan komposisi contoh?')) return;
