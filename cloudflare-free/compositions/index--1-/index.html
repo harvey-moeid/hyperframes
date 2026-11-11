@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>Angka Jiwa 8 - TikTok 24 detik</title>
+<!-- Satu-satunya skrip eksternal. Semua visual lain = CSS/SVG inline. -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+/* ===== TOKEN: ganti warna & teks utama HANYA di blok :root ini ===== */
+:root{
+  --ground:#12062b; --ink:#fff6dc; --gold:#f5c04a; --violet:#c084fc;
+  --ink-soft:rgba(255,246,220,.78);      /* kontras > 10:1 di atas ground */
+  --panel:rgba(255,255,255,.07); --edge:rgba(245,192,74,.38);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:monospace;
+  --s-xl:160px; --s-l:96px; --s-m:56px; --s-s:32px;   /* skala tipografi */
+
+  /* Teks (maks 7 kata per layar; angka dihitung kata) */
+  --t-wm:"@jalurtarot";
+  --t-s1a:"Angka Jiwa"; --t-s1b:"Kekuatan"; --t-s1c:"Ambisi"; --t-s1d:"Kesuksesan";
+  --t-s2a:"Makna"; --t-s2b:"Angka 8"; --t-s2c:"Kekuatan"; --t-s2d:"Keseimbangan"; --t-s2e:"Kelimpahan";
+  --t-s3a:"Karakter"; --t-s3b:"Utama"; --t-s3c:"Ambisius"; --t-s3d:"Tegas"; --t-s3e:"Adil"; --t-s3f:"Mandiri";
+  --t-s4a:"Kekuatan"; --t-s4b:"Tangguh"; --t-s4c:"Visioner"; --t-s4d:"Setia"; --t-s4e:"Dermawan";
+  --t-s5a:"Tantangan"; --t-s5b:"Gila kerja"; --t-s5c:"Perfeksionis"; --t-s5d:"Mudah stres";
+  --t-s6a:"Cinta &"; --t-s6b:"Hubungan"; --t-s6c:"Setia"; --t-s6d:"Protektif"; --t-s6e:"Serius";
+  --t-s7a:"Karier &"; --t-s7b:"Keuangan"; --t-s7c:"Bisnis"; --t-s7d:"Hukum"; --t-s7e:"Pimpinan";
+  --t-s8a:"Percayalah pada"; --t-s8b:"diri Anda"; --t-s8c:"Follow @jalurtarot";
+}
+
+/* ===== DASAR (vertikal 9:16) ===== */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--ground);font-family:var(--font);color:var(--ink)}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--ground)}
+.clip,#cam{position:absolute;inset:0}
+
+/* ===== LAPISAN LATAR (parallax: glow paling lambat, bintang paling cepat) ===== */
+.bg-layer{position:absolute;inset:-300px}
+#bg-glow{background:
+  radial-gradient(900px 900px at 30% 22%,rgba(192,132,252,.34),transparent 70%),
+  radial-gradient(820px 820px at 76% 74%,rgba(245,192,74,.15),transparent 70%),
+  radial-gradient(1100px 1100px at 50% 50%,rgba(192,132,252,.14),transparent 75%)}
+#bg-rings{background:repeating-radial-gradient(circle at 50% 40%,rgba(245,192,74,.08) 0,rgba(245,192,74,.08) 2px,transparent 2px,transparent 120px)}
+#bg-dots{position:absolute;left:-300px;top:-300px;width:1680px;height:2520px}
+.d-gold{fill:var(--gold)} .d-ink{fill:var(--ink)} .d-vio{fill:var(--violet)}
+#bg-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(18,6,43,.75) 100%)}
+
+/* ===== PANGGUNG: area aman TikTok (atas 300 px, bawah 380 px untuk UI/caption) ===== */
+.stage{position:absolute;inset:300px 120px 380px 120px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:48px}
+.tx{display:inline-block;white-space:nowrap}
+.h-l{font-size:var(--s-l);font-weight:700;letter-spacing:-.03em;line-height:1.05}
+.h-m{font-size:var(--s-m);font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.b-m{font-size:var(--s-m);font-weight:400;line-height:1.1;color:var(--ink-soft)}
+.gold{color:var(--gold)}
+.ln{display:flex;justify-content:center;gap:.28em}
+
+/* token teks -> konten */
+.t-wm::before{content:var(--t-wm)}
+.t-s1a::before{content:var(--t-s1a)} .t-s1b::before{content:var(--t-s1b)} .t-s1c::before{content:var(--t-s1c)} .t-s1d::before{content:var(--t-s1d)}
+.t-s2a::before{content:var(--t-s2a)} .t-s2b::before{content:var(--t-s2b)} .t-s2c::before{content:var(--t-s2c)} .t-s2d::before{content:var(--t-s2d)} .t-s2e::before{content:var(--t-s2e)}
+.t-s3a::before{content:var(--t-s3a)} .t-s3b::before{content:var(--t-s3b)} .t-s3c::before{content:var(--t-s3c)} .t-s3d::before{content:var(--t-s3d)} .t-s3e::before{content:var(--t-s3e)} .t-s3f::before{content:var(--t-s3f)}
+.t-s4a::before{content:var(--t-s4a)} .t-s4b::before{content:var(--t-s4b)} .t-s4c::before{content:var(--t-s4c)} .t-s4d::before{content:var(--t-s4d)} .t-s4e::before{content:var(--t-s4e)}
+.t-s5a::before{content:var(--t-s5a)} .t-s5b::before{content:var(--t-s5b)} .t-s5c::before{content:var(--t-s5c)} .t-s5d::before{content:var(--t-s5d)}
+.t-s6a::before{content:var(--t-s6a)} .t-s6b::before{content:var(--t-s6b)} .t-s6c::before{content:var(--t-s6c)} .t-s6d::before{content:var(--t-s6d)} .t-s6e::before{content:var(--t-s6e)}
+.t-s7a::before{content:var(--t-s7a)} .t-s7b::before{content:var(--t-s7b)} .t-s7c::before{content:var(--t-s7c)} .t-s7d::before{content:var(--t-s7d)} .t-s7e::before{content:var(--t-s7e)}
+.t-s8a::before{content:var(--t-s8a)} .t-s8b::before{content:var(--t-s8b)} .t-s8c::before{content:var(--t-s8c)}
+
+/* ===== UTIL SVG: garis emas + efek "digambar" (pathLength=1, dasharray 1 2) ===== */
+.ico{width:72px;height:72px;flex:none}
+.ico *{fill:none;stroke:var(--gold);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.dw{stroke-dasharray:1 2}
+.st{fill:none;stroke:var(--gold);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== WATERMARK (permanen, atas, di bawah tab TikTok) ===== */
+#wm{display:flex;justify-content:center;align-items:flex-start;padding-top:190px}
+#wm-pill{padding:14px 40px;border-radius:999px;border:2px solid var(--edge);background:var(--panel);
+  font-family:var(--mono);font-size:var(--s-s);letter-spacing:.14em;color:var(--gold)}
+
+/* ===== 1. HOOK ===== */
+#s1-art{width:520px;height:640px;display:block}
+#s1-words{display:flex;flex-direction:column;align-items:center;gap:6px}
+.ringc{fill:none;stroke:var(--violet);stroke-width:3;stroke-dasharray:3 18;opacity:.55}
+.ringf{fill:none;stroke:var(--violet);stroke-width:2;opacity:.25}
+.e0{fill:none;stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-dasharray:1 2;opacity:.9}
+.e1{fill:none;stroke:var(--gold);stroke-width:14;stroke-linecap:round;stroke-dasharray:1 2}
+.e2{fill:none;stroke:var(--gold);stroke-width:30;stroke-linecap:round;stroke-dasharray:1 2;opacity:.2}
+.e3{fill:none;stroke:var(--gold);stroke-width:48;stroke-linecap:round;stroke-dasharray:1 2;opacity:.1}
+
+/* ===== 2. MAKNA ===== */
+#s2-art{width:440px;height:345px;display:block}
+.pan{fill:var(--gold);fill-opacity:.22;stroke:var(--gold);stroke-width:6;stroke-linejoin:round}
+.knob{fill:var(--gold)}
+#s2-pills{display:flex;flex-direction:column;align-items:center;gap:22px}
+.pill-s{padding:16px 56px;border-radius:999px;background:var(--panel);border:2px solid var(--edge)}
+
+/* ===== 3 & 5. DAFTAR BARIS ===== */
+.list{display:flex;flex-direction:column;gap:28px}
+.row{display:flex;align-items:center;gap:32px;width:700px;padding:28px 44px;border-radius:28px;background:var(--panel);border:2px solid var(--edge)}
+
+/* ===== 4. KEKUATAN (grid 2x2) ===== */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:56px 48px;width:840px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:20px}
+.orb{width:200px;height:200px;border-radius:50%;background:var(--panel);border:4px solid var(--gold);display:flex;align-items:center;justify-content:center}
+.ico.big{width:104px;height:104px}
+
+/* ===== 5. TANTANGAN ===== */
+#s5-tri{width:220px;height:198px;display:block}
+#s5-tri *{fill:none;stroke:var(--gold);stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== 6. CINTA ===== */
+#s6-art{width:520px;height:380px;display:block}
+.hd0{fill:none;stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-dasharray:1 2;opacity:.85}
+.hd1{fill:none;stroke-width:12;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 2}
+.hd2{fill:none;stroke-width:30;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 2;opacity:.2}
+.hv{stroke:var(--violet)} .hg{stroke:var(--gold)}
+.trio{display:flex;align-items:center;justify-content:center;gap:28px}
+.sep{display:block;width:14px;height:14px;border-radius:50%;background:var(--gold)}
+
+/* ===== 7. KARIER ===== */
+#s7-art{width:520px;height:380px;display:block}
+.coin{fill:var(--gold);stroke:var(--ground);stroke-width:3}
+.ground-l{fill:none;stroke:var(--edge);stroke-width:4;stroke-linecap:round}
+
+/* ===== 8. PENUTUP / CTA ===== */
+#s8-star{width:220px;height:220px;display:block}
+.star{fill:var(--gold)}
+.halo{fill:var(--violet);opacity:.25}
+.pill{display:flex;align-items:center;padding:28px 64px;border-radius:999px;background:var(--gold);color:var(--ground);
+  font-size:var(--s-m);font-weight:700;letter-spacing:-.02em}
+</style>
+</head>
+<body>
+<!-- Root: durasi video = data-duration (24 s = 8 scene x 3 s). Tiap scene = satu .clip, overlap 0.4 s untuk crossfade. -->
+<div id="root" data-composition-id="main" data-start="0" data-duration="24" data-width="1080" data-height="1920">
+
+  <!-- Latar permanen: 3 lapisan bergerak + vinyet statis -->
+  <div id="bg" class="clip" data-start="0" data-duration="24" data-track-index="0">
+    <div id="bg-glow" class="bg-layer"></div>
+    <div id="bg-rings" class="bg-layer"></div>
+    <svg id="bg-dots" viewBox="0 0 1680 2520" aria-hidden="true"></svg>
+    <div id="bg-vig"></div>
+  </div>
+
+  <!-- Wrapper kamera: push-in 1.00 -> 1.06 sepanjang video -->
+  <div id="cam">
+
+    <!-- 1. HOOK 0.0-3.4 : angka 8 bercahaya digambar, orbit berputar -->
+    <div id="s1" class="clip" data-start="0" data-duration="3.4" data-track-index="1">
+      <div class="stage">
+        <div id="s1-title" class="h-l tx t-s1a"></div>
+        <svg id="s1-art" viewBox="0 0 520 640" aria-hidden="true">
+          <g id="s1-ring">
+            <circle class="ringc" cx="260" cy="320" r="240"/>
+            <circle class="ringf" cx="260" cy="320" r="200"/>
+          </g>
+          <g id="s1-eight">
+            <circle class="e3 et" pathLength="1" cx="260" cy="225" r="85"/>
+            <circle class="e2 et" pathLength="1" cx="260" cy="225" r="85"/>
+            <circle class="e1 et" pathLength="1" cx="260" cy="225" r="85"/>
+            <circle class="e0 et" pathLength="1" cx="260" cy="225" r="85"/>
+            <circle class="e3 eb" pathLength="1" cx="260" cy="405" r="95"/>
+            <circle class="e2 eb" pathLength="1" cx="260" cy="405" r="95"/>
+            <circle class="e1 eb" pathLength="1" cx="260" cy="405" r="95"/>
+            <circle class="e0 eb" pathLength="1" cx="260" cy="405" r="95"/>
+          </g>
+        </svg>
+        <div id="s1-words">
+          <div class="h-m gold s1w"><span class="tx t-s1b"></span></div>
+          <div class="h-m gold s1w"><span class="tx t-s1c"></span></div>
+          <div class="h-m gold s1w"><span class="tx t-s1d"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. MAKNA 3.0-6.4 : neraca bergoyang -->
+    <div id="s2" class="clip" data-start="3" data-duration="3.4" data-track-index="2">
+      <div class="stage">
+        <div id="s2-title" class="h-l">
+          <div class="ln"><span class="tx t-s2a"></span></div>
+          <div class="ln gold"><span class="tx t-s2b"></span></div>
+        </div>
+        <svg id="s2-art" viewBox="0 0 460 360" aria-hidden="true">
+          <path class="st dw" pathLength="1" d="M230 70 V300"/>
+          <path class="st dw" pathLength="1" d="M150 322 H310"/>
+          <circle class="knob" cx="230" cy="58" r="14"/>
+          <g id="s2-beam">
+            <path class="st dw" pathLength="1" d="M60 70 H400"/>
+            <path class="st str" d="M60 70 L0 210 M60 70 L120 210 M400 70 L340 210 M400 70 L460 210"/>
+            <path class="pan" d="M0 210 H120 Q112 248 60 248 Q8 248 0 210Z"/>
+            <path class="pan" d="M340 210 H460 Q452 248 400 248 Q348 248 340 210Z"/>
+          </g>
+        </svg>
+        <div id="s2-pills">
+          <div class="pill-s"><span class="h-m tx t-s2c"></span></div>
+          <div class="pill-s"><span class="h-m tx t-s2d"></span></div>
+          <div class="pill-s"><span class="h-m tx t-s2e"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. KARAKTER 6.0-9.4 : 4 baris dengan centang digambar -->
+    <div id="s3" class="clip" data-start="6" data-duration="3.4" data-track-index="3">
+      <div class="stage">
+        <div id="s3-title" class="h-l">
+          <div class="ln"><span class="tx t-s3a"></span></div>
+          <div class="ln gold"><span class="tx t-s3b"></span></div>
+        </div>
+        <div class="list">
+          <div class="row"><svg class="ico" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path class="dw" pathLength="1" d="M23 37 L32 46 L50 26"/></svg><span class="h-m tx t-s3c"></span></div>
+          <div class="row"><svg class="ico" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path class="dw" pathLength="1" d="M23 37 L32 46 L50 26"/></svg><span class="h-m tx t-s3d"></span></div>
+          <div class="row"><svg class="ico" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path class="dw" pathLength="1" d="M23 37 L32 46 L50 26"/></svg><span class="h-m tx t-s3e"></span></div>
+          <div class="row"><svg class="ico" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path class="dw" pathLength="1" d="M23 37 L32 46 L50 26"/></svg><span class="h-m tx t-s3f"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. KEKUATAN 9.0-12.4 : 4 ikon dalam lingkaran -->
+    <div id="s4" class="clip" data-start="9" data-duration="3.4" data-track-index="4">
+      <div class="stage">
+        <div id="s4-title" class="h-l"><span class="tx t-s4a"></span></div>
+        <div class="grid">
+          <div class="cell">
+            <div class="orb"><svg class="ico big" viewBox="0 0 72 72" aria-hidden="true"><path class="dw" pathLength="1" d="M22 12 H50 V30 Q50 44 36 44 Q22 44 22 30 Z M22 18 H12 Q12 32 24 34 M50 18 H60 Q60 32 48 34 M36 44 V54 M26 60 H46 M30 54 H42"/></svg></div>
+            <div class="h-m tx t-s4b"></div>
+          </div>
+          <div class="cell">
+            <div class="orb"><svg class="ico big" viewBox="0 0 72 72" aria-hidden="true"><path class="dw" pathLength="1" d="M10 52 L28 34 L40 42 L62 18 M48 18 H62 V32"/></svg></div>
+            <div class="h-m tx t-s4c"></div>
+          </div>
+          <div class="cell">
+            <div class="orb"><svg class="ico big" viewBox="0 0 72 72" aria-hidden="true"><path class="dw" pathLength="1" d="M36 10 L58 18 V36 Q58 54 36 64 Q14 54 14 36 V18 Z M26 36 L33 43 L46 28"/></svg></div>
+            <div class="h-m tx t-s4d"></div>
+          </div>
+          <div class="cell">
+            <div class="orb"><svg class="ico big" viewBox="0 0 72 72" aria-hidden="true"><path class="dw" pathLength="1" d="M36 58 C10 40 12 18 28 18 C33 18 36 22 36 26 C36 22 39 18 44 18 C60 18 62 40 36 58Z"/></svg></div>
+            <div class="h-m tx t-s4e"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. TANTANGAN 12.0-15.4 : segitiga peringatan + 3 baris -->
+    <div id="s5" class="clip" data-start="12" data-duration="3.4" data-track-index="5">
+      <div class="stage">
+        <svg id="s5-tri" viewBox="0 0 200 180" aria-hidden="true"><path d="M100 14 L188 166 H12 Z"/><path d="M100 66 V112"/><path d="M100 140 V141"/></svg>
+        <div id="s5-title" class="h-l"><span class="tx t-s5a"></span></div>
+        <div class="list">
+          <div class="row"><svg class="ico warn" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path d="M36 20 V40"/><path d="M36 51 V52"/></svg><span class="h-m tx t-s5b"></span></div>
+          <div class="row"><svg class="ico warn" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path d="M36 20 V40"/><path d="M36 51 V52"/></svg><span class="h-m tx t-s5c"></span></div>
+          <div class="row"><svg class="ico warn" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><path d="M36 20 V40"/><path d="M36 51 V52"/></svg><span class="h-m tx t-s5d"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. CINTA 15.0-18.4 : dua hati bercahaya -->
+    <div id="s6" class="clip" data-start="15" data-duration="3.4" data-track-index="6">
+      <div class="stage">
+        <div id="s6-title" class="h-l">
+          <div class="ln"><span class="tx t-s6a"></span></div>
+          <div class="ln gold"><span class="tx t-s6b"></span></div>
+        </div>
+        <svg id="s6-art" viewBox="0 0 520 380" aria-hidden="true">
+          <g id="h-a">
+            <path class="hd2 hv hd" pathLength="1" d="M190 250 C80 170 90 60 140 60 C170 60 190 80 190 105 C190 80 210 60 240 60 C290 60 300 170 190 250Z"/>
+            <path class="hd1 hv hd" pathLength="1" d="M190 250 C80 170 90 60 140 60 C170 60 190 80 190 105 C190 80 210 60 240 60 C290 60 300 170 190 250Z"/>
+            <path class="hd0 hd" pathLength="1" d="M190 250 C80 170 90 60 140 60 C170 60 190 80 190 105 C190 80 210 60 240 60 C290 60 300 170 190 250Z"/>
+          </g>
+          <g id="h-b">
+            <path class="hd2 hg hd" pathLength="1" d="M330 300 C220 220 230 110 280 110 C310 110 330 130 330 155 C330 130 350 110 380 110 C430 110 440 220 330 300Z"/>
+            <path class="hd1 hg hd" pathLength="1" d="M330 300 C220 220 230 110 280 110 C310 110 330 130 330 155 C330 130 350 110 380 110 C430 110 440 220 330 300Z"/>
+            <path class="hd0 hd" pathLength="1" d="M330 300 C220 220 230 110 280 110 C310 110 330 130 330 155 C330 130 350 110 380 110 C430 110 440 220 330 300Z"/>
+          </g>
+        </svg>
+        <div class="trio">
+          <span class="b-m tx tw t-s6c"></span><i class="sep tw"></i><span class="b-m tx tw t-s6d"></span><i class="sep tw"></i><span class="b-m tx tw t-s6e"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. KARIER 18.0-21.4 : tumpukan koin + panah naik -->
+    <div id="s7" class="clip" data-start="18" data-duration="3.4" data-track-index="7">
+      <div class="stage">
+        <div id="s7-title" class="h-l">
+          <div class="ln"><span class="tx t-s7a"></span></div>
+          <div class="ln gold"><span class="tx t-s7b"></span></div>
+        </div>
+        <svg id="s7-art" viewBox="0 0 520 380" aria-hidden="true">
+          <path class="ground-l" d="M20 344 H500"/>
+          <rect class="coin" x="40" y="318" width="120" height="22" rx="11"/>
+          <rect class="coin" x="40" y="292" width="120" height="22" rx="11"/>
+          <rect class="coin" x="40" y="266" width="120" height="22" rx="11"/>
+          <rect class="coin" x="200" y="318" width="120" height="22" rx="11"/>
+          <rect class="coin" x="200" y="292" width="120" height="22" rx="11"/>
+          <rect class="coin" x="200" y="266" width="120" height="22" rx="11"/>
+          <rect class="coin" x="200" y="240" width="120" height="22" rx="11"/>
+          <rect class="coin" x="200" y="214" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="318" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="292" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="266" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="240" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="214" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="188" width="120" height="22" rx="11"/>
+          <rect class="coin" x="360" y="162" width="120" height="22" rx="11"/>
+          <path class="st dw" pathLength="1" d="M50 200 L470 40"/>
+          <path class="st dw" pathLength="1" d="M447.7 65.7 L470 40 L436.3 35.7"/>
+        </svg>
+        <div class="trio">
+          <span class="b-m tx tw t-s7c"></span><i class="sep tw"></i><span class="b-m tx tw t-s7d"></span><i class="sep tw"></i><span class="b-m tx tw t-s7e"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. PENUTUP 21.0-24.0 : ajakan follow; tween terakhir selesai 22.4, lalu HOLD 1.6 s -->
+    <div id="s8" class="clip" data-start="21" data-duration="3" data-track-index="8">
+      <div class="stage">
+        <svg id="s8-star" viewBox="0 0 220 220" aria-hidden="true">
+          <circle class="halo" cx="110" cy="110" r="100"/>
+          <path class="star" d="M110 10 Q118 90 210 110 Q118 130 110 210 Q102 130 10 110 Q102 90 110 10Z"/>
+        </svg>
+        <div id="s8-title" class="h-l">
+          <div class="ln"><span class="tx t-s8a"></span></div>
+          <div class="ln gold"><span class="tx t-s8b"></span></div>
+        </div>
+        <div id="s8-pill" class="pill"><span class="tx t-s8c"></span></div>
+      </div>
+    </div>
+
+    <!-- Watermark permanen (di atas semua scene); memudar saat CTA muncul -->
+    <div id="wm" class="clip" data-start="0" data-duration="24" data-track-index="9">
+      <div id="wm-pill"><span class="tx t-wm"></span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var IN = "power3.out", OUT = "power2.in", LOOP = "sine.inOut";   /* easing: masuk / keluar / napas */
+
+  /* --- Bintang latar: PRNG ber-seed (mulberry32), posisi tetap & deterministik --- */
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  var rnd = mulberry32(20261112), dots = document.getElementById("bg-dots"), NS = "http://www.w3.org/2000/svg";
+  for (var i = 0; i < 96; i++) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", (rnd() * 1680).toFixed(1));
+    c.setAttribute("cy", (rnd() * 2520).toFixed(1));
+    c.setAttribute("r", (1.5 + rnd() * 3.5).toFixed(1));
+    c.setAttribute("opacity", (0.2 + rnd() * 0.5).toFixed(2));
+    c.setAttribute("class", i % 5 === 0 ? "d-gold" : i % 3 === 0 ? "d-ink" : "d-vio");
+    dots.appendChild(c);
+  }
+
+  var tl = gsap.timeline({paused: true});
+
+  /* Helper: masuk (geser dari +40) dan keluar (geser ke -40), overlap 0.4 s antar scene */
+  function enter(id, t){ tl.fromTo(id + " .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, t); }
+  function leave(id, t){ tl.to(id + " .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, t); }
+  function draw(sel, t, dur, stg){ tl.fromTo(sel, {strokeDashoffset:1}, {strokeDashoffset:0, duration:dur, ease:IN, stagger:stg || 0}, t); }
+
+  /* --- LATAR: drift linear (satu-satunya ease none) + napas glow. Kecepatan beda = parallax. --- */
+  tl.fromTo("#bg-glow",  {x:-50, y:30},  {x:50,   y:-30,  duration:24, ease:"none"}, 0);
+  tl.fromTo("#bg-rings", {x:0,   y:0},   {x:-90,  y:-120, duration:24, ease:"none"}, 0);
+  tl.fromTo("#bg-dots",  {x:80,  y:60},  {x:-180, y:-160, duration:24, ease:"none"}, 0);
+  tl.fromTo("#bg-glow",  {scale:1}, {scale:1.12, duration:12, ease:LOOP, yoyo:true, repeat:1}, 0);
+
+  /* --- KAMERA: push-in 1.00 -> 1.06 sepanjang 24 s --- */
+  tl.fromTo("#cam", {scale:1, transformOrigin:"50% 50%"}, {scale:1.06, transformOrigin:"50% 50%", duration:24, ease:"power1.inOut"}, 0);
+
+  /* --- WATERMARK --- */
+  tl.from("#wm-pill", {opacity:0, y:-20, duration:.6, ease:IN}, .3);
+  tl.to("#wm-pill", {opacity:0, duration:.4, ease:OUT}, 20.6);                                   /* diganti tombol follow di scene 8 */
+
+  /* --- 1. HOOK 0-3: frame 0 sudah berisi (judul + angka 8 setengah tergambar) --- */
+  tl.fromTo("#s1 .et", {strokeDashoffset:.65}, {strokeDashoffset:0, duration:1.4, ease:IN}, .1);
+  tl.fromTo("#s1 .eb", {strokeDashoffset:.65}, {strokeDashoffset:0, duration:1.4, ease:IN}, .35);
+  tl.fromTo("#s1-ring", {rotation:0, svgOrigin:"260 320"}, {rotation:70, svgOrigin:"260 320", duration:3.4, ease:"none"}, 0);
+  tl.from("#s1-title", {y:60, opacity:.35, duration:.7, ease:IN}, .15);
+  tl.from(".s1w", {y:50, opacity:0, duration:.7, ease:IN, stagger:.2}, .6);
+  tl.fromTo("#s1-eight", {scale:1, svgOrigin:"260 320"}, {scale:1.04, svgOrigin:"260 320", duration:.55, ease:LOOP, yoyo:true, repeat:1}, 1.8);   /* napas */
+  leave("#s1", 3.0);
+
+  /* --- 2. MAKNA 3-6: neraca digambar, kartu kata bergantian --- */
+  enter("#s2", 3.0);
+  tl.from("#s2-title .ln", {y:50, opacity:0, duration:.6, ease:IN, stagger:.15}, 3.2);
+  draw("#s2 .dw", 3.3, .8, .1);
+  tl.from("#s2 .pan, #s2 .str", {opacity:0, y:24, duration:.5, ease:IN, stagger:.05}, 3.9);
+  tl.from("#s2 .pill-s", {y:40, opacity:0, duration:.5, ease:IN, stagger:.15}, 4.0);
+  tl.fromTo("#s2-beam", {rotation:-5, svgOrigin:"230 70"}, {rotation:5, svgOrigin:"230 70", duration:.8, ease:LOOP, yoyo:true, repeat:1}, 4.3);   /* neraca bergoyang */
+  leave("#s2", 6.0);
+
+  /* --- 3. KARAKTER 6-9: baris masuk dari kiri, centang digambar --- */
+  enter("#s3", 6.0);
+  tl.from("#s3-title .ln", {y:50, opacity:0, duration:.6, ease:IN, stagger:.15}, 6.2);
+  tl.from("#s3 .row", {x:-60, opacity:0, duration:.6, ease:IN, stagger:.2}, 6.5);
+  draw("#s3 .dw", 6.9, .4, .2);
+  tl.to("#s3 .row", {scale:1.03, transformOrigin:"50% 50%", duration:.4, ease:LOOP, yoyo:true, repeat:1, stagger:.1}, 7.8);
+  leave("#s3", 9.0);
+
+  /* --- 4. KEKUATAN 9-12: ikon dalam lingkaran muncul bergantian --- */
+  enter("#s4", 9.0);
+  tl.from("#s4-title", {y:50, opacity:0, duration:.6, ease:IN}, 9.2);
+  tl.from("#s4 .orb", {scale:.5, opacity:0, transformOrigin:"50% 50%", duration:.6, ease:IN, stagger:.15}, 9.5);
+  draw("#s4 .dw", 9.9, .7, .12);
+  tl.from("#s4 .cell > .h-m", {y:30, opacity:0, duration:.5, ease:IN, stagger:.15}, 10.0);
+  tl.to("#s4 .orb", {scale:1.05, transformOrigin:"50% 50%", duration:.35, ease:LOOP, yoyo:true, repeat:1, stagger:.1}, 10.95);
+  leave("#s4", 12.0);
+
+  /* --- 5. TANTANGAN 12-15: peringatan, baris masuk dari kanan --- */
+  enter("#s5", 12.0);
+  tl.from("#s5-tri", {scale:.6, opacity:0, transformOrigin:"50% 50%", duration:.6, ease:IN}, 12.2);
+  tl.from("#s5-title", {y:50, opacity:0, duration:.6, ease:IN}, 12.4);
+  tl.from("#s5 .row", {x:60, opacity:0, duration:.6, ease:IN, stagger:.2}, 12.7);
+  tl.to("#s5-tri", {scale:1.06, transformOrigin:"50% 50%", duration:.6, ease:LOOP, yoyo:true, repeat:1}, 13.0);
+  tl.to("#s5 .warn", {scale:1.2, transformOrigin:"50% 50%", duration:.35, ease:LOOP, yoyo:true, repeat:1, stagger:.1}, 13.8);
+  leave("#s5", 15.0);
+
+  /* --- 6. CINTA 15-18: dua hati digambar lalu melayang berlawanan --- */
+  enter("#s6", 15.0);
+  tl.from("#s6-title .ln", {y:50, opacity:0, duration:.6, ease:IN, stagger:.15}, 15.2);
+  draw("#s6 .hd", 15.3, 1.0, .08);
+  tl.from("#s6 .tw", {y:30, opacity:0, duration:.5, ease:IN, stagger:.12}, 16.0);
+  tl.to("#h-a", {y:-14, duration:.6, ease:LOOP, yoyo:true, repeat:1}, 16.7);
+  tl.to("#h-b", {y:14, duration:.6, ease:LOOP, yoyo:true, repeat:1}, 16.7);
+  leave("#s6", 18.0);
+
+  /* --- 7. KARIER 18-21: koin menumpuk, panah naik digambar --- */
+  enter("#s7", 18.0);
+  tl.from("#s7-title .ln", {y:50, opacity:0, duration:.6, ease:IN, stagger:.15}, 18.2);
+  tl.from("#s7 .coin", {scaleY:0, opacity:0, transformOrigin:"50% 100%", duration:.35, ease:IN, stagger:.05}, 18.5);
+  draw("#s7 .dw", 19.0, .8, 0);
+  tl.from("#s7 .tw", {y:30, opacity:0, duration:.5, ease:IN, stagger:.12}, 19.3);
+  tl.to("#s7-art", {scale:1.03, transformOrigin:"50% 50%", duration:.5, ease:LOOP, yoyo:true, repeat:1}, 19.95);
+  leave("#s7", 21.0);
+
+  /* --- 8. PENUTUP 21-24: semua mendarat <= 22.4 s, lalu HOLD 1.6 s tanpa tween konten --- */
+  enter("#s8", 21.0);
+  tl.from("#s8-star", {scale:.5, opacity:0, transformOrigin:"50% 50%", duration:.6, ease:IN}, 21.1);
+  tl.from("#s8-title .ln", {y:50, opacity:0, duration:.7, ease:IN, stagger:.15}, 21.3);
+  tl.from("#s8-pill", {y:40, opacity:0, scale:.92, transformOrigin:"50% 50%", duration:.6, ease:IN}, 21.8);
+
+  /* --- Daftarkan SETELAH tween terakhir, lalu seek(0) --- */
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+  tl.seek(0);
+})();
+</script>
+</body>
+</html>
