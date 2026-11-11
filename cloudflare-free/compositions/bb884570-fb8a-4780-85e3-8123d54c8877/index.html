@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>JalurTarot — Angka Jiwa 8</title>
+  <style>
+    :root {
+      --bg: #090512;
+      --purple: #211039;
+      --purple2: #49216d;
+      --gold: #f2cf7a;
+      --gold2: #fff0c3;
+      --cream: #fff8e9;
+      --muted: #d9c8e8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg); color: var(--cream);
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    #composition {
+      position: relative; width: 1080px; height: 1920px; overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 36%, rgba(100,49,145,.54), transparent 44%),
+        radial-gradient(ellipse at 12% 82%, rgba(65,25,105,.36), transparent 38%),
+        linear-gradient(155deg, #080511 0%, #1b0d2c 50%, #090512 100%);
+    }
+    .starfield, .vignette, .ornament { position:absolute; inset:0; pointer-events:none; }
+    .star {
+      position:absolute; width:4px; height:4px; border-radius:50%;
+      background:#fff0c3; box-shadow:0 0 13px 3px rgba(242,207,122,.65);
+      opacity:.55;
+    }
+    .vignette { background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.5) 100%); }
+    .ornament svg { width:100%; height:100%; }
+    .slide {
+      position:absolute; inset:0; padding:112px 86px 100px;
+      display:flex; flex-direction:column; justify-content:space-between;
+      opacity:0; visibility:hidden; transform:scale(1.02);
+    }
+    .slide.active { visibility:visible; }
+    .eyebrow {
+      text-align:center; color:var(--gold); font:700 22px/1.3 Arial,sans-serif;
+      letter-spacing:5px; text-transform:uppercase;
+    }
+    .title {
+      margin:27px auto 0; max-width:900px; text-align:center;
+      color:var(--gold2); font-size:67px; line-height:1.1; font-weight:700;
+      text-shadow:0 0 25px rgba(242,207,122,.25);
+    }
+    .title.compact { font-size:56px; }
+    .divider { display:flex; align-items:center; gap:18px; width:72%; margin:30px auto 0; }
+    .divider:before,.divider:after { content:""; height:2px; flex:1; }
+    .divider:before { background:linear-gradient(90deg,transparent,var(--gold)); }
+    .divider:after { background:linear-gradient(90deg,var(--gold),transparent); }
+    .divider span { color:var(--gold); font-size:30px; }
+    .content {
+      flex:1; display:flex; flex-direction:column; justify-content:center;
+      gap:18px; padding:12px 4px;
+    }
+    .motif {
+      width:390px; height:390px; align-self:center; margin:0 auto 8px;
+      filter:drop-shadow(0 0 24px rgba(242,207,122,.35));
+    }
+    .motif svg { width:100%; height:100%; overflow:visible; }
+    .motif .line { fill:none; stroke:var(--gold); stroke-width:5; stroke-linecap:round; stroke-linejoin:round; }
+    .motif .soft { stroke-opacity:.45; }
+    .subtitle { text-align:center; color:var(--gold); font-size:39px; line-height:1.2; font-weight:bold; }
+    .paragraph {
+      margin:7px 0; text-align:center; color:var(--cream);
+      font-size:31px; line-height:1.4; font-weight:400;
+    }
+    .bullets { width:100%; max-width:850px; margin:18px auto 0; }
+    .bullet {
+      display:flex; align-items:flex-start; gap:20px; margin:0 0 23px;
+      color:var(--cream); font-size:32px; line-height:1.28;
+    }
+    .bullet .icon { color:var(--gold); font-size:31px; line-height:1.1; }
+    .callout {
+      margin-top:22px; padding:28px 34px; border:2px solid rgba(242,207,122,.82);
+      border-radius:24px; text-align:center; color:var(--gold2);
+      background:linear-gradient(135deg,rgba(49,23,76,.96),rgba(15,8,31,.94));
+      box-shadow:0 0 30px rgba(242,207,122,.13),inset 0 0 24px rgba(242,207,122,.05);
+      font-size:29px; line-height:1.38;
+    }
+    .footer { display:flex; flex-direction:column; align-items:center; gap:19px; }
+    .counter { color:rgba(255,240,195,.72); font:700 20px Arial,sans-serif; letter-spacing:4px; }
+    .follow {
+      border:2px solid #e8c46e; border-radius:999px; padding:17px 38px;
+      color:#fff5d7; background:linear-gradient(100deg,#32135c,#612c91,#32135c);
+      box-shadow:0 0 25px rgba(201,155,84,.25),inset 0 0 16px rgba(255,255,255,.08);
+      font:700 29px Arial,sans-serif; letter-spacing:1px;
+    }
+    .sparkle {
+      position:absolute; width:8px; height:8px; border-radius:50%;
+      background:var(--gold2); box-shadow:0 0 22px 8px rgba(242,207,122,.45);
+      pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+  <main id="composition" data-duration="40" data-width="1080" data-height="1920" data-fps="30">
+    <div class="starfield" id="starfield"></div>
+    <div class="vignette"></div>
+    <div class="ornament">
+      <svg viewBox="0 0 1080 1920" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="goldLine" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8b5b22"/><stop offset=".5" stop-color="#fff0b8"/><stop offset="1" stop-color="#a96d2d"/>
+          </linearGradient>
+        </defs>
+        <rect x="28" y="28" width="1024" height="1864" rx="34" fill="none" stroke="url(#goldLine)" stroke-width="3"/>
+        <rect x="44" y="44" width="992" height="1832" rx="27" fill="none" stroke="#c99b54" stroke-opacity=".35" stroke-width="1.5"/>
+        <path d="M48 180V48H180 M900 48H1032V180 M48 1740V1872H180 M900 1872H1032V1740" fill="none" stroke="url(#goldLine)" stroke-width="7" stroke-linecap="round"/>
+        <g fill="#f2cf7a"><circle cx="75" cy="75" r="9"/><circle cx="1005" cy="75" r="9"/><circle cx="75" cy="1845" r="9"/><circle cx="1005" cy="1845" r="9"/></g>
+      </svg>
+    </div>
+
+    <section class="slide" data-slide="0">
+      <header><div class="eyebrow">Numerologi • Jalur Hidup</div><h1 class="title">ANGKA JIWA 8</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="number"></div>
+        <div class="subtitle">Kekuatan, Ambisi, dan Kesuksesan</div>
+        <p class="paragraph">Kenali makna, karakter, dan perjalanan batin pemilik Angka Jiwa 8.</p>
+        <div class="callout">Apakah angka 8 menggambarkan dirimu?</div>
+      </div>
+      <footer class="footer"><div class="counter">01 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="1">
+      <header><div class="eyebrow">Makna Angka 8</div><h1 class="title">Kekuatan &amp; Keseimbangan</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="scales"></div>
+        <p class="paragraph">Angka 8 sering dikaitkan dengan kekuatan, ambisi, tanggung jawab, dan pencapaian materi.</p>
+        <p class="paragraph">Kamu terdorong untuk mandiri, membangun sesuatu yang bernilai, dan menciptakan kehidupan yang stabil.</p>
+        <div class="callout">Kesuksesan terbaik hadir saat ambisi berjalan bersama kebijaksanaan.</div>
+      </div>
+      <footer class="footer"><div class="counter">02 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="2">
+      <header><div class="eyebrow">Karakter Utama</div><h1 class="title">Pribadi yang Bertekad Kuat</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="crown"></div>
+        <div class="bullets">
+          <div class="bullet"><span class="icon">✧</span><span>Ambisius dan pekerja keras</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Tegas dalam mengambil keputusan</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Terorganisasi dan strategis</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Berorientasi pada hasil</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Memiliki daya tahan yang kuat</span></div>
+        </div>
+        <div class="callout">Belajar mendengarkan orang lain akan membuat kekuatanmu semakin matang.</div>
+      </div>
+      <footer class="footer"><div class="counter">03 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="3">
+      <header><div class="eyebrow">Potensi Diri</div><h1 class="title">Kekuatan Angka 8</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="trophy"></div>
+        <div class="bullets">
+          <div class="bullet"><span class="icon">✧</span><span>Mental tangguh dan pantang menyerah</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Mampu melihat peluang</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Pandai menyusun strategi</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Bertanggung jawab dan konsisten</span></div>
+        </div>
+        <div class="callout">Gunakan pengaruh dan kemampuanmu untuk membawa manfaat bagi sekitar.</div>
+      </div>
+      <footer class="footer"><div class="counter">04 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="4">
+      <header><div class="eyebrow">Hal yang Perlu Dijaga</div><h1 class="title">Tantangan Angka 8</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="heart"></div>
+        <div class="bullets">
+          <div class="bullet"><span class="icon">✧</span><span>Terlalu fokus pada materi dan karier</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Perfeksionis dan sulit merasa puas</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Rentan stres karena beban berlebihan</span></div>
+          <div class="bullet"><span class="icon">✧</span><span>Kadang terlihat kaku atau terlalu rasional</span></div>
+        </div>
+        <div class="callout">Seimbangkan ambisi dengan istirahat, emosi, dan hubungan yang sehat.</div>
+      </div>
+      <footer class="footer"><div class="counter">05 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="5">
+      <header><div class="eyebrow">Cinta &amp; Hubungan</div><h1 class="title">Belajar Membuka Hati</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="rose"></div>
+        <p class="paragraph">Dalam hubungan, kamu cenderung menghargai kesetiaan, komitmen, dan kestabilan.</p>
+        <p class="paragraph">Kamu bisa menjadi pasangan yang protektif dan bertanggung jawab. Namun, jangan sampai keinginan mengatur membuat pasangan merasa dibatasi.</p>
+        <div class="callout">Ungkapkan perasaan dengan jujur. Hubungan yang kuat dibangun bersama, bukan dikendalikan.</div>
+      </div>
+      <footer class="footer"><div class="counter">06 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="6">
+      <header><div class="eyebrow">Karier &amp; Keuangan</div><h1 class="title">Membangun Kemakmuran</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="coins"></div>
+        <p class="paragraph">Energi angka 8 sering diasosiasikan dengan kepemimpinan, bisnis, manajemen, dan pengelolaan sumber daya.</p>
+        <p class="paragraph">Bidang yang membutuhkan strategi, disiplin, dan tanggung jawab dapat terasa menarik bagimu.</p>
+        <div class="callout">Kelola uang dengan bijak. Keberhasilan bukan hanya tentang seberapa banyak yang diperoleh.</div>
+      </div>
+      <footer class="footer"><div class="counter">07 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+
+    <section class="slide" data-slide="7">
+      <header><div class="eyebrow">Pesan Untukmu</div><h1 class="title">Ambisi dengan Kebijaksanaan</h1><div class="divider"><span>✧</span></div></header>
+      <div class="content">
+        <div class="motif" data-motif="star"></div>
+        <p class="paragraph">Angka Jiwa 8 melambangkan tekad, kekuatan, dan dorongan untuk mencapai sesuatu yang bermakna.</p>
+        <p class="paragraph">Jadikan kesuksesan sebagai sarana untuk bertumbuh, berbagi, dan menciptakan kehidupan yang seimbang.</p>
+        <div class="callout">Percayalah pada proses. Kekuatan sejati juga terlihat dari cara kamu memperlakukan diri sendiri dan orang lain.</div>
+      </div>
+      <footer class="footer"><div class="counter">08 / 08</div><div class="follow">✦ Follow @jalurtarot ✦</div></footer>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const root = document.getElementById("composition");
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const starfield = document.getElementById("starfield");
+      const gold = "#f2cf7a";
+
+      for (let i = 0; i < 64; i++) {
+        const star = document.createElement("i");
+        star.className = "star";
+        star.style.left = ((i * 37 + 11) % 100) + "%";
+        star.style.top = ((i * 61 + 7) % 100) + "%";
+        star.style.width = (2 + (i * 13) % 4) + "px";
+        star.style.height = star.style.width;
+        star.dataset.phase = String(i * 0.73);
+        starfield.appendChild(star);
+      }
+
+      const motifs = {
+        number: '<circle class="line soft" cx="200" cy="200" r="166"/><circle class="line soft" cx="200" cy="200" r="137" stroke-dasharray="5 15"/><path class="line" stroke-width="12" d="M200 70 C70 70 100 195 200 200 C300 205 330 330 200 330 C70 330 100 205 200 200 C300 195 330 70 200 70"/><text x="200" y="218" text-anchor="middle" fill="#fff0c3" font-size="24">∞</text>',
+        scales: '<path class="line" d="M200 70V315 M130 315H270 M155 100H245 M200 100L95 145 M200 100L305 145 M95 145L55 245Q95 275 135 245Z M305 145L265 245Q305 275 345 245Z M145 315L200 280L255 315"/><circle cx="200" cy="100" r="12" fill="#f2cf7a"/>',
+        crown: '<path class="line" d="M65 285L85 135L165 210L200 85L235 210L315 135L335 285Z M82 315H318 M95 285H305"/><g fill="#f2cf7a"><circle cx="85" cy="135" r="10"/><circle cx="200" cy="85" r="10"/><circle cx="315" cy="135" r="10"/></g>',
+        trophy: '<path class="line" d="M135 90H265V175Q265 255 200 255Q135 255 135 175Z M135 120H85V160Q85 210 145 210 M265 120H315V160Q315 210 255 210 M200 255V315 M145 330H255 M165 315H235"/><path d="M200 120L210 150H242L216 170L226 202L200 183L174 202L184 170L158 150H190Z" fill="#f2cf7a"/>',
+        heart: '<path class="line" d="M200 315C160 275 70 210 70 145C70 65 165 55 200 125C235 55 330 65 330 145C330 210 240 275 200 315Z M110 210Q200 160 290 210"/>',
+        rose: '<path class="line" d="M200 340C180 280 220 240 200 190 M200 270Q125 240 120 190Q185 190 200 270 M200 290Q275 255 285 205Q220 205 200 290 M200 190C135 160 155 95 205 110C230 55 295 90 270 145C315 180 260 220 220 195C190 225 145 195 200 190Z M200 190Q170 145 215 125Q250 150 220 185"/>',
+        coins: '<g class="line"><g transform="translate(65 230)">' + Array.from({length:5},(_,i)=>'<ellipse cx="0" cy="'+(i*13)+'" rx="42" ry="12"/>').join("") + '</g><g transform="translate(155 175)">' + Array.from({length:7},(_,i)=>'<ellipse cx="0" cy="'+(i*13)+'" rx="42" ry="12"/>').join("") + '</g><g transform="translate(245 120)">' + Array.from({length:9},(_,i)=>'<ellipse cx="0" cy="'+(i*13)+'" rx="42" ry="12"/>').join("") + '</g><path d="M65 95L300 45L275 95M300 45L290 90"/></g>',
+        star: '<path class="line" d="M200 45L238 150L350 155L265 225L295 340L200 275L105 340L135 225L50 155L162 150Z"/><circle class="line" cx="200" cy="195" r="44"/><circle cx="200" cy="195" r="12" fill="#f2cf7a"/>'
+      };
+
+      document.querySelectorAll(".motif").forEach(function (el) {
+        const type = el.getAttribute("data-motif");
+        el.innerHTML = '<svg viewBox="0 0 400 400" aria-hidden="true">' + motifs[type] + '</svg>';
+      });
+
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+
+      slides.forEach(function (slide, index) {
+        const start = index * 5;
+        const elements = slide.querySelectorAll(".eyebrow,.title,.divider,.motif,.subtitle,.paragraph,.bullet,.callout,.counter,.follow");
+        tl.set(slide, { autoAlpha: 1, scale: 1.025 }, start);
+        tl.fromTo(slide, { opacity: 0 }, { opacity: 1, duration: 0.35 }, start);
+        tl.fromTo(slide.querySelector(".eyebrow"), { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, start + 0.08);
+        tl.fromTo(slide.querySelector(".title"), { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, start + 0.18);
+        tl.fromTo(slide.querySelector(".divider"), { scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 1, duration: 0.5 }, start + 0.35);
+        tl.fromTo(slide.querySelector(".motif"), { scale: 0.82, opacity: 0, rotation: -5 }, { scale: 1, opacity: 1, rotation: 0, duration: 0.8 }, start + 0.45);
+
+        const textItems = slide.querySelectorAll(".subtitle,.paragraph,.bullet,.callout");
+        textItems.forEach(function (item, itemIndex) {
+          tl.fromTo(item, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42 }, start + 0.85 + itemIndex * 0.12);
+        });
+        tl.fromTo(slide.querySelector(".counter"), { opacity: 0 }, { opacity: 1, duration: 0.25 }, start + 1.25);
+        tl.fromTo(slide.querySelector(".follow"), { y: 18, opacity: 0, scale: 0.94 }, { y: 0, opacity: 1, scale: 1, duration: 0.45 }, start + 1.35);
+        tl.to(slide.querySelector(".motif"), { scale: 1.035, duration: 2.4, yoyo: true, repeat: 1, ease: "sine.inOut" }, start + 1.2);
+
+        if (index < slides.length - 1) {
+          tl.to(slide, { opacity: 0, duration: 0.3 }, start + 4.7);
+          tl.set(slide, { autoAlpha: 0 }, start + 5);
+        }
+      });
+
+      tl.set(slides[slides.length - 1], { autoAlpha: 1 }, 35);
+      tl.to(slides[slides.length - 1], { scale: 1, duration: 0.6, ease: "power1.out" }, 35);
+
+      // HyperFrames reads this named timeline for deterministic frame seeking.
+      window.__timelines = window.__timelines || {};
+      window.__timelines["root"] = tl;
+
+      // Keep decorative stars deterministic and synchronized with the global timeline.
+      const starEls = Array.from(starfield.children);
+      window.__setFrame = function (frame) {
+        const seconds = frame / 30;
+        starEls.forEach(function (star) {
+          const phase = Number(star.dataset.phase);
+          star.style.opacity = String(0.25 + 0.55 * (0.5 + 0.5 * Math.sin(seconds * 2.2 + phase)));
+        });
+      };
+      tl.eventCallback("onUpdate", function () {
+        window.__setFrame(Math.round(tl.time() * 30));
+      });
+
+      // Initialize at frame zero; renderer can seek the registered timeline afterward.
+      tl.pause(0);
+      window.__setFrame(0);
+    })();
+  </script>
+</body>
+</html>
