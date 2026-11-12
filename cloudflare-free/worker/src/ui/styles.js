@@ -241,6 +241,25 @@ textarea{min-height:240px;resize:vertical;white-space:pre;overflow:auto;tab-size
 .drop b{color:var(--text);font-size:14px}
 .drop .i{width:26px;height:26px;color:var(--acc-t)}
 
+/* ============ JalurTarot Prompt Studio ============ */
+.prompt-studio{border-color:rgba(167,139,250,.28);background:linear-gradient(145deg,var(--surface),color-mix(in srgb,#28153f 24%,var(--surface)))}
+.prompt-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
+.prompt-eyebrow{font-size:10px;font-weight:800;letter-spacing:.16em;color:#c4a3ff;margin-bottom:5px}
+.prompt-head .h2{font-size:19px;letter-spacing:-.02em}
+.prompt-mark{display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:13px;background:rgba(167,139,250,.14);color:#d8bdff;font-size:24px}
+.prompt-fields{display:grid;grid-template-columns:1fr;gap:0 14px}
+.prompt-fields .field{margin-bottom:12px}
+.prompt-wide{grid-column:1/-1}
+.prompt-input{min-height:88px;font-family:var(--font);white-space:pre-wrap}
+.prompt-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.prompt-actions .btn.solid{background:linear-gradient(110deg,#7042bd,#3c63d9);border-color:#7042bd}
+.prompt-preview{margin-top:16px;padding-top:12px}
+.prompt-preview summary{min-height:36px}
+.prompt-preview textarea{min-height:260px;margin-top:10px;font-size:12px}
+.prompt-feedback{margin-top:12px;color:var(--mut);font-size:12.5px;line-height:1.5}
+@media(min-width:640px){.prompt-fields{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.prompt-actions .btn{flex:1 1 100%}.prompt-head .h2{font-size:17px}}
+
 /* ============ Status, pesan, toast ============ */
 .msg{margin:12px 0 0;padding:10px 14px;border-radius:var(--r-sm);font-size:14px;line-height:1.5;border:1px solid var(--line);border-left-width:3px;background:var(--surface2)}
 .msg.err{border-color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,transparent);border-left-color:var(--err);color:var(--err)}

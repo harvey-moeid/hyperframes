@@ -70,3 +70,17 @@ pada `wrangler.jsonc` maupun workflow deploy.
 1. Merge PR, lalu jalankan workflow **Deploy worker** (Actions > Deploy worker > Run workflow).
 2. Buka URL `*.workers.dev` Worker di browser (halaman web) atau lewat `curl` (JSON info).
 3. Uji di HP, atau di Chrome DevTools > Toggle device toolbar (iPhone SE 375px dan Pixel 7 412px).
+
+## JalurTarot Cinematic Prompt Studio
+
+Halaman **Buat video** menyediakan Prompt Studio untuk menyusun brief konten JalurTarot dan menghasilkan prompt lengkap bagi AI coding agent.
+
+- Isi jenis konten, judul/hook, pesan utama, kartu tarot, emosi, durasi, arah visual, dan CTA.
+- **Buat prompt lengkap** menggabungkan master art direction JalurTarot, storyboard, motion design, typography, audio direction, kontrak teknis HyperFrames, dan quality control dengan brief saat ini.
+- **Salin prompt lengkap** untuk dikirim ke BYGA AI / coding agent; **Salin brief saja** untuk memakai master prompt yang sudah disimpan di tempat lain.
+- Pratinjau prompt dapat dibuka melalui bagian detail dan disalin ulang.
+- Prompt Studio hanya membantu menghasilkan source HTML komposisi; prompt tidak dikirim ke endpoint render. HTML tetap harus dimasukkan melalui mode **Tulis baru** atau diunggah sebagai file komposisi.
+- Input brief tidak disimpan ke server atau localStorage. Hindari memasukkan data rahasia.
+
+Semua kontrol menggunakan markup biasa, tanpa inline style atau dependency eksternal, sehingga tetap sesuai CSP dan pola mobile-first.
+
