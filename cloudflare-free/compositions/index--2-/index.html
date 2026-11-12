@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>JalurTarot — Jiwa 9</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:#090512;overflow:hidden}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:#090512;font-family:"Helvetica Neue",Arial,sans-serif;color:#FFF8E9}
+.fill{position:absolute;inset:0}
+.serif{font-family:"Playfair Display",Georgia,"Times New Roman",serif}
+.gold{color:#F2CF7A}
+.in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:220px 110px 380px}
+.lbl{font-size:34px;letter-spacing:14px;color:#F2CF7A;text-transform:uppercase;margin-bottom:40px}
+.h1{font-size:88px;line-height:1.18;font-weight:700;color:#FFF8E9;text-shadow:0 6px 40px rgba(0,0,0,.7)}
+.h2{font-size:78px;line-height:1.2;font-weight:700;text-shadow:0 6px 40px rgba(0,0,0,.7)}
+.sub{font-size:40px;line-height:1.5;color:#FFF0C3;margin-top:44px;opacity:.95;text-shadow:0 3px 20px rgba(0,0,0,.8)}
+.nine{font-size:600px;line-height:.9;font-weight:700;background:linear-gradient(180deg,#FFF0C3 0%,#F2CF7A 55%,#b98a2f 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 50px rgba(242,207,122,.45))}
+.ring{position:absolute;left:50%;top:50%;width:980px;height:980px;margin:-560px 0 0 -490px}
+.word{font-size:64px;line-height:1.25;font-weight:700;color:#FFF8E9;margin:30px 0;text-shadow:0 0 40px rgba(242,207,122,.35)}
+.rule{width:220px;height:3px;background:linear-gradient(90deg,transparent,#F2CF7A,transparent);margin:34px 0}
+.star{position:absolute;border-radius:50%;background:#FFF8E9}
+.dust{position:absolute;border-radius:50%;background:#F2CF7A;filter:blur(1px)}
+#sweep{position:absolute;top:-200px;left:-500px;width:320px;height:2400px;transform:rotate(18deg);background:linear-gradient(90deg,transparent,rgba(255,240,195,.22),transparent);opacity:0}
+.cta{margin-top:56px;padding:30px 54px;border:3px solid #F2CF7A;border-radius:80px;font-size:44px;color:#FFF0C3;background:rgba(33,16,57,.7)}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="jalurtarot-jiwa-9" data-start="0" data-duration="40" data-width="1080" data-height="1920">
+
+  <!-- BACKGROUND: nebula + stars + dust -->
+  <div id="bg" class="clip fill" data-start="0" data-duration="40" data-track-index="0">
+    <div id="neb1" class="fill" style="background:radial-gradient(ellipse 900px 700px at 25% 20%,rgba(73,33,109,.85),transparent 70%),radial-gradient(ellipse 1000px 800px at 80% 75%,rgba(33,16,57,1),transparent 70%)"></div>
+    <div id="neb2" class="fill" style="background:radial-gradient(ellipse 700px 600px at 70% 30%,rgba(73,33,109,.5),transparent 70%),radial-gradient(ellipse 600px 500px at 20% 85%,rgba(242,207,122,.10),transparent 70%)"></div>
+    <div id="stars" class="fill"></div>
+    <div id="dusts" class="fill"></div>
+    <div class="fill" style="background:radial-gradient(ellipse at center,transparent 45%,rgba(9,5,18,.85) 100%)"></div>
+  </div>
+
+  <!-- ORNAMENTAL FRAME -->
+  <div id="frame" class="clip fill" data-start="0" data-duration="40" data-track-index="1">
+    <svg class="fill" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" stroke="#F2CF7A">
+      <rect x="44" y="44" width="992" height="1832" rx="6" stroke-width="2" opacity=".55"/>
+      <rect x="62" y="62" width="956" height="1796" rx="4" stroke-width="1" opacity=".3"/>
+      <g stroke-width="3" opacity=".9">
+        <path d="M44 150V44H150"/><path d="M936 44H1036V150"/><path d="M44 1770V1876H150"/><path d="M936 1876H1036V1770"/>
+      </g>
+      <g fill="#F2CF7A" stroke="none" opacity=".9">
+        <path d="M540 44l10 10-10 10-10-10z"/><path d="M540 1856l10 10-10 10-10-10z"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- SCENE 1 · HOOK 0-4 -->
+  <div id="s1" class="clip fill" data-start="0" data-duration="5" data-track-index="2">
+    <div class="in">
+      <svg id="ring1" class="ring" viewBox="0 0 980 980" fill="none" stroke="#F2CF7A">
+        <circle cx="490" cy="490" r="470" stroke-width="2" opacity=".7"/>
+        <circle cx="490" cy="490" r="430" stroke-width="1" stroke-dasharray="3 14" opacity=".7"/>
+        <circle cx="490" cy="490" r="380" stroke-width="1.5" opacity=".4"/>
+      </svg>
+      <div id="s1a" class="lbl" style="position:relative">Numerologi</div>
+      <div id="s1b" class="nine serif" style="position:relative">9</div>
+      <div id="s1c" class="h2 serif" style="position:relative;margin-top:10px">Apakah kamu terlahir sebagai <span class="gold">Jiwa 9</span>, sang penutup siklus?<div class="sub" style="font-size:38px;margin-top:30px">Angka misterius yang membawa kebijaksanaan dari banyak perjalanan.</div></div>
+    </div>
+  </div>
+
+  <!-- SCENE 2 · TEMA 4-9 -->
+  <div id="s2" class="clip fill" data-start="5" data-duration="7" data-track-index="2">
+    <div class="in">
+      <div class="lbl r">Angka Terakhir</div>
+      <div class="h1 serif r">Penutup <span class="gold">siklus</span> sekaligus awal yang baru</div>
+      <div class="rule r"></div>
+      <div class="sub r">Dalam numerologi, 9 adalah angka tunggal terakhir. Ia melambangkan penyelesaian, kebijaksanaan, dan kesiapan untuk melepas apa yang sudah selesai.</div>
+    </div>
+  </div>
+
+  <!-- SCENE 3 · MAKNA 9-15 -->
+  <div id="s3" class="clip fill" data-start="12" data-duration="8" data-track-index="2">
+    <div class="in">
+      <div class="lbl r">Jiwa 9 dikenal lewat</div>
+      <div class="word serif r"><span class="gold">Welas asih</span> yang tulus pada sesama</div>
+      <div class="word serif r"><span class="gold">Kebijaksanaan</span> yang lahir dari pengalaman hidup</div>
+      <div class="word serif r">Keberanian untuk <span class="gold">melepaskan</span> dengan ikhlas</div>
+    </div>
+  </div>
+
+  <!-- SCENE 4 · PENDALAMAN 15-21 -->
+  <div id="s4" class="clip fill" data-start="20" data-duration="8" data-track-index="2">
+    <div class="in">
+      <div class="lbl r">Sisi yang jarang terlihat</div>
+      <div class="h1 serif r">Sering memberi sepenuh hati, tetapi lupa merawat <span class="gold">diri sendiri</span></div>
+      <div class="rule r"></div>
+      <div class="sub r">Belajar melepas bukan berarti kehilangan. Itu cara jiwamu bernapas lega dan memberi ruang bagi hal baru.</div>
+    </div>
+  </div>
+
+  <!-- SCENE 5 · PENERAPAN & KLIMAKS 21-26 -->
+  <div id="s5" class="clip fill" data-start="28" data-duration="7" data-track-index="2">
+    <div class="in">
+      <div class="lbl r">Renungkan hari ini</div>
+      <div class="h2 serif r">Apa yang perlu kuselesaikan <span class="gold">dengan damai</span> hari ini, agar hatiku terasa lebih ringan?</div>
+      <div class="sub r">Tarik napas dalam, lalu jawab dengan jujur pada dirimu sendiri.</div>
+    </div>
+  </div>
+
+  <!-- SCENE 6 · BRAND & CTA 26-30 -->
+  <div id="s6" class="clip fill" data-start="35" data-duration="5" data-track-index="2">
+    <div class="in">
+      <svg id="ring6" width="300" height="300" viewBox="0 0 300 300" fill="none" stroke="#F2CF7A" style="margin-bottom:30px">
+        <circle cx="150" cy="150" r="120" stroke-width="2"/>
+        <circle cx="150" cy="150" r="96" stroke-width="1" stroke-dasharray="3 10"/>
+        <path d="M150 70l14 66 66 14-66 14-14 66-14-66-66-14 66-14z" fill="#F2CF7A" stroke="none"/>
+      </svg>
+      <div id="s6a" class="serif" style="font-size:96px;letter-spacing:12px;font-weight:700;color:#F2CF7A">JALURTAROT</div>
+      <div class="rule" id="s6r"></div>
+      <div id="s6b" class="cta">Follow @jalurtarot untuk pesan berikutnya</div>
+    </div>
+  </div>
+
+  <!-- LIGHT SWEEP -->
+  <div id="sweepClip" class="clip fill" data-start="0" data-duration="40" data-track-index="3" style="pointer-events:none"><div id="sweep"></div></div>
+</div>
+
+<script>
+(function(){
+  // Seeded RNG (deterministik)
+  var seed=90909;
+  function rnd(){seed=(seed*1664525+1013904223)%4294967296;return seed/4294967296;}
+  var st=document.getElementById('stars'),du=document.getElementById('dusts'),i,e;
+  for(i=0;i<46;i++){
+    e=document.createElement('div');e.className='star';
+    var s=1+Math.floor(rnd()*3);
+    e.style.cssText='width:'+s+'px;height:'+s+'px;left:'+(rnd()*1080).toFixed(1)+'px;top:'+(rnd()*1920).toFixed(1)+'px;opacity:'+(.25+rnd()*.5).toFixed(2);
+    st.appendChild(e);
+  }
+  for(i=0;i<20;i++){
+    e=document.createElement('div');e.className='dust';
+    var d=3+Math.floor(rnd()*5);
+    e.style.cssText='width:'+d+'px;height:'+d+'px;left:'+(rnd()*1080).toFixed(1)+'px;top:'+(900+rnd()*1100).toFixed(1)+'px;opacity:0';
+    e.setAttribute('data-sp',(0.5+rnd()*0.9).toFixed(2));
+    du.appendChild(e);
+  }
+
+  var tl=gsap.timeline({paused:true});
+  tl.to({},{duration:40},0); // pastikan durasi tepat 40s
+
+  // Latar: nebula bergerak pelan + debu emas naik
+  tl.fromTo('#neb1',{scale:1,x:0},{scale:1.15,x:-30,duration:40,ease:'sine.inOut'},0);
+  tl.fromTo('#neb2',{scale:1.1,y:0},{scale:1,y:-40,duration:40,ease:'sine.inOut'},0);
+  var ds=du.children;
+  for(i=0;i<ds.length;i++){
+    var sp=parseFloat(ds[i].getAttribute('data-sp'));
+    tl.fromTo(ds[i],{y:0,opacity:0},{y:-700*sp-400,opacity:.8,duration:40,ease:'none'},0);
+    tl.to(ds[i],{opacity:0,duration:6,ease:'none'},34);
+  }
+  var ss=st.children;
+  for(i=0;i<ss.length;i+=3){
+    tl.fromTo(ss[i],{opacity:.2},{opacity:.9,duration:2+(i%4),ease:'sine.inOut'},(i*0.6)%36);
+  }
+
+  // Bingkai
+  tl.fromTo('#frame',{opacity:0},{opacity:1,duration:1.2,ease:'power2.out'},0);
+
+  // Helper scene: push-in + exit
+  function scene(id,start,dur,last){
+    tl.fromTo('#'+id+' .in',{scale:1},{scale:1.06,duration:dur,ease:'none'},start);
+    if(!last) tl.to('#'+id+' .in',{opacity:0,duration:.5,ease:'power2.in'},start+dur-.5);
+  }
+  function sweep(t){
+    tl.fromTo('#sweep',{x:0,opacity:0},{x:1700,opacity:1,duration:1.1,ease:'power2.inOut'},t);
+    tl.to('#sweep',{opacity:0,duration:.25},t+.85);
+  }
+
+  // S1 Hook 0-4
+  scene('s1',0,5);
+  tl.fromTo('#s1b',{opacity:0,scale:1.3},{opacity:1,scale:1,duration:1.4,ease:'expo.out'},0);
+  tl.fromTo('#ring1',{opacity:0,rotation:-40,scale:.8},{opacity:1,rotation:0,scale:1,duration:2.4,ease:'power3.out'},0);
+  tl.fromTo('#s1a',{opacity:0,y:-30},{opacity:1,y:0,duration:.8,ease:'power2.out'},.2);
+  tl.fromTo('#s1c',{opacity:0,y:50},{opacity:1,y:0,duration:.9,ease:'power3.out'},.9);
+  sweep(.4);
+
+  // S2 4-9
+  scene('s2',5,7);
+  tl.fromTo('#s2 .r',{opacity:0,y:50},{opacity:1,y:0,duration:1,stagger:.5,ease:'power3.out'},5.2);
+  tl.fromTo('#s2 .rule',{scaleX:0},{scaleX:1,duration:1,ease:'power2.out'},6.1);
+  sweep(5.0);
+
+  // S3 9-15
+  scene('s3',12,8);
+  tl.fromTo('#s3 .lbl',{opacity:0,y:-20},{opacity:1,y:0,duration:.8,ease:'power2.out'},12.2);
+  tl.fromTo('#s3 .word',{opacity:0,x:-80,scale:.92},{opacity:1,x:0,scale:1,duration:1,stagger:1.7,ease:'expo.out'},12.9);
+  sweep(12.0);
+
+  // S4 15-21
+  scene('s4',20,8);
+  tl.fromTo('#s4 .r',{opacity:0,y:50},{opacity:1,y:0,duration:1,stagger:.7,ease:'power3.out'},20.2);
+  tl.fromTo('#s4 .rule',{scaleX:0},{scaleX:1,duration:1,ease:'power2.out'},21.3);
+  sweep(20.0);
+
+  // S5 21-26 (klimaks emosional, jeda pada kalimat penting)
+  scene('s5',28,7);
+  tl.fromTo('#s5 .lbl',{opacity:0},{opacity:1,duration:.9,ease:'sine.inOut'},28.2);
+  tl.fromTo('#s5 .h2',{opacity:0,y:60,scale:.95},{opacity:1,y:0,scale:1,duration:1.4,ease:'power3.out'},28.8);
+  tl.fromTo('#s5 .sub',{opacity:0,y:30},{opacity:1,y:0,duration:1,ease:'power2.out'},31.0);
+  sweep(28.0);
+
+  // S6 CTA 26-30
+  scene('s6',35,5,true);
+  tl.fromTo('#ring6',{opacity:0,rotation:-90,scale:.7},{opacity:1,rotation:0,scale:1,duration:1.6,ease:'power3.out'},35.2);
+  tl.fromTo('#s6a',{opacity:0,y:40},{opacity:1,y:0,duration:1,ease:'expo.out'},35.6);
+  tl.fromTo('#s6r',{scaleX:0},{scaleX:1,duration:.9,ease:'power2.out'},36.2);
+  tl.fromTo('#s6b',{opacity:0,y:40},{opacity:1,y:0,duration:1,ease:'power3.out'},36.5);
+  sweep(35.0);
+
+  window.__timelines=window.__timelines||{};
+  window.__timelines['jalurtarot-jiwa-9']=tl;
+})();
+</script>
+</body>
+</html>
