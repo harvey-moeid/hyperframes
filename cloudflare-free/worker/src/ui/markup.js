@@ -125,6 +125,73 @@ const CREATE = String.raw`
 <section id="v-create" class="view" hidden aria-labelledby="h-create">
   <div class="view-h"><div><h1 id="h-create">Buat video</h1><p class="sub">Pilih komposisi, atur kualitas, lalu mulai render.</p></div></div>
   <div class="keybar" id="keyBarC"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg><span class="kb-t"></span><a class="btn sm" href="#/settings">Pengaturan</a></div>
+
+  <section class="card prompt-studio" aria-labelledby="jtPromptTitle">
+    <div class="prompt-head">
+      <div>
+        <div class="prompt-eyebrow">JALUR TAROT · CREATIVE WORKSPACE</div>
+        <h2 id="jtPromptTitle" class="h2">Cinematic Prompt Studio</h2>
+        <p class="hint">Susun brief video, lalu salin master prompt lengkap untuk AI coding agent. Prompt ini menghasilkan HTML komposisi; bukan dikirim langsung ke mesin render.</p>
+      </div>
+      <span class="prompt-mark" aria-hidden="true">✦</span>
+    </div>
+    <div class="prompt-fields">
+      <div class="field">
+        <label for="jtTheme">Jenis konten</label>
+        <select id="jtTheme">
+          <option>Pesan Semesta</option><option>Tarot Reading</option><option>Numerologi</option>
+          <option>Asmara &amp; Hubungan</option><option>Keuangan &amp; Rezeki</option><option>Karier</option>
+          <option>Pick a Card</option><option>Pesan Harian</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="jtTitle">Judul / hook video</label>
+        <input id="jtTitle" type="text" maxlength="120" placeholder="Contoh: Pesan Semesta Hari Ini">
+      </div>
+      <div class="field prompt-wide">
+        <label for="jtMessage">Pesan utama / materi narasi</label>
+        <textarea id="jtMessage" class="prompt-input" rows="3" placeholder="Tuliskan inti pesan yang ingin disampaikan kepada penonton..."></textarea>
+      </div>
+      <div class="field">
+        <label for="jtCards">Kartu tarot (opsional)</label>
+        <input id="jtCards" type="text" maxlength="180" placeholder="Contoh: The Magician, The Star">
+      </div>
+      <div class="field">
+        <label for="jtMood">Emosi / nuansa</label>
+        <select id="jtMood">
+          <option>Misterius, penasaran, inspiratif</option><option>Romantis, hangat, emosional</option>
+          <option>Dramatis, intens, penuh harapan</option><option>Tenang, spiritual, reflektif</option>
+          <option>Optimistis, energik, penuh peluang</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="jtDuration">Durasi video</label>
+        <select id="jtDuration"><option value="24">24 detik</option><option value="30">30 detik</option><option value="45">45 detik</option><option value="60">60 detik</option></select>
+      </div>
+      <div class="field">
+        <label for="jtVisual">Arah visual</label>
+        <select id="jtVisual">
+          <option>Dark mystical, ungu kerajaan dan emas</option><option>Celestial gold, kosmik dan elegan</option>
+          <option>Gothic tarot, gelap dan dramatis</option><option>Ethereal purple, lembut dan magis</option>
+        </select>
+      </div>
+      <div class="field prompt-wide">
+        <label for="jtCta">Call to action</label>
+        <input id="jtCta" type="text" maxlength="120" value="Follow @jalurtarot untuk pesan berikutnya">
+      </div>
+    </div>
+    <div class="prompt-actions">
+      <button type="button" class="btn solid" id="jtBuildPrompt">Buat prompt lengkap</button>
+      <button type="button" class="btn" id="jtCopyPrompt">Salin prompt lengkap</button>
+      <button type="button" class="btn" id="jtCopyBrief">Salin brief saja</button>
+    </div>
+    <details class="prompt-preview" id="jtPromptDetails">
+      <summary>Pratinjau prompt untuk AI coding agent</summary>
+      <textarea id="jtPromptOutput" rows="12" readonly aria-label="Pratinjau prompt lengkap" placeholder="Isi brief lalu tekan Buat prompt lengkap."></textarea>
+      <p class="hint">Salin hasil ini ke BYGA AI atau coding agent yang mengerjakan komposisi HyperFrames.</p>
+    </details>
+    <div id="jtPromptMsg" class="prompt-feedback" role="status" aria-live="polite">Isi brief di atas. Prompt akan menggabungkan arahan artistik JalurTarot dan kontrak teknis HyperFrames.</div>
+  </section>
   <div class="two">
     <form id="form" class="card" autocomplete="off" novalidate>
       <div class="field">
