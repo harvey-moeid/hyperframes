@@ -71,16 +71,36 @@ pada `wrangler.jsonc` maupun workflow deploy.
 2. Buka URL `*.workers.dev` Worker di browser (halaman web) atau lewat `curl` (JSON info).
 3. Uji di HP, atau di Chrome DevTools > Toggle device toolbar (iPhone SE 375px dan Pixel 7 412px).
 
-## JalurTarot Cinematic Prompt Studio
+## Cinematic Prompt Studio (JalurTarot + studio lain)
 
-Halaman **Buat video** menyediakan Prompt Studio untuk menyusun brief konten JalurTarot dan menghasilkan prompt lengkap bagi AI coding agent.
+Halaman **Buat video** menyediakan Prompt Studio untuk menyusun brief konten dan menghasilkan prompt lengkap bagi AI coding agent.
 
-- Isi jenis konten, judul/hook, pesan utama, kartu tarot, emosi, durasi, arah visual, dan CTA.
-- **Buat prompt lengkap** menggabungkan master art direction JalurTarot, storyboard, motion design, typography, audio direction, kontrak teknis HyperFrames, dan quality control dengan brief saat ini.
+Pilih **Studio** di bagian atas form. Setiap studio punya master prompt, pilihan jenis konten, emosi, arah visual, durasi bawaan, dan CTA bawaan sendiri:
+
+| Studio | Fokus | Catatan akurasi di master prompt |
+| --- | --- | --- |
+| JalurTarot (Tarot & Spiritual) | Pesan semesta, tarot reading, numerologi | Kartu tidak boleh diacak atau dikarang |
+| Motivasi & Quotes | Quote harian, mindset, self-growth | Tidak menisbatkan kutipan ke tokoh nyata |
+| Promo Produk & UMKM | Peluncuran, flash sale, testimoni | Harga, diskon, dan klaim hanya dari brief |
+| Edukasi & Fakta Singkat | Fakta, tips, mitos vs fakta | Angka dan sumber hanya dari brief |
+| Kuliner & Resep | Resep, review tempat makan, promo menu | Bahan, takaran, harga, alamat hanya dari brief |
+| Kustom (niche sendiri) | Niche lain dengan brand sendiri | Tidak ada data yang dikarang |
+
+- Isi brand/akun, jenis konten, judul/hook, pesan utama, detail khusus studio (mis. kartu tarot, produk & harga, sumber data), emosi, durasi, arah visual, dan CTA.
+- **Buat prompt lengkap** menggabungkan master prompt studio terpilih (art direction, storyboard, tipografi, motion, audio, akurasi konten, kontrak teknis HyperFrames, quality control) dengan brief saat ini.
 - **Salin prompt lengkap** untuk dikirim ke BYGA AI / coding agent; **Salin brief saja** untuk memakai master prompt yang sudah disimpan di tempat lain.
-- Pratinjau prompt dapat dibuka melalui bagian detail dan disalin ulang.
+- Berpindah studio mengganti pilihan, placeholder, dan label detail khusus; kolom detail khusus dikosongkan. Brand dan CTA hanya diganti bila belum diedit.
 - Prompt Studio hanya membantu menghasilkan source HTML komposisi; prompt tidak dikirim ke endpoint render. HTML tetap harus dimasukkan melalui mode **Tulis baru** atau diunggah sebagai file komposisi.
 - Input brief tidak disimpan ke server atau localStorage. Hindari memasukkan data rahasia.
 
-Semua kontrol menggunakan markup biasa, tanpa inline style atau dependency eksternal, sehingga tetap sesuai CSP dan pola mobile-first.
+### Menambah studio baru
 
+Kode ada di `worker/src/ui/client-create.js`. Tambahkan nama studio ke `PS_ORDER` dan satu objek di `PS_STUDIOS`
+dengan field: `name`, `short`, `eyebrow`, `intro`, `briefTitle`, `brand`, `brandPh`, `brandFallback`, `themes`, `titlePh`, `messagePh`,
+`messageFallback`, `extraLabel`, `extraPh`, `extraBrief`, `extraFallback`, `moods`, `visuals`, `cta`, `ctaFallback`, `duration`,
+serta `masterTitle`, `roles`, `art`, `story`, `type`, `guard` (dirangkai `psMaster()` bersama blok teknis `PS_*` yang dipakai semua studio).
+JalurTarot memakai `master` tersendiri (`JALUR_TAROT_MASTER_PROMPT`) agar prompt aslinya tidak berubah.
+Pemilih studio dan kolom Brand disisipkan lewat JS (`psInjectControls`), jadi `markup.js` tidak perlu diubah.
+Hindari backtick dan `${` karena file memakai `String.raw`.
+
+Semua kontrol menggunakan markup biasa, tanpa inline style atau dependency eksternal, sehingga tetap sesuai CSP dan pola mobile-first.
