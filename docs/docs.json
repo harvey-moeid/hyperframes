@@ -246,6 +246,7 @@
                 "group": "Composition reference",
                 "pages": [
                   "reference/html-schema",
+                  "reference/html-contract-checklist",
                   "reference/color-grading",
                   "reference/audio-effects",
                   "reference/speed-ramps",
