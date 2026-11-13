@@ -45,10 +45,13 @@ const LOGO = String.raw`<svg class="logo" viewBox="0 0 32 32" role="img" aria-la
   <path d="M14 12.2v7.6l6-3.8z" fill="#fff"/>
 </svg>`;
 
-const SHELL_TOP = String.raw`<a class="skip" href="#main">Lewati ke konten</a>
+const SHELL_TOP =
+  String.raw`<a class="skip" href="#main">Lewati ke konten</a>
 <div class="app">
 <aside class="side" aria-label="Navigasi utama">
-  <a class="brand" href="#/dashboard" aria-label="HyperFrames Studio, ke Dashboard">` + LOGO + String.raw`<span><b>HyperFrames</b><small>Studio</small></span></a>
+  <a class="brand" href="#/dashboard" aria-label="HyperFrames Studio, ke Dashboard">` +
+  LOGO +
+  String.raw`<span><b>HyperFrames</b><small>Studio</small></span></a>
   <nav class="nav" aria-label="Menu">
     <a class="nav-new" data-route="create" href="#/create"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span>Buat video</span></a>
     <a data-route="dashboard" href="#/dashboard"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span>Dashboard</span></a>
@@ -576,7 +579,8 @@ export const MARKUP =
 </head>
 <body>
 ` +
-  ICONS + "\n" +
+  ICONS +
+  "\n" +
   SHELL_TOP +
   DASHBOARD +
   CREATE +

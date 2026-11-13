@@ -41,8 +41,12 @@ const LIGHT =
   "--shadow:0 1px 0 #fff inset,0 14px 30px -22px rgba(15,23,48,.35);";
 
 const THEME_CSS =
-  ":root[data-theme=light]{" + LIGHT + "}\n" +
-  "@media (prefers-color-scheme: light){:root:not([data-theme]){" + LIGHT + "}}\n";
+  ":root[data-theme=light]{" +
+  LIGHT +
+  "}\n" +
+  "@media (prefers-color-scheme: light){:root:not([data-theme]){" +
+  LIGHT +
+  "}}\n";
 
 const BASE = String.raw`
 /* ============ Dasar ============ */

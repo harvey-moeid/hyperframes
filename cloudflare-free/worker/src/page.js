@@ -5,8 +5,14 @@ import { DATA } from "./ui/client-data.js";
 import { VIEWS } from "./ui/client-views.js";
 import { CREATE } from "./ui/client-create.js";
 
-function makeNonce(){const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);let bin="";for(const b of bytes)bin+=String.fromCharCode(b);return btoa(bin);}
-const COMPOSITION_TEMPLATE=String.raw`<!doctype html>
+function makeNonce() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+const COMPOSITION_TEMPLATE = String.raw`<!doctype html>
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
@@ -90,8 +96,13 @@ const COMPOSITION_TEMPLATE=String.raw`<!doctype html>
   </body>
 </html>
 `;
-const TEMPLATE_JSON=JSON.stringify(COMPOSITION_TEMPLATE).replace(/</g,"\\u003c");
-const CLIENT_JS=[CORE.replace("__TEMPLATE_JSON__",TEMPLATE_JSON),DATA,VIEWS,CREATE,String.raw`
+const TEMPLATE_JSON = JSON.stringify(COMPOSITION_TEMPLATE).replace(/</g, "\\u003c");
+const CLIENT_JS = [
+  CORE.replace("__TEMPLATE_JSON__", TEMPLATE_JSON),
+  DATA,
+  VIEWS,
+  CREATE,
+  String.raw`
 var mediaFilter='all';
 function renderMedia(){
  updateKeyBars();
@@ -177,13 +188,32 @@ function initApp(){
  window.addEventListener('hashchange',onRoute);onRoute();resumePending();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initApp);else initApp();
-`].join("\n");
-export function htmlPage(){
- const nonce=makeNonce();
- const body=MARKUP.replace("__CSS__",STYLES).replace("__JS__",CLIENT_JS).replaceAll("__NONCE__",nonce);
- return new Response(body,{status:200,headers:{
-  "content-type":"text/html; charset=utf-8","cache-control":"no-store",vary:"accept",
-  "content-security-policy":"default-src 'none'; "+"script-src 'nonce-"+nonce+"'; "+"style-src 'nonce-"+nonce+"'; "+"connect-src 'self'; media-src 'self'; img-src 'self' data:; "+"base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-  "x-content-type-options":"nosniff","x-frame-options":"DENY","referrer-policy":"no-referrer"
- }});
+`,
+].join("\n");
+export function htmlPage() {
+  const nonce = makeNonce();
+  const body = MARKUP.replace("__CSS__", STYLES)
+    .replace("__JS__", CLIENT_JS)
+    .replaceAll("__NONCE__", nonce);
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      vary: "accept",
+      "content-security-policy":
+        "default-src 'none'; " +
+        "script-src 'nonce-" +
+        nonce +
+        "'; " +
+        "style-src 'nonce-" +
+        nonce +
+        "'; " +
+        "connect-src 'self'; media-src 'self'; img-src 'self' data:; " +
+        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "no-referrer",
+    },
+  });
 }
