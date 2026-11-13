@@ -80,7 +80,9 @@ function lookup(pathname) {
     case "/manifest.webmanifest":
       return asset(MANIFEST, "application/manifest+json; charset=utf-8", "no-cache");
     case "/sw.js":
-      return asset(SW_SOURCE, "text/javascript; charset=utf-8", "no-cache", { "service-worker-allowed": "/" });
+      return asset(SW_SOURCE, "text/javascript; charset=utf-8", "no-cache", {
+        "service-worker-allowed": "/",
+      });
     case "/icon.svg":
       return asset(ICON_SVG, "image/svg+xml; charset=utf-8", "public, max-age=86400");
     case "/icons/icon-192.png":
@@ -127,9 +129,17 @@ export async function decorateShell(request, res) {
     const out =
       html.slice(0, headAt) +
       HEAD_TAGS +
-      '<style nonce="' + nonce + '">' + CLIENT_CSS + "</style>" +
+      '<style nonce="' +
+      nonce +
+      '">' +
+      CLIENT_CSS +
+      "</style>" +
       html.slice(headAt, bodyAt) +
-      '<script nonce="' + nonce + '">' + CLIENT_SOURCE + "</script>" +
+      '<script nonce="' +
+      nonce +
+      '">' +
+      CLIENT_SOURCE +
+      "</script>" +
       html.slice(bodyAt);
 
     const headers = new Headers(res.headers);

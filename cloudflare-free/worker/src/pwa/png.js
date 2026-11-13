@@ -45,7 +45,12 @@ export function isValidPng(bytes, size) {
       const len = dv.getUint32(off);
       const end = off + 8 + len;
       if (end + 4 > bytes.length) return false;
-      const type = String.fromCharCode(bytes[off + 4], bytes[off + 5], bytes[off + 6], bytes[off + 7]);
+      const type = String.fromCharCode(
+        bytes[off + 4],
+        bytes[off + 5],
+        bytes[off + 6],
+        bytes[off + 7],
+      );
       if (crc32(bytes.subarray(off + 4, end)) !== dv.getUint32(end)) return false;
       if (first) {
         if (type !== "IHDR" || len !== 13) return false;
@@ -91,7 +96,13 @@ export function solidPng(size, rgb) {
   for (let pos = 0; pos < raw.length; pos += 65535) {
     const part = raw.subarray(pos, Math.min(pos + 65535, raw.length));
     const last = pos + 65535 >= raw.length;
-    const head = new Uint8Array([last ? 1 : 0, part.length & 255, part.length >>> 8, ~part.length & 255, (~part.length >>> 8) & 255]);
+    const head = new Uint8Array([
+      last ? 1 : 0,
+      part.length & 255,
+      part.length >>> 8,
+      ~part.length & 255,
+      (~part.length >>> 8) & 255,
+    ]);
     blocks.push(head, part);
     total += head.length + part.length;
   }
@@ -113,7 +124,13 @@ export function solidPng(size, rgb) {
   ihdr[8] = 1; // kedalaman bit
   ihdr[9] = 3; // berpalet
   const plte = new Uint8Array([rgb[0], rgb[1], rgb[2], 255, 255, 255]);
-  const parts = [new Uint8Array(SIGNATURE), chunk("IHDR", ihdr), chunk("PLTE", plte), chunk("IDAT", z), chunk("IEND", new Uint8Array(0))];
+  const parts = [
+    new Uint8Array(SIGNATURE),
+    chunk("IHDR", ihdr),
+    chunk("PLTE", plte),
+    chunk("IDAT", z),
+    chunk("IEND", new Uint8Array(0)),
+  ];
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let at = 0;
   for (const p of parts) {
