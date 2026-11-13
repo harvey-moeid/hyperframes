@@ -1,12 +1,15 @@
 // Worker "hyperframes-render" — jalan di paket Workers FREE.
 // Tidak ada Containers / Sandbox / Browser Rendering / Paid plan di sini.
 //
+// Entry: src/worker.js membungkus aplikasi inti (src/index.js) dengan lapisan PWA (src/pwa/).
+// Untuk mematikan PWA tanpa efek lain, ubah "main" kembali ke "src/index.js".
+//
 // Secret (JANGAN ditulis di file ini; set lewat `wrangler secret put` atau worker_secret_put):
 //   - GITHUB_TOKEN : PAT fine-grained, hanya untuk repo fork ini, izin Contents: Read and write
 //   - API_KEY      : kunci untuk header x-api-key pada POST /render
 {
   "name": "hyperframes-render",
-  "main": "src/index.js",
+  "main": "src/worker.js",
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
   "r2_buckets": [
