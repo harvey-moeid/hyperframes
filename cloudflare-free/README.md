@@ -29,7 +29,7 @@ client ◀── GET /video/:id, /status/:id ─┘ (lewat Worker)
 
 | Path                                     | Fungsi                                                                  |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| `worker/src/index.js`                    | Worker: halaman web `/`, `/api`, `/render`, `/asset`, `/status/:id`, `/video/:id` |
+| `worker/src/index.js`                    | Worker: halaman web `/`, `/api`, `/render`, `/asset`, `/asset-large/:composition/:filename`, `/status/:id`, `/video/:id` |
 | `worker/wrangler.jsonc`                  | Binding R2 `VIDEOS`, var `GITHUB_REPO`                                  |
 | `compositions/contoh/`                   | Komposisi contoh 5 detik (1920×1080)                                    |
 | `../.github/workflows/render-video.yml`  | Workflow render (dipicu `repository_dispatch` / manual)                 |
@@ -43,8 +43,9 @@ Komposisi baru bisa dibuat dua cara:
    _Isi dari contoh_ memuat templat awal). Worker yang meng-commit file yang sama ke repo,
    lalu memicu render.
 
-Asset (gambar, video, audio, font) untuk sebuah komposisi diunggah lewat `POST /asset`
-(lihat bagian _Asset_) dan dirujuk dengan path relatif `assets/<file>` di `index.html`.
+Asset kecil (maks 8 MiB) untuk sebuah komposisi diunggah lewat `POST /asset`; asset besar
+(lebih dari 8 MiB sampai 90 MiB) lewat `PUT /asset-large/:composition/:filename` ke R2
+(lihat bagian _Asset_). Keduanya dirujuk dengan path relatif `assets/<file>` di `index.html`.
 
 Nama folder harus cocok `^[a-zA-Z0-9_-]{1,64}$`.
 
