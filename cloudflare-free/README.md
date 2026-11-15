@@ -29,7 +29,7 @@ client ◀── GET /video/:id, /status/:id ─┘ (lewat Worker)
 
 | Path                                     | Fungsi                                                                  |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
-| `worker/src/index.js`                    | Worker: halaman web `/`, `/api`, `/render`, `/status/:id`, `/video/:id` |
+| `worker/src/index.js`                    | Worker: halaman web `/`, `/api`, `/render`, `/asset`, `/status/:id`, `/video/:id` |
 | `worker/wrangler.jsonc`                  | Binding R2 `VIDEOS`, var `GITHUB_REPO`                                  |
 | `compositions/contoh/`                   | Komposisi contoh 5 detik (1920×1080)                                    |
 | `../.github/workflows/render-video.yml`  | Workflow render (dipicu `repository_dispatch` / manual)                 |
@@ -42,6 +42,9 @@ Komposisi baru bisa dibuat dua cara:
 2. **Lewat Worker**: kirim isinya di field `html` (atau tempel di halaman web; tombol
    _Isi dari contoh_ memuat templat awal). Worker yang meng-commit file yang sama ke repo,
    lalu memicu render.
+
+Asset (gambar, video, audio, font) untuk sebuah komposisi diunggah lewat `POST /asset`
+(lihat bagian _Asset_) dan dirujuk dengan path relatif `assets/<file>` di `index.html`.
 
 Nama folder harus cocok `^[a-zA-Z0-9_-]{1,64}$`.
 
@@ -56,6 +59,7 @@ Nama folder harus cocok `^[a-zA-Z0-9_-]{1,64}$`.
 | `GET /`           | —                  | Browser (header `Accept` memuat `text/html`) → halaman web. Selain itu (curl, skrip) → JSON info layanan, sama seperti sebelumnya.                                                                                       |
 | `GET /api`        | —                  | Selalu JSON info layanan.                                                                                                                                                                                                |
 | `POST /render`    | header `x-api-key` | Body JSON opsional: `id`, `composition` (default `contoh`), `quality` (`draft`/`standard`/`high`), `html`. `id` kosong → UUID otomatis. Balas `202`. `409` bila `id` sudah ada. Lihat bagian _Komposisi lewat `html`_.   |
+| `POST /asset`     | header `x-api-key` | Body JSON: `composition`, `filename`, `data` (base64). Meng-commit file ke `compositions/<composition>/assets/<filename>`. Maks 8 MiB per file. Balas `201`. Lihat bagian _Asset_.                                       |
 | `GET /status/:id` | —                  | `200 {status:"done"}` bila MP4 ada di R2; `410 {status:"failed", reason, run_url?}` bila workflow menandai render gagal/dibatalkan; selain itu `404 {status:"not_ready"}` (antre/render/id tak dikenal tidak dibedakan). |
 | `GET /video/:id`  | —                  | Menyajikan MP4 (mendukung Range). `404` selama belum selesai.                                                                                                                                                            |
 
@@ -94,6 +98,35 @@ Bila body `POST /render` memuat `html` (string isi `index.html`):
 - **Setiap render dengan `html` menambah satu commit di repo.** Tidak ada batas ukuran praktis di
   repo, tetapi riwayat git akan terus bertambah.
 
+### Asset
+
+`POST /asset` meng-commit satu file asset ke folder komposisi, sehingga bisa dirujuk dari `index.html`
+dengan path relatif.
+
+Body JSON:
+
+| Field         | Aturan                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `composition` | Nama folder komposisi, `^[a-zA-Z0-9_-]{1,64}$`.                                             |
+| `filename`    | `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` (tanpa `/`; ekstensi apa pun yang lolos regex diterima). |
+| `data`        | Isi file dalam base64 standar (base64url ditolak). Maks **8 MiB** setelah decode.            |
+
+- Worker meng-commit ke `cloudflare-free/compositions/<composition>/assets/<filename>` di default branch.
+- Asset **boleh ditimpa**: unggah ulang dengan `filename` yang sama menggantikan isinya (beda dengan
+  `index.html` yang tidak pernah ditimpa).
+- Balasan sukses `201`: `{ok, composition, filename, path, src, commit_sha, bytes}`. `src` berisi path
+  relatif yang dipakai di komposisi, mis. `assets/logo.png`.
+- Galat: `401 unauthorized`; `500 server_not_configured`; `413 body_too_large` atau `asset_too_large`
+  (dengan `max_bytes`); `400 invalid_json`, `invalid_composition`, `invalid_filename`, `invalid_data`,
+  `invalid_base64`; `502 {error:"commit_failed", github_status}`.
+- Di komposisi: `<img src="assets/logo.png">`, `<video src="assets/avatar.mp4" ...>`, dan sebagainya.
+  Workflow melakukan sparse-checkout `cloudflare-free/compositions`, jadi asset ikut ter-checkout.
+- **Setiap unggahan menambah satu commit biner di repo.** Cocok untuk gambar, font, dan klip kecil;
+  hindari file besar atau sering berganti karena riwayat git terus membengkak.
+- Bila render dipicu segera setelah unggah, beri jeda singkat atau pakai `commit_sha` dari balasan.
+  `POST /render` saat ini belum menerima `sha` dari klien, jadi commit asset yang sangat baru berpotensi
+  belum terlihat oleh workflow (belum diuji).
+
 ## Halaman web
 
 Buka `https://hyperframes-render.<SUBDOMAIN-ANDA>.workers.dev/` di browser. Fungsinya:
@@ -117,6 +150,9 @@ Buka `https://hyperframes-render.<SUBDOMAIN-ANDA>.workers.dev/` di browser. Fung
 
 Perilaku API untuk `curl`/skrip tidak berubah: `GET /` tanpa `Accept: text/html` tetap membalas JSON.
 
+> Catatan: apakah halaman web sudah punya antarmuka unggah asset belum didokumentasikan di sini.
+> Lihat `docs/UI.md` dan `worker/src/page.js`.
+
 ## Setup
 
 1. Bucket: `npx wrangler r2 bucket create hyperframes-renders`
@@ -130,7 +166,7 @@ Perilaku API untuk `curl`/skrip tidak berubah: `GET /` tanpa `Accept: text/html`
 5. Secret runtime Worker (nilai diketik di prompt, jangan ditulis ke file):
    `npx wrangler secret put GITHUB_TOKEN` dan `npx wrangler secret put API_KEY`
    - `GITHUB_TOKEN`: PAT _fine-grained_, hanya untuk repo fork ini, izin **Contents: Read and write**
-     (dibutuhkan endpoint `repository_dispatch` **dan** commit komposisi lewat Contents API).
+     (dibutuhkan endpoint `repository_dispatch` **dan** commit komposisi/asset lewat Contents API).
    - `API_KEY`: string acak buatan sendiri, mis. `openssl rand -hex 32`.
 6. Tes cepat tanpa Worker: Actions → _Render video_ → _Run workflow_ (`id=tes1`).
 
@@ -149,6 +185,13 @@ jq -n --rawfile html komposisi.html '{html:$html, composition:"video-baru", qual
   curl -sS -X POST "$WORKER/render" \
     -H "x-api-key: $API_KEY" -H "content-type: application/json" -d @-
 
+# 1c. unggah asset untuk komposisi (base64 ke file dulu agar tidak kena batas panjang argumen shell)
+base64 -w0 logo.png > logo.b64   # macOS: base64 -i logo.png | tr -d '\n' > logo.b64
+jq -n --rawfile data logo.b64 '{composition:"video-baru", filename:"logo.png", data:$data}' |
+  curl -sS -X POST "$WORKER/asset" \
+    -H "x-api-key: $API_KEY" -H "content-type: application/json" -d @-
+# di index.html: <img src="assets/logo.png">
+
 # 2. cek status (ulangi sampai 200 "done"; berhenti juga bila 410 "failed")
 curl -sS -w '\nHTTP %{http_code}\n' "$WORKER/status/<id>"
 
@@ -163,9 +206,10 @@ Atau cukup buka `$WORKER/` di browser (lihat _Halaman web_).
 - **Workers Free**: 100.000 request/hari, 10 ms CPU per invocation. Satu render = 1 request `/render` + beberapa polling.
 - **R2 free tier**: 10 GB-bulan penyimpanan, 1 juta operasi Class A (tulis) dan 10 juta Class B (baca) per bulan, egress gratis. Satu render ≈ 1 tulis; `/video` ≈ 1 baca per panggilan; `/status` ≈ 1–2 baca per panggilan (cek MP4, lalu cek penanda gagal selama belum selesai).
 - **GitHub Actions**: repo publik memakai runner standar tanpa kuota menit (menurut dokumentasi GitHub); repo privat dibatasi kuota menit akun. Job dibatasi `timeout-minutes: 30`.
-- **GitHub API**: tiap render dengan `html` = 1 commit + 1 dispatch; masih jauh di bawah batas rate API.
+- **GitHub API**: tiap render dengan `html` = 1 commit + 1 dispatch; tiap unggahan asset = 1 commit (+ 1 baca untuk mencari sha file lama); masih jauh di bawah batas rate API.
 - Batas teknis workflow: MP4 maksimal 300 MiB (guard di workflow); durasi/resolusi besar = render lebih lama di runner 4 vCPU.
 - Isi komposisi lewat `html`: maks 256 KB per permintaan.
+- Asset lewat `/asset`: maks 8 MiB per file (`MAX_ASSET_BYTES`), dijaga kecil karena batas CPU/memori Workers Free saat decode base64.
 - R2 tidak menghapus otomatis: hapus `renders/*.mp4` dan `renders/*.failed.json` lama bila mendekati 10 GB (atau pasang lifecycle rule di dashboard; penanda gagal hanya beberapa ratus byte).
 
 ## Keamanan
@@ -178,6 +222,7 @@ Atau cukup buka `$WORKER/` di browser (lihat _Halaman web_).
 - Halaman web: CSP berbasis nonce, data dari server hanya dimasukkan ke DOM lewat `textContent`, ID dari server maupun `localStorage` divalidasi ulang dengan regex yang sama sebelum dipakai.
 - Penanda gagal: hanya field yang dikenal yang diteruskan Worker ke klien, dan `run_url` divalidasi dengan regex bentuk tautan run GitHub (Worker **dan** halaman web) sebelum dijadikan tautan; tautan dibuka dengan `rel="noopener noreferrer"`.
 - Komposisi lewat `html`: path commit selalu `cloudflare-free/compositions/<nama>/index.html` dengan `<nama>` lolos regex (tidak bisa keluar folder atau menyentuh `.github/`), dan file lama tidak ditimpa.
+- Asset lewat `/asset`: path commit selalu `cloudflare-free/compositions/<nama>/assets/<file>` dengan `<nama>` dan `<file>` lolos regex (`<file>` tanpa `/`, jadi tidak bisa keluar folder atau menyentuh `.github/`). Tidak ada pembatasan ekstensi atau pemeriksaan isi file; asset yang sudah ada ditimpa.
 - **Isi komposisi dijalankan sebagai kode** (HTML/JS) di Chrome pada runner GitHub Actions. Secret Cloudflare hanya dipasang di step _Upload ke R2_ dan step penanda gagal (keduanya setelah render), tidak di step render. Pelindung utamanya tetap `x-api-key`: siapa pun yang memegangnya bisa menjalankan kode di runner dan menambah commit di repo, jadi jaga kerahasiaannya.
 
 ## Pemecahan masalah
@@ -185,6 +230,9 @@ Atau cukup buka `$WORKER/` di browser (lihat _Halaman web_).
 - Dispatch `502`/`github_status: 404`: token salah atau tidak punya akses ke repo; `403`: izin Contents belum _write_.
 - `502 commit_failed` dengan `github_status` 404/403/401: sebab sama seperti dispatch (token/izin Contents). `409`: ada commit lain bersamaan, ulangi.
 - `409 composition_already_exists`: nama komposisi sudah ada di repo; kosongkan nama (otomatis `web-<id>`) atau pilih nama lain. Ini juga terjadi bila mengulang `id` yang sama dengan `html` setelah render gagal (komposisi `web-<id>` sudah ter-commit): ulangi dengan `id` baru, atau jalankan ulang tanpa `html` memakai `composition: "web-<id>"`.
+- `/asset` membalas `413 asset_too_large`: file lebih dari 8 MiB; kecilkan atau kompres, atau host di URL eksternal dan rujuk dari HTML.
+- `/asset` membalas `400 invalid_base64`: pakai base64 standar (bukan base64url) dan jangan sisipkan awalan `data:...;base64,`.
+- Render berhasil tetapi asset tidak terbaca: periksa path di HTML (`assets/<file>`, huruf besar-kecil sama) dan pastikan unggahan sudah selesai sebelum render dipicu.
 - `/status` `410` (gagal): buka `run_url` / log workflow _Render video_; step _Render komposisi_ biasanya memuat hasil `hyperframes lint` atau error render.
 - `/status` tetap `404` lama padahal workflow sudah merah: penanda gagal tidak tertulis. Periksa step _Tulis penanda gagal ke R2_ di log (secret Cloudflare belum diset atau izin R2 kurang).
 - Workflow tidak jalan: Actions belum diaktifkan di fork, atau workflow belum ada di default branch.
