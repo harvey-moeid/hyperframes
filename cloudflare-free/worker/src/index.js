@@ -386,9 +386,13 @@ function validateLargeAssetSize(bytes) {
   return null;
 }
 
+function isValidContentLength(value) {
+  return typeof value === "string" && /^[0-9]+$/.test(value);
+}
+
 function validateLargeAssetBody(request) {
   const contentLength = request.headers.get("content-length");
-  if (contentLength === null || !/^[0-9]+$/.test(contentLength)) {
+  if (!isValidContentLength(contentLength)) {
     return { error: json({ error: "content_length_required" }, 411) };
   }
   const bytes = Number(contentLength);
@@ -398,18 +402,19 @@ function validateLargeAssetBody(request) {
   return { bytes };
 }
 
+async function largeAssetAuthError(request, env) {
+  if (!env.API_KEY || !env.VIDEOS) return json({ error: "server_not_configured" }, 500);
+  const provided = request.headers.get("x-api-key") ?? "";
+  if (!(await safeEqual(provided, env.API_KEY))) return json({ error: "unauthorized" }, 401);
+  return null;
+}
+
 /**
  * PUT /asset-large/:composition/:filename — simpan stream biner mentah ke R2.
  * Content-Length wajib agar R2 dapat menerima request.body sebagai stream berukuran pasti.
  */
 async function handleLargeAsset(request, env, composition, filename) {
-  const provided = request.headers.get("x-api-key") ?? "";
-  const authError =
-    !env.API_KEY || !env.VIDEOS
-      ? json({ error: "server_not_configured" }, 500)
-      : !(await safeEqual(provided, env.API_KEY))
-        ? json({ error: "unauthorized" }, 401)
-        : null;
+  const authError = await largeAssetAuthError(request, env);
   if (authError) return authError;
 
   const pathError = validateLargeAssetPath(composition, filename);
