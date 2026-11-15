@@ -1,68 +1,52 @@
 # Handoff: dukungan asset di `cloudflare-free`
 
-Status: **asset sudah didukung lewat `POST /asset`**. Dokumen ini dikoreksi 2026-11-15.
+Status: **UI unggah asset dan `POST /asset` sudah ada; dukungan SHA eksplisit dan asset besar melalui R2 ditambahkan pada branch PR ini.** Belum ada verifikasi terhadap Worker yang di-deploy.
 
-## Koreksi
+## Bukti UI (dibaca dari kode di `main`)
 
-Versi pertama dokumen ini (PR #19) menyimpulkan bahwa asset **belum** didukung dan mengusulkan
-membangun endpoint upload. Itu **keliru**. Kesimpulan tersebut diambil dari `cloudflare-free/README.md`
-tanpa membaca kode. Setelah `cloudflare-free/worker/src/index.js` dibaca, `POST /asset` ternyata sudah ada.
-README-lah yang belum mendokumentasikannya (diperbaiki di PR yang sama dengan koreksi ini).
+Halaman web sudah memiliki UI unggah asset. Bukti:
 
-## Perilaku saat ini (dibaca dari `worker/src/index.js`)
+- `cloudflare-free/worker/src/ui/markup.js`: halaman Media memiliki input file `id="mFile"` (multiple), label drag-and-drop `id="mDrop"`, input komposisi `mComp`, dan pesan status `mMsg`.
+- `cloudflare-free/worker/src/page.js`: `mediaUpload(file)` membaca file dengan `FileReader`, mengirim JSON ke `POST /asset`, dan `initMedia()` memasang event `change` serta `drop`.
+- `renderMedia()` menampilkan pustaka asset lokal. Bukan daftar server: daftar itu disimpan di penyimpanan browser.
+- Batas UI yang ada tetap 8 MiB per file. UI ini tidak diubah untuk upload besar karena instruksi penambahan UI hanya berlaku bila UI upload belum ada.
+
+## Perilaku endpoint kecil yang sudah ada
 
 `POST /asset` (header `x-api-key`), body JSON `{composition, filename, data}`:
 
-- `composition`: nama folder komposisi, regex `^[a-zA-Z0-9_-]{1,64}$`.
-- `filename`: regex `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` (tanpa `/`, jadi tidak bisa keluar folder).
-- `data`: base64 standar (base64url ditolak). Ukuran setelah decode maksimal **8 MiB** (`MAX_ASSET_BYTES`).
-- Worker meng-commit ke `cloudflare-free/compositions/<composition>/assets/<filename>` lewat GitHub
-  Contents API. Asset **boleh ditimpa**: sha file lama dicari lebih dulu dan disertakan.
-- Balasan sukses `201`: `{ok, composition, filename, path, src: "assets/<filename>", commit_sha, bytes}`.
-- Galat: `401 unauthorized`, `500 server_not_configured`, `413 body_too_large` / `asset_too_large`,
-  `400 invalid_json` / `invalid_composition` / `invalid_filename` / `invalid_data` / `invalid_base64`,
-  `502 commit_failed`.
-- Di komposisi, rujuk asset dengan path relatif, mis. `<img src="assets/logo.png">`. Workflow melakukan
-  sparse-checkout `cloudflare-free/compositions` dan merender dari folder komposisi, sehingga path relatif ikut.
+- `composition`: `^[a-zA-Z0-9_-]{1,64}$`.
+- `filename`: `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`.
+- `data`: base64 standar, maksimal 8 MiB setelah decode.
+- Commit ke `cloudflare-free/compositions/<composition>/assets/<filename>` melalui GitHub Contents API; file boleh ditimpa.
+- Balasan sukses memuat `src: "assets/<filename>"` dan `commit_sha`.
 
-## Celah dan risiko yang diketahui
+## Perubahan pada branch PR
 
-Tiga yang pertama dibaca dari kode; yang lain **belum diuji**.
+1. `POST /render` menerima `sha` opsional, divalidasi dengan `SHA_RE` (40 karakter hex lowercase) dan diteruskan ke `client_payload.sha`. SHA hasil commit HTML tetap diprioritaskan. Tanpa field `sha`, perilaku sebelumnya tidak berubah.
+2. `PUT /asset-large/:composition/:filename` menerima body biner mentah, bukan JSON/base64, dengan `Content-Length` wajib. Validasi nama menggunakan regex `ID_RE` dan `ASSET_NAME_RE` yang sama dengan Worker.
+3. Asset besar disimpan pada bucket R2 yang sama dengan render, dengan key `assets/<composition>/<filename>`. Batas aplikasi: lebih dari 8 MiB sampai 90 MiB per file.
+4. Workflow `render-video.yml` mengunduh seluruh objek pada prefix `assets/<composition>/` sebelum render, lalu menyimpannya ke `cloudflare-free/compositions/<composition>/assets/`.
+5. Token R2 berada pada environment step yang perlu mengakses R2 (unduh asset, unggah MP4, penanda gagal), bukan pada step yang menjalankan komposisi.
 
-1. **README tidak mendokumentasikan `/asset`** (sudah ditambahkan di PR koreksi ini).
-2. **Asset masuk ke riwayat git.** Tiap unggahan = satu commit biner. Aman untuk gambar dan font kecil,
-   boros untuk video. Batas 8 MiB dipasang karena batas CPU dan memori Workers Free saat decode base64.
-3. **Tidak ada validasi ekstensi atau isi.** Nama file apa pun yang lolos regex diterima.
-4. **Kemungkinan race condition (dugaan, belum diuji).** `POST /render` tanpa `html` tidak mengirim
-   `client_payload.sha`, sehingga workflow checkout `github.sha` (ujung default branch saat event).
-   Bila `POST /render` dikirim sangat cepat setelah `POST /asset`, commit asset mungkin belum terlihat.
-   Komentar di workflow soal "kecepatan GitHub memperbarui default branch" menunjukkan kekhawatiran serupa
-   untuk `html`, yang diatasi dengan SHA.
-5. **Tidak ada endpoint daftar atau hapus asset.** Menghapus harus lewat git.
-6. **Dukungan di halaman web belum dicek** (`worker/src/page.js` dan `ui/` belum dibaca).
-7. **Asset terikat ke nama komposisi, bukan ke `id` render.** Dua render dari komposisi yang sama berbagi asset.
+## Dasar batas Cloudflare dan strategi stream
 
-## Opsi lanjutan (hanya bila perlu)
+- Dokumentasi Cloudflare menyatakan batas request body untuk zona Free adalah 100 MB; batas CPU Workers Free 10 ms per request dan memori 128 MB.
+- R2 `Bucket.put()` menerima `ReadableStream`, tetapi stream harus memiliki panjang yang diketahui (misalnya request body dengan `Content-Length`).
+- Implementasi meneruskan `request.body` langsung ke R2, tanpa `arrayBuffer()` atau base64. Streaming menghindari buffering seluruh file; ini **bukan jaminan** bahwa CPU selalu di bawah 10 ms.
+- Batas 90 MiB dipilih sebagai batas aplikasi konservatif di bawah 100 MB. Worker yang di-deploy tetap diperlukan untuk menguji perilaku runtime dan batas aktual.
 
-### Perbaiki race condition (kecil, disarankan bila dugaan terbukti)
+## Verifikasi yang diperlukan
 
-- `POST /asset` sudah mengembalikan `commit_sha`. Izinkan `POST /render` menerima field `sha` opsional
-  (divalidasi `SHA_RE`) yang diteruskan ke `client_payload.sha`.
-- Klien mengirim `commit_sha` dari unggahan terakhir ke `/render`.
-- Uji: unggah asset lalu langsung render; pastikan asset terbaca.
+- Uji unit/integrasi Worker: `sha` valid diteruskan; SHA invalid ditolak; tanpa SHA payload lama tetap; upload R2 stream ukuran >8 MiB berhasil; ukuran <=8 MiB, >90 MiB, nama invalid, tanpa Content-Length, dan API key salah ditolak.
+- Uji workflow dengan objek R2 nyata: pagination daftar objek, download biner, path asset, serta pastikan step render tidak memiliki `CLOUDFLARE_API_TOKEN` atau `CLOUDFLARE_ACCOUNT_ID`.
+- Uji berurutan unggah asset kecil lalu `POST /render` dengan `sha=commit_sha`; periksa checkout SHA yang tepat.
+- **Belum diuji tanpa Worker yang di-deploy.** PR/CI dapat memeriksa sintaks dan workflow, tetapi tidak membuktikan binding R2, token, request streaming, atau integrasi end-to-end.
 
-### Asset besar lewat R2 (hanya bila 8 MiB atau pertumbuhan repo jadi masalah)
+## Risiko / catatan operasional
 
-- Simpan ke R2 `assets/<id>/<filename>`; workflow mengunduh sebelum render.
-- Perlu kredensial R2 di step unduh (sebelum render) dan harus dijaga agar tidak terekspos ke kode komposisi.
-- Menambah kerumitan; jangan dikerjakan sebelum kebutuhan nyata ada.
-
-### Pembatasan ekstensi
-
-- Allowlist (png, jpg, webp, svg, mp4, webm, mp3, wav, woff2) bila ingin lebih ketat.
-
-## Pertanyaan terbuka
-
-- Apakah ada kebutuhan asset di atas 8 MiB? Bila tidak, Opsi R2 tidak perlu.
-- Apakah halaman web sudah punya UI unggah asset? Perlu membaca `page.js` dan `ui/`.
-- Apakah dugaan race condition benar-benar terjadi? Perlu uji unggah lalu render berurutan cepat.
+- `POST /asset` tetap memakai commit GitHub dan tidak diubah.
+- Asset R2 tidak membuat commit GitHub. Bila ada nama yang sama di repo dan R2, download step menimpa file Git pada workspace render.
+- Key R2 saat ini mutable. Jika asset ditimpa setelah render didispatch tetapi sebelum download step, job antrean bisa mengambil versi baru, bukan versi saat dispatch. Hindari overwrite saat render masih antre; snapshot immutable per render belum dibuat.
+- Bucket `hyperframes-renders` kini berisi `renders/*` dan `assets/<composition>/*`; lifecycle cleanup harus mempertimbangkan kedua prefix.
+- Worker memakai binding `VIDEOS` yang sudah ada ke bucket tersebut; tidak ada bucket atau secret baru.

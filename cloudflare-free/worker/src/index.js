@@ -53,6 +53,8 @@ const ASSET_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 // Batas ukuran satu aset (video avatar dsb). GitHub Contents API menerima file lebih besar,
 // tetapi dijaga kecil di sini agar aman terhadap batas CPU/memori Workers Free saat decode base64.
 const MAX_ASSET_BYTES = 8 * 1024 * 1024; // 8 MiB
+// Asset besar memakai stream R2 mentah; 90 MiB berada di bawah batas body 100 MB Cloudflare Free.
+const MAX_LARGE_ASSET_BYTES = 90 * 1024 * 1024;
 // Body JSON /asset: base64 menambah ~37% ukuran, plus sedikit ruang untuk field lain.
 const MAX_ASSET_BODY_BYTES = Math.ceil((MAX_ASSET_BYTES * 4) / 3) + 4096;
 
@@ -137,7 +139,7 @@ const serviceInfo = () =>
   json(
     {
       service: "hyperframes-render",
-      endpoints: ["POST /render", "POST /asset", "GET /status/:id", "GET /video/:id"],
+      endpoints: ["POST /render", "POST /asset", "PUT /asset-large/:composition/:filename", "GET /status/:id", "GET /video/:id"],
     },
     200,
     { vary: "accept" },
@@ -159,6 +161,19 @@ async function route(request, env) {
   if (pathname === "/asset") {
     if (method !== "POST") return methodNotAllowed(["POST"]);
     return handleAsset(request, env);
+  }
+
+  const largeAssetMatch = pathname.match(/^\/asset-large\/([^/]+)\/([^/]+)$/);
+  if (largeAssetMatch) {
+    if (method !== "PUT") return methodNotAllowed(["PUT"]);
+    let composition, filename;
+    try {
+      composition = decodeURIComponent(largeAssetMatch[1]);
+      filename = decodeURIComponent(largeAssetMatch[2]);
+    } catch {
+      return json({ error: "invalid_path" }, 400);
+    }
+    return handleLargeAsset(request, env, composition, filename);
   }
 
   const match = pathname.match(/^\/(status|video)\/([^/]+)$/);
@@ -355,7 +370,92 @@ async function handleAsset(request, env) {
   );
 }
 
-/** POST /render  body: { id?, composition?, quality?, html? } → 202 */
+function validateLargeAssetPath(composition, filename) {
+  if (!ID_RE.test(composition)) return json({ error: "invalid_composition" }, 400);
+  if (!ASSET_NAME_RE.test(filename)) return json({ error: "invalid_filename" }, 400);
+  return null;
+}
+
+function validateLargeAssetSize(bytes) {
+  if (!Number.isSafeInteger(bytes) || bytes <= MAX_ASSET_BYTES) {
+    return json({ error: "asset_must_exceed_8_mib", min_bytes_exclusive: MAX_ASSET_BYTES }, 400);
+  }
+  if (bytes > MAX_LARGE_ASSET_BYTES) {
+    return json({ error: "asset_too_large", max_bytes: MAX_LARGE_ASSET_BYTES }, 413);
+  }
+  return null;
+}
+
+function isValidContentLength(value) {
+  return typeof value === "string" && /^[0-9]+$/.test(value);
+}
+
+function validateLargeAssetBody(request) {
+  const contentLength = request.headers.get("content-length");
+  if (!isValidContentLength(contentLength)) {
+    return { error: json({ error: "content_length_required" }, 411) };
+  }
+  const bytes = Number(contentLength);
+  const sizeError = validateLargeAssetSize(bytes);
+  if (sizeError) return { error: sizeError };
+  if (!request.body) return { error: json({ error: "invalid_data" }, 400) };
+  return { bytes };
+}
+
+function requestApiKey(request) {
+  const value = request.headers.get("x-api-key");
+  return value === null ? "" : value;
+}
+
+function largeAssetContentType(request) {
+  const value = request.headers.get("content-type");
+  return value === null ? "application/octet-stream" : value;
+}
+
+async function largeAssetAuthError(request, env) {
+  if (!env.API_KEY) return json({ error: "server_not_configured" }, 500);
+  if (!env.VIDEOS) return json({ error: "server_not_configured" }, 500);
+  if (!(await safeEqual(requestApiKey(request), env.API_KEY))) {
+    return json({ error: "unauthorized" }, 401);
+  }
+  return null;
+}
+
+/**
+ * PUT /asset-large/:composition/:filename — simpan stream biner mentah ke R2.
+ * Content-Length wajib agar R2 dapat menerima request.body sebagai stream berukuran pasti.
+ */
+async function handleLargeAsset(request, env, composition, filename) {
+  const authError = await largeAssetAuthError(request, env);
+  if (authError) return authError;
+
+  const pathError = validateLargeAssetPath(composition, filename);
+  if (pathError) return pathError;
+  const body = validateLargeAssetBody(request);
+  if (body.error) return body.error;
+
+  const path = `assets/${composition}/${filename}`;
+  const object = await env.VIDEOS.put(path, request.body, {
+    httpMetadata: {
+      contentType: largeAssetContentType(request),
+    },
+  });
+  return json(
+    {
+      ok: true,
+      composition,
+      filename,
+      path,
+      src: `assets/${filename}`,
+      bytes: object.size,
+      etag: object.etag,
+      storage: "r2",
+    },
+    201,
+  );
+}
+
+/** POST /render  body: { id?, composition?, quality?, html?, sha? } → 202 */
 async function handleRender(request, env, origin) {
   if (!env.API_KEY || !env.GITHUB_TOKEN || !REPO_RE.test(env.GITHUB_REPO ?? "")) {
     return json({ error: "server_not_configured" }, 500);
@@ -398,6 +498,9 @@ async function handleRender(request, env, origin) {
   if (typeof quality !== "string" || !QUALITIES.has(quality)) {
     return json({ error: "invalid_quality", allowed: [...QUALITIES] }, 400);
   }
+  if (body.sha !== undefined && (typeof body.sha !== "string" || !SHA_RE.test(body.sha))) {
+    return json({ error: "invalid_sha" }, 400);
+  }
   if (hasHtml) {
     if (typeof body.html !== "string" || body.html.trim() === "") {
       return json({ error: "invalid_html" }, 400);
@@ -435,7 +538,9 @@ async function handleRender(request, env, origin) {
   }
 
   const clientPayload = { id, composition, quality };
+  // SHA hasil commit HTML selalu paling baru; bila tidak ada HTML, pakai SHA opsional dari klien.
   if (commitSha) clientPayload.sha = commitSha;
+  else if (body.sha !== undefined) clientPayload.sha = body.sha;
 
   const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
     method: "POST",
