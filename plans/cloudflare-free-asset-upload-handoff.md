@@ -47,5 +47,6 @@ Halaman web sudah memiliki UI unggah asset. Bukti:
 
 - `POST /asset` tetap memakai commit GitHub dan tidak diubah.
 - Asset R2 tidak membuat commit GitHub. Bila ada nama yang sama di repo dan R2, download step menimpa file Git pada workspace render.
+- Key R2 saat ini mutable. Jika asset ditimpa setelah render didispatch tetapi sebelum download step, job antrean bisa mengambil versi baru, bukan versi saat dispatch. Hindari overwrite saat render masih antre; snapshot immutable per render belum dibuat.
 - Bucket `hyperframes-renders` kini berisi `renders/*` dan `assets/<composition>/*`; lifecycle cleanup harus mempertimbangkan kedua prefix.
 - Worker memakai binding `VIDEOS` yang sudah ada ke bucket tersebut; tidak ada bucket atau secret baru.

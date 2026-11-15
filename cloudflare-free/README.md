@@ -126,6 +126,9 @@ Body JSON:
   font, dan klip kecil; hindari file besar atau sering berganti karena riwayat git terus membengkak.
 - Asset besar lewat R2 diunduh oleh workflow ke folder `assets/` sebelum proses render. Jika nama file
   yang sama ada di GitHub dan R2, file R2 akan menimpa salinan Git di workspace render.
+- Key R2 bersifat mutable: bila file ditimpa setelah `POST /render` tetapi sebelum step unduh berjalan,
+  render antrean dapat memakai versi baru. Jangan menimpa asset selama render terkait masih menunggu;
+  snapshot versi R2 per render belum diterapkan.
 - Untuk menghindari race checkout setelah unggah asset, kirim `commit_sha` dari balasan `POST /asset`
   sebagai field `sha` pada `POST /render`. Worker memvalidasi SHA 40 karakter hex dan meneruskannya
   ke `client_payload.sha`; bila field tidak dikirim, perilaku sebelumnya tetap sama.
