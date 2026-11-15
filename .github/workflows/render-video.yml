@@ -106,6 +106,76 @@ jobs:
         with:
           node-version: "22"
 
+      # Token R2 hanya tersedia pada step yang perlu mengakses bucket, bukan step render.
+      - name: Unduh asset besar dari R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          INPUT_COMPOSITION: ${{ github.event.client_payload.composition || inputs.composition || 'contoh' }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { createWriteStream } from "node:fs";
+          import { mkdir } from "node:fs/promises";
+          import { dirname, join } from "node:path";
+          import { Readable } from "node:stream";
+          import { pipeline } from "node:stream/promises";
+
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const bucket = process.env.R2_BUCKET;
+          const composition = process.env.INPUT_COMPOSITION;
+          const idRe = /^[a-zA-Z0-9_-]{1,64}$/;
+          const filenameRe = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
+          const maxBytes = 90 * 1024 * 1024;
+          if (!token || !account || !bucket) throw new Error("Secret R2 / konfigurasi bucket belum tersedia");
+          if (!idRe.test(composition || "")) throw new Error("Nama komposisi tidak valid");
+
+          const base = `https://api.cloudflare.com/client/v4/accounts/${account}/r2/buckets/${bucket}/objects`;
+          const prefix = `assets/${composition}/`;
+          const target = join("cloudflare-free", "compositions", composition, "assets");
+          await mkdir(target, { recursive: true });
+
+          let cursor = "";
+          let downloaded = 0;
+          do {
+            const listUrl = new URL(base);
+            listUrl.searchParams.set("prefix", prefix);
+            listUrl.searchParams.set("per_page", "1000");
+            if (cursor) listUrl.searchParams.set("cursor", cursor);
+            const listed = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
+            if (!listed.ok) throw new Error(`Gagal daftar R2: HTTP ${listed.status}`);
+            const page = await listed.json();
+            if (!page.success) throw new Error("API R2 gagal mengembalikan daftar asset");
+
+            for (const item of page.result || []) {
+              const key = item.key;
+              if (typeof key !== "string" || !key.startsWith(prefix)) throw new Error("Key R2 di luar prefix komposisi");
+              const filename = key.slice(prefix.length);
+              if (!filenameRe.test(filename)) throw new Error("Nama file R2 tidak valid");
+              if (!Number.isSafeInteger(item.size) || item.size < 1 || item.size > maxBytes) {
+                throw new Error(`Ukuran asset R2 di luar batas: ${filename}`);
+              }
+
+              const response = await fetch(`${base}/${key}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (!response.ok || !response.body) throw new Error(`Gagal unduh ${filename}: HTTP ${response.status}`);
+              const destination = join(target, filename);
+              await mkdir(dirname(destination), { recursive: true });
+              await pipeline(Readable.fromWeb(response.body), createWriteStream(destination));
+              downloaded++;
+              console.log(`Asset R2 diunduh: ${filename} (${item.size} byte)`);
+            }
+
+            cursor = page.result_info?.cursor || "";
+            if (!page.result_info?.is_truncated) cursor = "";
+            if (page.result_info?.is_truncated && !cursor) throw new Error("Pagination R2 terpotong tanpa cursor");
+          } while (cursor);
+
+          console.log(`Jumlah asset R2 untuk ${composition}: ${downloaded}`);
+          NODE
+
       - name: Pasang FFmpeg
         run: |
           set -euo pipefail

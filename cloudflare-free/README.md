@@ -58,8 +58,9 @@ Nama folder harus cocok `^[a-zA-Z0-9_-]{1,64}$`.
 | ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `GET /`           | —                  | Browser (header `Accept` memuat `text/html`) → halaman web. Selain itu (curl, skrip) → JSON info layanan, sama seperti sebelumnya.                                                                                       |
 | `GET /api`        | —                  | Selalu JSON info layanan.                                                                                                                                                                                                |
-| `POST /render`    | header `x-api-key` | Body JSON opsional: `id`, `composition` (default `contoh`), `quality` (`draft`/`standard`/`high`), `html`. `id` kosong → UUID otomatis. Balas `202`. `409` bila `id` sudah ada. Lihat bagian _Komposisi lewat `html`_.   |
-| `POST /asset`     | header `x-api-key` | Body JSON: `composition`, `filename`, `data` (base64). Meng-commit file ke `compositions/<composition>/assets/<filename>`. Maks 8 MiB per file. Balas `201`. Lihat bagian _Asset_.                                       |
+| `POST /render`    | header `x-api-key` | Body JSON opsional: `id`, `composition` (default `contoh`), `quality` (`draft`/`standard`/`high`), `html`, `sha` (SHA commit 40 hex). Bila `sha` dikirim tanpa `html`, workflow checkout SHA itu; bila tidak dikirim, perilaku lama tetap berlaku. Balas `202`. |
+| `POST /asset`     | header `x-api-key` | Body JSON: `composition`, `filename`, `data` (base64). Commit ke repo; maks 8 MiB. Asset boleh ditimpa. Balas `201`. |
+| `PUT /asset-large/:composition/:filename` | header `x-api-key` | Body biner mentah dengan `Content-Length`; simpan ke R2 `assets/<composition>/<filename>`. Ukuran >8 MiB sampai 90 MiB. Balas `201`. |
 | `GET /status/:id` | —                  | `200 {status:"done"}` bila MP4 ada di R2; `410 {status:"failed", reason, run_url?}` bila workflow menandai render gagal/dibatalkan; selain itu `404 {status:"not_ready"}` (antre/render/id tak dikenal tidak dibedakan). |
 | `GET /video/:id`  | —                  | Menyajikan MP4 (mendukung Range). `404` selama belum selesai.                                                                                                                                                            |
 
@@ -121,17 +122,25 @@ Body JSON:
   `invalid_base64`; `502 {error:"commit_failed", github_status}`.
 - Di komposisi: `<img src="assets/logo.png">`, `<video src="assets/avatar.mp4" ...>`, dan sebagainya.
   Workflow melakukan sparse-checkout `cloudflare-free/compositions`, jadi asset ikut ter-checkout.
-- **Setiap unggahan menambah satu commit biner di repo.** Cocok untuk gambar, font, dan klip kecil;
-  hindari file besar atau sering berganti karena riwayat git terus membengkak.
-- Bila render dipicu segera setelah unggah, beri jeda singkat atau pakai `commit_sha` dari balasan.
-  `POST /render` saat ini belum menerima `sha` dari klien, jadi commit asset yang sangat baru berpotensi
-  belum terlihat oleh workflow (belum diuji).
+- **Setiap unggahan lewat `POST /asset` menambah satu commit biner di repo.** Cocok untuk gambar,
+  font, dan klip kecil; hindari file besar atau sering berganti karena riwayat git terus membengkak.
+- Asset besar lewat R2 diunduh oleh workflow ke folder `assets/` sebelum proses render. Jika nama file
+  yang sama ada di GitHub dan R2, file R2 akan menimpa salinan Git di workspace render.
+- Untuk menghindari race checkout setelah unggah asset, kirim `commit_sha` dari balasan `POST /asset`
+  sebagai field `sha` pada `POST /render`. Worker memvalidasi SHA 40 karakter hex dan meneruskannya
+  ke `client_payload.sha`; bila field tidak dikirim, perilaku sebelumnya tetap sama.
+- `PUT /asset-large/<composition>/<filename>` menyimpan body biner mentah (bukan JSON/base64) ke bucket
+  R2 yang sama pada key `assets/<composition>/<filename>`. Endpoint hanya menerima file **lebih dari 8 MiB**
+  dan maksimal **90 MiB**; `Content-Length` wajib. File besar tidak membuat commit GitHub.
 
 ## Halaman web
 
 Buka `https://hyperframes-render.<SUBDOMAIN-ANDA>.workers.dev/` di browser. Fungsinya:
 
 - Form render: API key, sumber komposisi, kualitas, dan ID opsional → memanggil `POST /render`.
+- Halaman **Media** sudah menyediakan input file `mFile`, area drag-and-drop `mDrop`, serta fungsi
+  `mediaUpload(file)` untuk `POST /asset` (maks 8 MiB per file). Unggah asset besar menggunakan endpoint
+  `PUT /asset-large/...` melalui klien HTTP; UI Media saat ini tidak mengunggah asset besar.
   Sumber komposisi: _yang sudah ada di repo_ (nama folder) atau _tulis komposisi baru_ (nama opsional +
   textarea `index.html`, di-commit Worker ke repo). Tombol _Isi dari contoh_ mengisi textarea dengan templat
   komposisi 5 detik (meminta konfirmasi bila textarea sudah berisi).
@@ -158,7 +167,9 @@ Perilaku API untuk `curl`/skrip tidak berubah: `GET /` tanpa `Accept: text/html`
 1. Bucket: `npx wrangler r2 bucket create hyperframes-renders`
 2. GitHub Secrets (Settings → Secrets and variables → Actions):
    `CLOUDFLARE_API_TOKEN` dan `CLOUDFLARE_ACCOUNT_ID`.
-   Izin token: _Account → Workers Scripts: Edit_ dan _Workers R2 Storage: Edit_.
+   Izin token: _Account → Workers Scripts: Edit_ dan _Workers R2 Storage: Read + Edit_.
+   Token hanya dimasukkan ke step workflow yang berinteraksi dengan R2 (unduh asset, unggah MP4,
+   dan tulis penanda gagal); tidak pernah dimasukkan ke environment step render komposisi.
 3. **Aktifkan Actions di fork**: GitHub menonaktifkan workflow di fork secara default.
    Buka tab _Actions_ → _I understand my workflows, go ahead and enable them_.
 4. Deploy Worker: Actions → _Deploy worker_ → _Run workflow_
@@ -185,12 +196,15 @@ jq -n --rawfile html komposisi.html '{html:$html, composition:"video-baru", qual
   curl -sS -X POST "$WORKER/render" \
     -H "x-api-key: $API_KEY" -H "content-type: application/json" -d @-
 
-# 1c. unggah asset untuk komposisi (base64 ke file dulu agar tidak kena batas panjang argumen shell)
+# 1c. unggah asset kecil (maks 8 MiB) melalui POST /asset
 base64 -w0 logo.png > logo.b64   # macOS: base64 -i logo.png | tr -d '\n' > logo.b64
 jq -n --rawfile data logo.b64 '{composition:"video-baru", filename:"logo.png", data:$data}' |
   curl -sS -X POST "$WORKER/asset" \
     -H "x-api-key: $API_KEY" -H "content-type: application/json" -d @-
-# di index.html: <img src="assets/logo.png">
+# 1d. unggah asset besar (>8 MiB sampai 90 MiB) sebagai biner mentah
+curl -sS -X PUT "$WORKER/asset-large/video-baru/video.mp4" \
+  -H "x-api-key: $API_KEY" -H "content-type: video/mp4" --data-binary @video.mp4
+# di index.html: <img src="assets/logo.png"> atau <video src="assets/video.mp4">
 
 # 2. cek status (ulangi sampai 200 "done"; berhenti juga bila 410 "failed")
 curl -sS -w '\nHTTP %{http_code}\n' "$WORKER/status/<id>"
@@ -209,7 +223,12 @@ Atau cukup buka `$WORKER/` di browser (lihat _Halaman web_).
 - **GitHub API**: tiap render dengan `html` = 1 commit + 1 dispatch; tiap unggahan asset = 1 commit (+ 1 baca untuk mencari sha file lama); masih jauh di bawah batas rate API.
 - Batas teknis workflow: MP4 maksimal 300 MiB (guard di workflow); durasi/resolusi besar = render lebih lama di runner 4 vCPU.
 - Isi komposisi lewat `html`: maks 256 KB per permintaan.
-- Asset lewat `/asset`: maks 8 MiB per file (`MAX_ASSET_BYTES`), dijaga kecil karena batas CPU/memori Workers Free saat decode base64.
+- Asset lewat `POST /asset`: maks 8 MiB per file (`MAX_ASSET_BYTES`), karena base64 perlu didekode dan di-commit ke GitHub.
+- Asset lewat `PUT /asset-large/:composition/:filename`: lebih dari 8 MiB sampai 90 MiB (`MAX_LARGE_ASSET_BYTES`).
+  Batas 90 MiB adalah batas aplikasi konservatif di bawah request body 100 MB pada zona Cloudflare Free;
+  R2 menerima `ReadableStream` dengan panjang diketahui, sehingga Worker tidak perlu membuffer file.
+  Batas CPU 10 ms tetap berlaku untuk kode yang dijalankan; streaming tidak menjamin setiap invocation bebas
+  dari CPU limit. Fitur ini belum diuji tanpa Worker yang di-deploy.
 - R2 tidak menghapus otomatis: hapus `renders/*.mp4` dan `renders/*.failed.json` lama bila mendekati 10 GB (atau pasang lifecycle rule di dashboard; penanda gagal hanya beberapa ratus byte).
 
 ## Keamanan
