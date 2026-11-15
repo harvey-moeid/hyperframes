@@ -403,7 +403,8 @@ function validateLargeAssetBody(request) {
 }
 
 async function largeAssetAuthError(request, env) {
-  if (!env.API_KEY || !env.VIDEOS) return json({ error: "server_not_configured" }, 500);
+  if (!env.API_KEY) return json({ error: "server_not_configured" }, 500);
+  if (!env.VIDEOS) return json({ error: "server_not_configured" }, 500);
   const provided = request.headers.get("x-api-key") ?? "";
   if (!(await safeEqual(provided, env.API_KEY))) return json({ error: "unauthorized" }, 401);
   return null;
@@ -425,7 +426,7 @@ async function handleLargeAsset(request, env, composition, filename) {
   const path = `assets/${composition}/${filename}`;
   const object = await env.VIDEOS.put(path, request.body, {
     httpMetadata: {
-      contentType: request.headers.get("content-type") || "application/octet-stream",
+      contentType: request.headers.get("content-type") ?? "application/octet-stream",
     },
   });
   return json(
