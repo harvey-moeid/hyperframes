@@ -370,61 +370,72 @@ async function handleAsset(request, env) {
   );
 }
 
-/**
- * PUT /asset-large/:composition/:filename — simpan stream biner mentah ke R2.
- * Content-Length wajib agar R2 dapat menerima request.body sebagai stream berukuran pasti.
- */
-async function handleLargeAsset(request, env, composition, filename) {
-  if (!env.API_KEY || !env.VIDEOS) {
-    return json({ error: "server_not_configured" }, 500);
-  }
-
-  const provided = request.headers.get("x-api-key") ?? "";
-  if (!(await safeEqual(provided, env.API_KEY))) {
-    return json({ error: "unauthorized" }, 401);
-  }
-
+function validateLargeAssetPath(composition, filename) {
   if (!ID_RE.test(composition)) return json({ error: "invalid_composition" }, 400);
   if (!ASSET_NAME_RE.test(filename)) return json({ error: "invalid_filename" }, 400);
+  return null;
+}
 
-  const contentLength = request.headers.get("content-length");
-  if (contentLength === null || !/^[0-9]+$/.test(contentLength)) {
-    return json({ error: "content_length_required" }, 411);
-  }
-  const bytes = Number(contentLength);
+function validateLargeAssetSize(bytes) {
   if (!Number.isSafeInteger(bytes) || bytes <= MAX_ASSET_BYTES) {
     return json({ error: "asset_must_exceed_8_mib", min_bytes_exclusive: MAX_ASSET_BYTES }, 400);
   }
   if (bytes > MAX_LARGE_ASSET_BYTES) {
     return json({ error: "asset_too_large", max_bytes: MAX_LARGE_ASSET_BYTES }, 413);
   }
-  if (!request.body) return json({ error: "invalid_data" }, 400);
+  return null;
+}
+
+function validateLargeAssetBody(request) {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength === null || !/^[0-9]+$/.test(contentLength)) {
+    return { error: json({ error: "content_length_required" }, 411) };
+  }
+  const bytes = Number(contentLength);
+  const sizeError = validateLargeAssetSize(bytes);
+  if (sizeError) return { error: sizeError };
+  if (!request.body) return { error: json({ error: "invalid_data" }, 400) };
+  return { bytes };
+}
+
+/**
+ * PUT /asset-large/:composition/:filename — simpan stream biner mentah ke R2.
+ * Content-Length wajib agar R2 dapat menerima request.body sebagai stream berukuran pasti.
+ */
+async function handleLargeAsset(request, env, composition, filename) {
+  const provided = request.headers.get("x-api-key") ?? "";
+  const authError =
+    !env.API_KEY || !env.VIDEOS
+      ? json({ error: "server_not_configured" }, 500)
+      : !(await safeEqual(provided, env.API_KEY))
+        ? json({ error: "unauthorized" }, 401)
+        : null;
+  if (authError) return authError;
+
+  const pathError = validateLargeAssetPath(composition, filename);
+  if (pathError) return pathError;
+  const body = validateLargeAssetBody(request);
+  if (body.error) return body.error;
 
   const path = `assets/${composition}/${filename}`;
-  try {
-    const object = await env.VIDEOS.put(path, request.body, {
-      httpMetadata: {
-        contentType: request.headers.get("content-type") || "application/octet-stream",
-      },
-    });
-    if (!object) return json({ error: "storage_failed" }, 502);
-    return json(
-      {
-        ok: true,
-        composition,
-        filename,
-        path,
-        src: `assets/${filename}`,
-        bytes: object.size,
-        etag: object.etag,
-        storage: "r2",
-      },
-      201,
-    );
-  } catch (err) {
-    console.error("large_asset_upload_failed", err instanceof Error ? err.message : String(err));
-    return json({ error: "storage_failed" }, 502);
-  }
+  const object = await env.VIDEOS.put(path, request.body, {
+    httpMetadata: {
+      contentType: request.headers.get("content-type") || "application/octet-stream",
+    },
+  });
+  return json(
+    {
+      ok: true,
+      composition,
+      filename,
+      path,
+      src: `assets/${filename}`,
+      bytes: object.size,
+      etag: object.etag,
+      storage: "r2",
+    },
+    201,
+  );
 }
 
 /** POST /render  body: { id?, composition?, quality?, html?, sha? } → 202 */
