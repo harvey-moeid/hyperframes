@@ -37,6 +37,17 @@ jobs:
       - run: bun run --cwd packages/core build:hyperframes-runtime
       - run: bun run check:catalog-drift
       - name: Refresh the standing publish PR
-        run: node scripts/publish-catalog.mjs
+        shell: bash
+        run: |
+          set +e
+          node scripts/publish-catalog.mjs 2>&1 | tee "$RUNNER_TEMP/catalog-publish.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Catalog publisher failure details"
+            tail -n 80 "$RUNNER_TEMP/catalog-publish.log"
+            echo "::endgroup::"
+            echo "::error::Catalog publisher exited with status $status; see the diagnostic output above."
+          fi
+          exit "$status"
         env:
           GH_TOKEN: ${{ github.token }}
