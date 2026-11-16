@@ -168,24 +168,24 @@ function initSettings(){
   try{var r=await fetch('/asset',{method:'POST',headers:{'x-api-key':key,'content-type':'application/json'},body:JSON.stringify({composition:'contoh',filename:'probe.txt',data:''})});
    if(r.status===401){setMsg($('setMsg'),'API key salah.','err');return;}
    if(r.status===500){setMsg($('setMsg'),'Worker belum dikonfigurasi.','err');return;}
-   setApiKey(key,$('setRemember').checked);setMsg($('setMsg'),'API key diterima Worker.','ok');
+   setApiKey(key,$('setRemember').checked);setMsg($('setMsg'),'API key diterima Worker.','ok');syncRemote(true);
   }catch(e){setMsg($('setMsg'),'Tidak dapat menghubungi Worker.','err');}
  });
  $('setConn').addEventListener('click',async function(){try{var r=await fetch('/api'),d=await r.json();setMsg($('setMsg'),r.ok&&d.service==='hyperframes-render'?'Server terhubung.':'Respons server tidak sesuai.',r.ok?'ok':'err');}catch(e){setMsg($('setMsg'),'Koneksi gagal.','err');}});
  seg($('segTheme'),function(v){sSet('local',K.theme,v);applyTheme(v);});
  seg($('segDefQuality'),function(v){prefs.quality=v;savePrefs();});
  $('setComp').addEventListener('change',function(){var v=$('setComp').value.trim();if(v&&!ID_RE.test(v)){setMsg($('setMsg'),'Nama komposisi tidak valid.','err');return;}prefs.composition=v||'contoh';savePrefs();});
- $('clrHist').addEventListener('click',function(){sDel('local',K.hist);Object.keys(jobs).forEach(stopTracking);renderSettings();});
+ $('clrHist').addEventListener('click',function(){clearHist();Object.keys(jobs).forEach(stopTracking);renderSettings();});
  $('clrDrafts').addEventListener('click',function(){sDel('local',K.drafts);renderSettings();});
  $('clrAssets').addEventListener('click',function(){sDel('local',K.assets);renderSettings();renderMedia();});
  $('clrAll').addEventListener('click',async function(){if(!await confirmBox('Hapus semua data lokal?','Data browser dihapus; file GitHub dan video server tetap ada.','Hapus semua',true))return;
-  ['hf_history','hf_drafts','hf_assets','hf_prefs','hf_theme','hf_onboard_done'].forEach(function(k){sDel('local',k);});sDel('session',K.key);apiKey='';prefs={quality:'standard',composition:'contoh'};applyTheme('auto');renderSettings();renderMedia();updateKeyBars();});
+  ['hf_history','hf_hidden','hf_cleared','hf_drafts','hf_assets','hf_prefs','hf_theme','hf_onboard_done'].forEach(function(k){sDel('local',k);});sDel('session',K.key);apiKey='';prefs={quality:'standard',composition:'contoh'};applyTheme('auto');renderSettings();renderMedia();updateKeyBars();});
 }
 function initApp(){
  loadPrefs();applyTheme(loadTheme());apiKey=sGet('session',K.key)||'';
  initViews();initCreate();initMedia();initSettings();
  if(!location.hash)location.hash='#/dashboard';
- window.addEventListener('hashchange',onRoute);onRoute();resumePending();
+ window.addEventListener('hashchange',onRoute);onRoute();resumePending();syncRemote(true);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initApp);else initApp();
 `,

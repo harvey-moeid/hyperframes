@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      preview: ${{ steps.release.outputs.release_only == 'true' && 'false' || steps.filter.outputs.preview }}
+      preview: ${{ steps.release.outputs.release_only == 'true' && 'false' || steps.preview_scope.outputs.preview }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -60,7 +60,36 @@ jobs:
               - "packages/producer/tests/parity/**"
               - "package.json"
               - "bun.lock"
-              - ".github/workflows/preview-regression.yml"
+
+      - name: Scope preview parity to runtime changes
+        id: preview_scope
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          FILTERED_PREVIEW: ${{ steps.filter.outputs.preview }}
+        run: |
+          if [ "$FILTERED_PREVIEW" != "true" ]; then
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed_files="$(git diff --name-only "$BASE_SHA...HEAD")"
+          relevant=""
+          while IFS= read -r file; do
+            case "$file" in
+              *.test.*) continue ;;
+            esac
+            case "$file" in
+              packages/core/*|packages/parsers/*|packages/studio-server/*|packages/lint/*|packages/player/*|packages/studio/*|packages/cli/*|packages/producer/src/parity-harness.ts|packages/producer/src/parity-fixtures.ts|packages/producer/tests/parity/*|package.json|bun.lock)
+                relevant="$file"
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+          if [ -n "$relevant" ]; then
+            echo "preview=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+          fi
+
 
   preflight:
     name: Preflight (lint + format)

@@ -1,6 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/config-schema.json",
   "entry": [
+    "cloudflare-free/worker/src/worker.js",
+    "cloudflare-free/worker/src/page.js",
+    "cloudflare-free/worker/src/ui/client-data.js",
+    "cloudflare-free/worker/src/ui/client-views.js",
+    "cloudflare-free/worker/src/renders.js",
     // IconButton, Tabs and cn are exported before their first consumer exists.
     "packages/studio/src/components/ui/index.ts",
     "packages/producer/src/**/*.test.ts",
@@ -82,6 +87,8 @@
     "packages/studio/src/hooks/gsapRuntimePreview.ts",
   ],
   "ignorePatterns": [
+    // Legacy monolithic Worker core predates this PR; audit the new entry wrapper and render-sync modules separately.
+    "cloudflare-free/worker/src/index.js",
     "docs/**",
     // Chrome browser binaries downloaded by puppeteer — not project source.
     "chrome/**",

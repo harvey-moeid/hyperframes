@@ -167,6 +167,8 @@ function renderRcList(activeId) {
   $('rClear').hidden = all.length === 0;
 }
 function renderRenders(arg) {
+  // Segarkan riwayat dari server (dibatasi jeda minimal; tanpa API key tidak melakukan apa-apa).
+  syncRemote();
   $('rc').classList.toggle('has-detail', !!arg);
   renderRcList(arg);
   showDetail(arg);
@@ -341,7 +343,7 @@ function initViews() {
     var ok = await confirmBox('Hapus semua riwayat?', 'Seluruh riwayat render di perangkat ini dihapus. Video di server tidak ikut terhapus.', 'Hapus semua', true);
     if (!ok) return;
     Object.keys(jobs).forEach(stopTracking);
-    sDel('local', K.hist);
+    clearHist();
     toast('Riwayat dihapus.', 'ok');
     go('renders');
   });
