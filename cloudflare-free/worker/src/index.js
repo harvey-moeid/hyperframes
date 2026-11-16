@@ -32,6 +32,7 @@
  */
 
 import { htmlPage } from "./page.js";
+import { safeEqual } from "./auth.js";
 
 // Aturan input yang sama dipakai ulang di workflow (validasi dua lapis).
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -75,19 +76,6 @@ const json = (data, status = 200, extraHeaders = {}) =>
 const methodNotAllowed = (allowed) =>
   json({ error: "method_not_allowed" }, 405, { allow: allowed.join(", ") });
 
-/**
- * Bandingkan dua string tanpa membocorkan panjang/isi lewat waktu respons.
- * Keduanya di-hash SHA-256 dulu supaya panjangnya sama, lalu dibandingkan
- * dengan crypto.subtle.timingSafeEqual (tersedia di Workers runtime).
- */
-async function safeEqual(a, b) {
-  const enc = new TextEncoder();
-  const [ha, hb] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(a)),
-    crypto.subtle.digest("SHA-256", enc.encode(b)),
-  ]);
-  return crypto.subtle.timingSafeEqual(ha, hb);
-}
 
 /** String UTF-8 -> base64 (Contents API mewajibkan base64). */
 function toBase64(text) {

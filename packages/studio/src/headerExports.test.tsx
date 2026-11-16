@@ -13,7 +13,9 @@ describe("header package exports", () => {
     document.body.append(el);
     const root = createRoot(el);
     await act(async () => root.render(<HyperframesLogo />));
-    expect(el.querySelector("svg")).not.toBeNull();
+    const logo = el.querySelector("img[alt=\"byga\"]");
+    expect(logo).not.toBeNull();
+    expect(logo?.getAttribute("src")).toBe("/byga-logo.svg");
     await act(async () => root.unmount());
   });
 

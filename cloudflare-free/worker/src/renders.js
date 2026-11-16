@@ -1,22 +1,12 @@
 /**
  * GET /renders — daftar render dari R2 untuk sinkronisasi riwayat lintas perangkat.
  *
- * KEPUTUSAN:
- *  - Sumber kebenaran = objek di bucket R2 yang sama dengan /status dan /video:
- *      renders/<id>.mp4          render sukses
- *      renders/<id>.failed.json  render gagal/dibatalkan (ditulis workflow)
- *      renders/<id>.meta.json    {composition, quality} (ditulis workflow; opsional)
- *    Render yang masih antre/berjalan belum punya objek, jadi tidak muncul di sini.
- *  - Dilindungi x-api-key. /status dan /video publik karena id berupa UUID yang sulit ditebak;
- *    daftar ini membuka SEMUA id, jadi tidak boleh publik.
- *  - Batas Workers Free: 50 subrequest per invocation. R2 list maks MAX_LIST_PAGES kali dan
- *    pembacaan JSON maks MAX_LIMIT kali (satu per baris), total < 50.
- *  - R2 list berurutan menurut nama kunci, bukan waktu. Bila lebih dari MAX_LIST_PAGES halaman,
- *    hasil diurutkan dari subset yang terbaca saja dan `truncated: true` dikembalikan.
- *
- * Respons: { renders: [{ id, status: "done"|"failed", uploaded, size?, reason?, run_url?, composition?, quality? }],
- *            truncated: boolean }
+ * Sumber kebenaran adalah objek renders/<id>.mp4, .failed.json, dan .meta.json di R2.
+ * Endpoint dilindungi x-api-key karena daftar ini membuka semua ID render.
+ * Batas Workers Free: maksimal 5 operasi list dan 40 pembacaan JSON per invocation.
  */
+
+import { safeEqual } from "./auth.js";
 
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const RUN_URL_RE =
@@ -39,58 +29,58 @@ const json = (data, status = 200, extraHeaders = {}) =>
     },
   });
 
-/** Bandingkan dua string tanpa membocorkan panjang/isi lewat waktu respons (sama dengan index.js). */
-async function safeEqual(a, b) {
-  const enc = new TextEncoder();
-  const [ha, hb] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(a)),
-    crypto.subtle.digest("SHA-256", enc.encode(b)),
-  ]);
-  return crypto.subtle.timingSafeEqual(ha, hb);
-}
-
 function parseLimit(raw) {
   if (raw === null || !/^[0-9]{1,3}$/.test(raw)) return DEFAULT_LIMIT;
   return Math.min(Math.max(Number(raw), 1), MAX_LIMIT);
 }
 
-/** Kelompokkan objek renders/ per id: { mp4?, failed?, meta? }. */
+function addRenderObjects(byId, objects) {
+  for (const object of objects) {
+    const match = KEY_RE.exec(object.key);
+    if (!match) continue;
+
+    const [, id, kind] = match;
+    const entry = byId.get(id) ?? {};
+    if (kind === "mp4") entry.mp4 = object;
+    else if (kind === "failed.json") entry.failed = object;
+    else entry.meta = object;
+    byId.set(id, entry);
+  }
+}
+
 async function listRenderObjects(bucket) {
   const byId = new Map();
   let cursor;
+
   for (let page = 0; page < MAX_LIST_PAGES; page++) {
-    const res = await bucket.list({ prefix: "renders/", cursor, limit: 1000 });
-    for (const obj of res.objects) {
-      const m = KEY_RE.exec(obj.key);
-      if (!m) continue;
-      let entry = byId.get(m[1]);
-      if (!entry) {
-        entry = {};
-        byId.set(m[1], entry);
-      }
-      if (m[2] === "mp4") entry.mp4 = obj;
-      else if (m[2] === "failed.json") entry.failed = obj;
-      else entry.meta = obj;
-    }
-    if (!res.truncated) return { byId, truncated: false };
-    cursor = res.cursor;
+    const result = await bucket.list({ prefix: "renders/", cursor, limit: 1000 });
+    addRenderObjects(byId, result.objects);
+    if (!result.truncated) return { byId, truncated: false };
+    cursor = result.cursor;
   }
+
   return { byId, truncated: true };
 }
 
-/** Baca JSON kecil dari R2; null bila tidak ada, terlalu besar, atau rusak. */
-async function readJson(bucket, key) {
+function parseJsonObject(raw) {
   try {
-    const obj = await bucket.get(key);
-    if (!obj || obj.size > MAX_JSON_BYTES) return null;
-    const data = JSON.parse(await obj.text());
+    const data = JSON.parse(raw);
     return data !== null && typeof data === "object" && !Array.isArray(data) ? data : null;
   } catch {
     return null;
   }
 }
 
-/** Teruskan hanya field yang dikenal dan lolos validasi. */
+async function readJson(bucket, key) {
+  try {
+    const object = await bucket.get(key);
+    if (!object || object.size > MAX_JSON_BYTES) return null;
+    return parseJsonObject(await object.text());
+  } catch {
+    return null;
+  }
+}
+
 function pickMeta(data, row) {
   if (!data) return;
   if (typeof data.composition === "string" && ID_RE.test(data.composition)) {
@@ -101,30 +91,58 @@ function pickMeta(data, row) {
   }
 }
 
-async function buildRow(bucket, id, entry) {
-  if (entry.mp4) {
-    // MP4 selalu menang atas penanda gagal lama (sama dengan GET /status/:id).
-    const row = {
-      id,
-      status: "done",
-      size: entry.mp4.size,
-      uploaded: entry.mp4.uploaded.toISOString(),
-    };
-    if (entry.meta) pickMeta(await readJson(bucket, `renders/${id}.meta.json`), row);
-    return row;
-  }
+async function buildDoneRow(bucket, id, entry) {
+  const row = {
+    id,
+    status: "done",
+    size: entry.mp4.size,
+    uploaded: entry.mp4.uploaded.toISOString(),
+  };
+  if (entry.meta) pickMeta(await readJson(bucket, `renders/${id}.meta.json`), row);
+  return row;
+}
+
+async function buildFailedRow(bucket, id, entry) {
   const data = await readJson(bucket, `renders/${id}.failed.json`);
   const row = {
     id,
     status: "failed",
-    reason: data && data.reason === "cancelled" ? "cancelled" : "failed",
+    reason: data?.reason === "cancelled" ? "cancelled" : "failed",
     uploaded: entry.failed.uploaded.toISOString(),
   };
-  if (data && typeof data.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
+
+  if (typeof data?.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
     row.run_url = data.run_url;
   }
   pickMeta(data, row);
   return row;
+}
+
+async function buildRow(bucket, id, entry) {
+  return entry.mp4
+    ? buildDoneRow(bucket, id, entry)
+    : buildFailedRow(bucket, id, entry);
+}
+
+function collectCandidates(byId) {
+  const candidates = [];
+  for (const [id, entry] of byId) {
+    const source = entry.mp4 || entry.failed;
+    if (source) candidates.push({ id, entry, time: source.uploaded.getTime() });
+  }
+  candidates.sort((a, b) => b.time - a.time);
+  return candidates;
+}
+
+async function authorize(request, env) {
+  if (!env.API_KEY || !env.VIDEOS) {
+    return json({ error: "server_not_configured" }, 500);
+  }
+  const provided = request.headers.get("x-api-key") ?? "";
+  if (!(await safeEqual(provided, env.API_KEY))) {
+    return json({ error: "unauthorized" }, 401);
+  }
+  return null;
 }
 
 /** GET /renders?limit=N (default 30, maks 40) — terbaru lebih dulu. */
@@ -132,24 +150,15 @@ export async function handleRenders(request, env) {
   if (request.method !== "GET") {
     return json({ error: "method_not_allowed" }, 405, { allow: "GET" });
   }
-  if (!env.API_KEY || !env.VIDEOS) return json({ error: "server_not_configured" }, 500);
 
-  const provided = request.headers.get("x-api-key") ?? "";
-  if (!(await safeEqual(provided, env.API_KEY))) return json({ error: "unauthorized" }, 401);
+  const authError = await authorize(request, env);
+  if (authError) return authError;
 
   try {
     const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
     const { byId, truncated } = await listRenderObjects(env.VIDEOS);
-
-    const candidates = [];
-    for (const [id, entry] of byId) {
-      const source = entry.mp4 || entry.failed;
-      if (source) candidates.push({ id, entry, time: source.uploaded.getTime() });
-    }
-    candidates.sort((a, b) => b.time - a.time);
-
-    const page = candidates.slice(0, limit);
-    const renders = await Promise.all(page.map((c) => buildRow(env.VIDEOS, c.id, c.entry)));
+    const page = collectCandidates(byId).slice(0, limit);
+    const renders = await Promise.all(page.map(({ id, entry }) => buildRow(env.VIDEOS, id, entry)));
     return json({ renders, truncated });
   } catch (err) {
     console.error("renders_failed", err instanceof Error ? err.message : String(err));
