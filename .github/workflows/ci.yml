@@ -527,6 +527,22 @@ jobs:
       - uses: ./.github/actions/prepare-ffmpeg-bin
       - run: bash scripts/ci/install-workspace-dependencies.sh
       - run: bun run format:check
+      - name: Report files rejected by the formatter
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          ./node_modules/.bin/oxfmt --list-different . > "$RUNNER_TEMP/format-diff.txt" 2>&1
+          status=$?
+          if [ -s "$RUNNER_TEMP/format-diff.txt" ]; then
+            while IFS= read -r file; do
+              [ -n "$file" ] && echo "::error file=$file::File is not formatted by oxfmt"
+            done < "$RUNNER_TEMP/format-diff.txt"
+            cat "$RUNNER_TEMP/format-diff.txt"
+          else
+            echo "::error::Formatter diagnostic returned no file list (exit $status)."
+          fi
+          exit 0
 
   typecheck:
     name: Typecheck
