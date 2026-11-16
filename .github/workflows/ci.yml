@@ -526,10 +526,6 @@ jobs:
           node-version: 22
       - uses: ./.github/actions/prepare-ffmpeg-bin
       - run: bash scripts/ci/install-workspace-dependencies.sh
-      - name: Fetch LFS files quietly
-        run: |
-          git lfs install --local --force
-          git lfs pull --quiet
       - run: bun run format:check
 
   typecheck:
