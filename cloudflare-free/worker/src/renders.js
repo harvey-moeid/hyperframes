@@ -34,18 +34,23 @@ function parseLimit(raw) {
   return Math.min(Math.max(Number(raw), 1), MAX_LIMIT);
 }
 
-function addRenderObjects(byId, objects) {
-  for (const object of objects) {
-    const match = KEY_RE.exec(object.key);
-    if (!match) continue;
+function assignRenderObject(entry, kind, object) {
+  if (kind === "mp4") entry.mp4 = object;
+  else if (kind === "failed.json") entry.failed = object;
+  else entry.meta = object;
+}
 
-    const [, id, kind] = match;
-    const entry = byId.get(id) ?? {};
-    if (kind === "mp4") entry.mp4 = object;
-    else if (kind === "failed.json") entry.failed = object;
-    else entry.meta = object;
-    byId.set(id, entry);
-  }
+function addRenderObject(byId, object) {
+  const match = KEY_RE.exec(object.key);
+  if (!match) return;
+  const [, id, kind] = match;
+  const entry = byId.get(id) ?? {};
+  assignRenderObject(entry, kind, object);
+  byId.set(id, entry);
+}
+
+function addRenderObjects(byId, objects) {
+  objects.forEach((object) => addRenderObject(byId, object));
 }
 
 async function listRenderObjects(bucket) {
@@ -62,10 +67,14 @@ async function listRenderObjects(bucket) {
   return { byId, truncated: true };
 }
 
+function isObjectRecord(data) {
+  return data !== null && typeof data === "object" && !Array.isArray(data);
+}
+
 function parseJsonObject(raw) {
   try {
     const data = JSON.parse(raw);
-    return data !== null && typeof data === "object" && !Array.isArray(data) ? data : null;
+    return isObjectRecord(data) ? data : null;
   } catch {
     return null;
   }
@@ -81,14 +90,22 @@ async function readJson(bucket, key) {
   }
 }
 
-function pickMeta(data, row) {
-  if (!data) return;
+function setComposition(data, row) {
   if (typeof data.composition === "string" && ID_RE.test(data.composition)) {
     row.composition = data.composition;
   }
+}
+
+function setQuality(data, row) {
   if (typeof data.quality === "string" && QUALITIES.has(data.quality)) {
     row.quality = data.quality;
   }
+}
+
+function pickMeta(data, row) {
+  if (!data) return;
+  setComposition(data, row);
+  setQuality(data, row);
 }
 
 async function buildDoneRow(bucket, id, entry) {
@@ -102,18 +119,22 @@ async function buildDoneRow(bucket, id, entry) {
   return row;
 }
 
+function applyFailureDetails(data, row) {
+  if (data?.reason === "cancelled") row.reason = "cancelled";
+  if (typeof data?.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
+    row.run_url = data.run_url;
+  }
+}
+
 async function buildFailedRow(bucket, id, entry) {
   const data = await readJson(bucket, `renders/${id}.failed.json`);
   const row = {
     id,
     status: "failed",
-    reason: data?.reason === "cancelled" ? "cancelled" : "failed",
+    reason: "failed",
     uploaded: entry.failed.uploaded.toISOString(),
   };
-
-  if (typeof data?.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
-    row.run_url = data.run_url;
-  }
+  applyFailureDetails(data, row);
   pickMeta(data, row);
   return row;
 }
@@ -139,21 +160,11 @@ async function authorize(request, env) {
     return json({ error: "server_not_configured" }, 500);
   }
   const provided = request.headers.get("x-api-key") ?? "";
-  if (!(await safeEqual(provided, env.API_KEY))) {
-    return json({ error: "unauthorized" }, 401);
-  }
-  return null;
+  const authorized = await safeEqual(provided, env.API_KEY);
+  return authorized ? null : json({ error: "unauthorized" }, 401);
 }
 
-/** GET /renders?limit=N (default 30, maks 40) — terbaru lebih dulu. */
-export async function handleRenders(request, env) {
-  if (request.method !== "GET") {
-    return json({ error: "method_not_allowed" }, 405, { allow: "GET" });
-  }
-
-  const authError = await authorize(request, env);
-  if (authError) return authError;
-
+async function renderResponse(request, env) {
   try {
     const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
     const { byId, truncated } = await listRenderObjects(env.VIDEOS);
@@ -164,4 +175,14 @@ export async function handleRenders(request, env) {
     console.error("renders_failed", err instanceof Error ? err.message : String(err));
     return json({ error: "internal_error" }, 500);
   }
+}
+
+/** GET /renders?limit=N (default 30, maks 40) — terbaru lebih dulu. */
+export async function handleRenders(request, env) {
+  if (request.method !== "GET") {
+    return json({ error: "method_not_allowed" }, 405, { allow: "GET" });
+  }
+  const authError = await authorize(request, env);
+  if (authError) return authError;
+  return renderResponse(request, env);
 }
