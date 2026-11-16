@@ -76,7 +76,6 @@ const json = (data, status = 200, extraHeaders = {}) =>
 const methodNotAllowed = (allowed) =>
   json({ error: "method_not_allowed" }, 405, { allow: allowed.join(", ") });
 
-
 /** String UTF-8 -> base64 (Contents API mewajibkan base64). */
 function toBase64(text) {
   return bytesToBase64(new TextEncoder().encode(text));
@@ -127,7 +126,13 @@ const serviceInfo = () =>
   json(
     {
       service: "hyperframes-render",
-      endpoints: ["POST /render", "POST /asset", "PUT /asset-large/:composition/:filename", "GET /status/:id", "GET /video/:id"],
+      endpoints: [
+        "POST /render",
+        "POST /asset",
+        "PUT /asset-large/:composition/:filename",
+        "GET /status/:id",
+        "GET /video/:id",
+      ],
     },
     200,
     { vary: "accept" },
