@@ -1,7 +1,9 @@
 import type { RuntimeJson, RuntimeOutboundMessage, RuntimePickerElementInfo } from "./types";
+import { PREVIEW_VIDEO_FRAME_ATTR } from "../studioPreviewMark";
 import { COLOR_GRADING_SOURCE_HIDDEN_ATTR } from "../colorGrading";
 import { swallow } from "./diagnostics";
 import { isElementNode } from "./domRealm";
+import { unproxiedSrc } from "./proxySrc";
 import { createDrawnProbe } from "./pickerDrawn";
 
 type PickerModuleDeps = {
@@ -191,7 +193,8 @@ export function createPickerModule(deps: PickerModuleDeps): PickerModule {
       if (
         Number.isFinite(opacity) &&
         opacity <= 0.01 &&
-        !current.hasAttribute(COLOR_GRADING_SOURCE_HIDDEN_ATTR)
+        !current.hasAttribute(COLOR_GRADING_SOURCE_HIDDEN_ATTR) &&
+        !current.hasAttribute(PREVIEW_VIDEO_FRAME_ATTR)
       )
         return true;
       current = current.parentElement;
@@ -309,7 +312,7 @@ export function createPickerModule(deps: PickerModuleDeps): PickerModule {
       label: buildElementLabel(el),
       boundingBox: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
       textContent: el.textContent ? el.textContent.trim().slice(0, 200) : null,
-      src: el.getAttribute("src") || el.getAttribute("data-composition-src") || null,
+      src: unproxiedSrc(el) || el.getAttribute("data-composition-src") || null,
       dataAttributes,
     };
   }

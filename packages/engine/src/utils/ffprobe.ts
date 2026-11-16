@@ -12,7 +12,8 @@ import {
   videoStreamHasAlpha,
 } from "@hyperframes/parsers/media-alpha";
 import { urlInputArgs } from "./urlInput.js";
-import { decodableAudioStream } from "@hyperframes/parsers/media-streams";
+import { TextArtMediaError } from "./notMediaPayload.js";
+import { decodableAudioStream, misstatesPcmByteRate } from "@hyperframes/parsers/media-streams";
 import { runFfmpeg } from "./runFfmpeg.js";
 import { FFPROBE_PATH_ENV, getFfprobeBinary } from "./ffmpegBinaries.js";
 import { ManagedChildProcess } from "./managedChildProcess.js";
@@ -248,6 +249,8 @@ export interface AudioMetadata {
   audioStreamLeadSeconds?: number;
   mediaTimeOffsetSeconds?: number;
   audioStreamCount?: number;
+  /** PCM whose header byte rate is not sample rate x channels x sample size: a seek by it lands at the wrong time. */
+  misstatedByteRate?: boolean;
   /** The track read for these facts and for the mix, by its place among the audio streams (decodableAudioStream). */
   audioStream: number;
 }
@@ -270,6 +273,8 @@ interface FFProbeStream {
   avg_frame_rate?: string;
   sample_rate?: string;
   channels?: number;
+  bit_rate?: string;
+  bits_per_sample?: number;
   color_range?: string;
   color_transfer?: string;
   color_primaries?: string;
@@ -567,7 +572,9 @@ async function probeMediaOutput(filePath: string, signal?: AbortSignal): Promise
     }
     return cached.promise;
   }
-  const promise = readProbeJson(filePath, signal).then(parseProbeJson);
+  const promise = readProbeJson(filePath, signal).then((json) =>
+    refuseTextArt(parseProbeJson(json)),
+  );
   if (identity !== null) {
     cache.set(filePath, { identity, promise });
     if (!signal && cache.size > MEDIA_PROBE_OUTPUT_CACHE_MAX_ENTRIES) {
@@ -584,6 +591,18 @@ async function probeMediaOutput(filePath: string, signal?: AbortSignal): Promise
 }
 
 class StructurallyIncompletePngError extends Error {}
+
+const TEXT_ART_CODECS = new Set(["ansi", "bintext", "xbin", "idf"]);
+
+function refuseTextArt(output: FFProbeOutput): FFProbeOutput {
+  const formats = (output.format?.format_name ?? "").toLowerCase().split(",");
+  const drawsText = (output.streams ?? []).some(
+    (stream) =>
+      stream.codec_type === "video" && TEXT_ART_CODECS.has(stream.codec_name?.toLowerCase() ?? ""),
+  );
+  if (formats.includes("tty") || drawsText) throw new TextArtMediaError();
+  return output;
+}
 
 async function readFileRange(
   filePath: string,
@@ -1343,6 +1362,7 @@ async function probeAudioMetadata(filePath: string, signal?: AbortSignal): Promi
     mediaTimeOffsetSeconds: mediaTimeOffsetSeconds(output),
     audioStreamCount: audioStreams.length,
     audioStream: audioStreamIndex,
+    misstatedByteRate: misstatesPcmByteRate(audioStream),
   };
 }
 

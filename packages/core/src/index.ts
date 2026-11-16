@@ -1,5 +1,5 @@
 // Types
-export type { RuntimeTimelineClipIdentity } from "./runtime/types.js";
+export type { PlaybackHeldBy, RuntimeTimelineClipIdentity } from "./runtime/types.js";
 export type {
   ExecutionMode,
   Orientation,
@@ -308,6 +308,11 @@ export {
   type PreviewQuality,
   type PreviewSourceFacts,
 } from "./previewProxyBox";
+export type {
+  PausedVideoFrameProvider,
+  PausedVideoFrameRequest,
+  PausedVideoFrame,
+} from "./runtime/pausedVideoFrames";
 
 // Inline scripts
 export {
@@ -350,7 +355,7 @@ export {
   realProjectRoot,
   resolveWithinProject,
 } from "./safePath";
-export { isHyperframesProject, PROJECT_MARKER_FILES } from "./projectRule";
+export { isCompositionFolder, isHyperframesProject, PROJECT_MARKER_FILES } from "./projectRule";
 export type {
   HyperframePickerApi,
   HyperframePickerBoundingBox,
@@ -490,3 +495,4 @@ export {
   type MotionBlurFingerprint,
   type MotionBlurFingerprintField,
 } from "./motionBlurFingerprint.js";
+export { terminalText } from "./terminalText.js";

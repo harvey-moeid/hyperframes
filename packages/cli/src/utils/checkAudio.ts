@@ -67,6 +67,7 @@ async function silentPart(
       sampleRate: probed.sampleRate,
       channels: probed.channels,
       duration: probed.durationSeconds,
+      misstatedByteRate: probed.misstatedByteRate,
     },
     { mono: true, sampleRate: SILENCE_SAMPLE_RATE },
   );
@@ -138,9 +139,8 @@ async function videoSoundsAutoDetected(
   dependencies: AudioCheckDependencies,
 ): Promise<boolean> {
   for (const video of media.videos) {
-    if (!video.hasAudio) continue;
-    if (await dependencies.videoHasAudio(mediaPath(video.src, projectDir)).catch(() => false))
-      return true;
+    const path = video.hasAudio ? mediaPath(video.src, projectDir) : null;
+    if (path && (await dependencies.videoHasAudio(path).catch(() => false))) return true;
   }
   return false;
 }
@@ -155,7 +155,7 @@ async function inspectClip(
 ): Promise<CheckFinding[]> {
   const path = mediaPath(clip.src, projectDir);
   // ponytail: remote sources are not fetched; missing local files are lint's audio_src_not_found.
-  if (path === clip.src || !existsSync(path)) return [];
+  if (path === null || path === clip.src || !existsSync(path)) return [];
   const problem = await clipProblem(path, clip, dependencies);
   if (!problem) return [];
   const id = clip.type === "video" ? clip.id.replace(/-audio$/, "") : clip.id;
