@@ -62,7 +62,9 @@ const SHELL_TOP =
   <div class="side-foot">Cloudflare Free &middot; GitHub Actions &middot; R2<br>Riwayat tersimpan di perangkat ini.</div>
 </aside>
 <div class="col">
-<header class="mtop">` + LOGO + String.raw`<b>HyperFrames</b><span class="sep" aria-hidden="true">/</span><span class="mt-title" id="mTitle">Dashboard</span></header>
+<header class="mtop">` +
+  LOGO +
+  String.raw`<b>HyperFrames</b><span class="sep" aria-hidden="true">/</span><span class="mt-title" id="mTitle">Dashboard</span></header>
 <main id="main" tabindex="-1">
 <noscript><div class="msg err">Halaman ini membutuhkan JavaScript. API tetap bisa dipakai lewat curl (lihat <code>/api</code>).</div></noscript>`;
 
