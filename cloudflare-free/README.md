@@ -27,13 +27,13 @@ client ◀── GET /video/:id, /status/:id ─┘ (lewat Worker)
 
 ## Isi folder
 
-| Path                                     | Fungsi                                                                  |
-| ---------------------------------------- | ----------------------------------------------------------------------- |
+| Path                                     | Fungsi                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `worker/src/index.js`                    | Worker: halaman web `/`, `/api`, `/render`, `/asset`, `/asset-large/:composition/:filename`, `/status/:id`, `/video/:id` |
-| `worker/wrangler.jsonc`                  | Binding R2 `VIDEOS`, var `GITHUB_REPO`                                  |
-| `compositions/contoh/`                   | Komposisi contoh 5 detik (1920×1080)                                    |
-| `../.github/workflows/render-video.yml`  | Workflow render (dipicu `repository_dispatch` / manual)                 |
-| `../.github/workflows/deploy-worker.yml` | Workflow deploy Worker (manual, `wrangler deploy`)                      |
+| `worker/wrangler.jsonc`                  | Binding R2 `VIDEOS`, var `GITHUB_REPO`                                                                                   |
+| `compositions/contoh/`                   | Komposisi contoh 5 detik (1920×1080)                                                                                     |
+| `../.github/workflows/render-video.yml`  | Workflow render (dipicu `repository_dispatch` / manual)                                                                  |
+| `../.github/workflows/deploy-worker.yml` | Workflow deploy Worker (manual, `wrangler deploy`)                                                                       |
 
 Komposisi baru bisa dibuat dua cara:
 
@@ -55,15 +55,15 @@ Nama folder harus cocok `^[a-zA-Z0-9_-]{1,64}$`.
 
 ## API
 
-| Endpoint          | Auth               | Keterangan                                                                                                                                                                                                               |
-| ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /`           | —                  | Browser (header `Accept` memuat `text/html`) → halaman web. Selain itu (curl, skrip) → JSON info layanan, sama seperti sebelumnya.                                                                                       |
-| `GET /api`        | —                  | Selalu JSON info layanan.                                                                                                                                                                                                |
-| `POST /render`    | header `x-api-key` | Body JSON opsional: `id`, `composition` (default `contoh`), `quality` (`draft`/`standard`/`high`), `html`, `sha` (SHA commit 40 hex). Bila `sha` dikirim tanpa `html`, workflow checkout SHA itu; bila tidak dikirim, perilaku lama tetap berlaku. Balas `202`. |
-| `POST /asset`     | header `x-api-key` | Body JSON: `composition`, `filename`, `data` (base64). Commit ke repo; maks 8 MiB. Asset boleh ditimpa. Balas `201`. |
-| `PUT /asset-large/:composition/:filename` | header `x-api-key` | Body biner mentah dengan `Content-Length`; simpan ke R2 `assets/<composition>/<filename>`. Ukuran >8 MiB sampai 90 MiB. Balas `201`. |
-| `GET /status/:id` | —                  | `200 {status:"done"}` bila MP4 ada di R2; `410 {status:"failed", reason, run_url?}` bila workflow menandai render gagal/dibatalkan; selain itu `404 {status:"not_ready"}` (antre/render/id tak dikenal tidak dibedakan). |
-| `GET /video/:id`  | —                  | Menyajikan MP4 (mendukung Range). `404` selama belum selesai.                                                                                                                                                            |
+| Endpoint                                  | Auth               | Keterangan                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                   | —                  | Browser (header `Accept` memuat `text/html`) → halaman web. Selain itu (curl, skrip) → JSON info layanan, sama seperti sebelumnya.                                                                                                                              |
+| `GET /api`                                | —                  | Selalu JSON info layanan.                                                                                                                                                                                                                                       |
+| `POST /render`                            | header `x-api-key` | Body JSON opsional: `id`, `composition` (default `contoh`), `quality` (`draft`/`standard`/`high`), `html`, `sha` (SHA commit 40 hex). Bila `sha` dikirim tanpa `html`, workflow checkout SHA itu; bila tidak dikirim, perilaku lama tetap berlaku. Balas `202`. |
+| `POST /asset`                             | header `x-api-key` | Body JSON: `composition`, `filename`, `data` (base64). Commit ke repo; maks 8 MiB. Asset boleh ditimpa. Balas `201`.                                                                                                                                            |
+| `PUT /asset-large/:composition/:filename` | header `x-api-key` | Body biner mentah dengan `Content-Length`; simpan ke R2 `assets/<composition>/<filename>`. Ukuran >8 MiB sampai 90 MiB. Balas `201`.                                                                                                                            |
+| `GET /status/:id`                         | —                  | `200 {status:"done"}` bila MP4 ada di R2; `410 {status:"failed", reason, run_url?}` bila workflow menandai render gagal/dibatalkan; selain itu `404 {status:"not_ready"}` (antre/render/id tak dikenal tidak dibedakan).                                        |
+| `GET /video/:id`                          | —                  | Menyajikan MP4 (mendukung Range). `404` selama belum selesai.                                                                                                                                                                                                   |
 
 Karena `/status` dan `/video` publik, pakai `id` yang sulit ditebak (biarkan UUID otomatis).
 
@@ -107,11 +107,11 @@ dengan path relatif.
 
 Body JSON:
 
-| Field         | Aturan                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| `composition` | Nama folder komposisi, `^[a-zA-Z0-9_-]{1,64}$`.                                             |
+| Field         | Aturan                                                                                        |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| `composition` | Nama folder komposisi, `^[a-zA-Z0-9_-]{1,64}$`.                                               |
 | `filename`    | `^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$` (tanpa `/`; ekstensi apa pun yang lolos regex diterima). |
-| `data`        | Isi file dalam base64 standar (base64url ditolak). Maks **8 MiB** setelah decode.            |
+| `data`        | Isi file dalam base64 standar (base64url ditolak). Maks **8 MiB** setelah decode.             |
 
 - Worker meng-commit ke `cloudflare-free/compositions/<composition>/assets/<filename>` di default branch.
 - Asset **boleh ditimpa**: unggah ulang dengan `filename` yang sama menggantikan isinya (beda dengan
