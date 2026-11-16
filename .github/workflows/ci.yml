@@ -532,7 +532,18 @@ jobs:
             cat /tmp/install-workspace-dependencies.log
             exit 1
           fi
-      - run: bun run format:check
+      - name: Run format check
+        shell: bash
+        run: |
+          set +e
+          bun run format:check > "$RUNNER_TEMP/format-check.log" 2>&1
+          status=$?
+          echo "## Formatter diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          tail -n 80 "$RUNNER_TEMP/format-check.log" >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            [ -z "$line" ] || echo "::error::$line"
+          done < <(tail -n 30 "$RUNNER_TEMP/format-check.log")
+          exit "$status"
 
   typecheck:
     name: Typecheck
