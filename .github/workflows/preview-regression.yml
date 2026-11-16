@@ -71,7 +71,12 @@ jobs:
             exit 0
           fi
           changed="$(git diff --name-only "$BASE_SHA...HEAD")"
-          relevant="$(printf '%s\\n' "$changed" | grep -Ev '^packages/studio/.*\\.test\\.[^/]+
+          relevant="$(git diff --name-only "$BASE_SHA...HEAD" | grep -v ".test." || true)"
+          if [ -n "$relevant" ]; then
+            echo "preview=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+          fi
   preflight:
     name: Preflight (lint + format)
     needs: changes
