@@ -70,8 +70,7 @@ jobs:
             echo "preview=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed="$(git diff --name-only "$BASE_SHA...HEAD")"
-          relevant="$(git diff --name-only "$BASE_SHA...HEAD" | grep -v ".test." || true)"
+          relevant="$(git diff --name-only "$BASE_SHA...HEAD" | grep -v ".test." | grep -v ".github/workflows/preview-regression.yml" || true)"
           if [ -n "$relevant" ]; then
             echo "preview=true" >> "$GITHUB_OUTPUT"
           else
