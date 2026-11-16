@@ -54,6 +54,7 @@ jobs:
               - "packages/lint/**"
               - "packages/player/**"
               - "packages/studio/**"
+              - "!packages/studio/**/*.test.*"
               - "packages/cli/**"
               - "packages/producer/src/parity-harness.ts"
               - "packages/producer/src/parity-fixtures.ts"
