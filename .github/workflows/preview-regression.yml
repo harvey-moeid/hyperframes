@@ -70,7 +70,24 @@ jobs:
             echo "preview=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          relevant="$(git diff --name-only "$BASE_SHA...HEAD" | grep -v ".test." | grep -v ".github/workflows/preview-regression.yml" || true)"
+          changed_files="$(git diff --name-only "$BASE_SHA...HEAD")"
+          relevant=""
+          while IFS= read -r file; do
+            case "$file" in
+              *.test.*) continue ;;
+            esac
+            case "$file" in
+              packages/core/*|packages/parsers/*|packages/studio-server/*|packages/lint/*|packages/player/*|packages/studio/*|packages/cli/*|packages/producer/src/parity-harness.ts|packages/producer/src/parity-fixtures.ts|packages/producer/tests/parity/*|package.json|bun.lock)
+                relevant="$file"
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+          if [ -n "$relevant" ]; then
+            echo "preview=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+          fi
           if [ -n "$relevant" ]; then
             echo "preview=true" >> "$GITHUB_OUTPUT"
           else
