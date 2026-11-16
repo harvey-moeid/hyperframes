@@ -61,7 +61,6 @@ jobs:
               - "packages/producer/tests/parity/**"
               - "package.json"
               - "bun.lock"
-              - ".github/workflows/preview-regression.yml"
 
   preflight:
     name: Preflight (lint + format)
