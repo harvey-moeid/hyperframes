@@ -119,11 +119,19 @@ async function buildDoneRow(bucket, id, entry) {
   return row;
 }
 
-function applyFailureDetails(data, row) {
+function applyCancelledReason(data, row) {
   if (data?.reason === "cancelled") row.reason = "cancelled";
+}
+
+function applyRunUrl(data, row) {
   if (typeof data?.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
     row.run_url = data.run_url;
   }
+}
+
+function applyFailureDetails(data, row) {
+  applyCancelledReason(data, row);
+  applyRunUrl(data, row);
 }
 
 async function buildFailedRow(bucket, id, entry) {
@@ -156,12 +164,14 @@ function collectCandidates(byId) {
 }
 
 async function authorize(request, env) {
-  if (!env.API_KEY || !env.VIDEOS) {
+  if (!(env.API_KEY && env.VIDEOS)) {
     return json({ error: "server_not_configured" }, 500);
   }
   const provided = request.headers.get("x-api-key") ?? "";
-  const authorized = await safeEqual(provided, env.API_KEY);
-  return authorized ? null : json({ error: "unauthorized" }, 401);
+  if (!(await safeEqual(provided, env.API_KEY))) {
+    return json({ error: "unauthorized" }, 401);
+  }
+  return null;
 }
 
 async function renderResponse(request, env) {
