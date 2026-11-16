@@ -2,8 +2,13 @@
  * Klien bagian 2: data lokal (riwayat, draf, aset) + pemantauan render (polling /status/:id).
  *
  * KEPUTUSAN:
- *  - Riwayat render disimpan di localStorage perangkat ini (Worker tidak punya endpoint daftar).
- *    Kunci 'hf_history' sama dengan versi lama, field baru bersifat opsional, jadi data lama tetap terbaca.
+ *  - Riwayat render disimpan di localStorage perangkat ini. Kunci 'hf_history' sama dengan versi lama,
+ *    field baru bersifat opsional, jadi data lama tetap terbaca.
+ *  - Riwayat juga disinkronkan dari server lewat GET /renders (syncRemote): render yang sudah selesai atau
+ *    gagal di R2 digabung ke daftar lokal. Data lokal tidak pernah ditimpa; sinkronisasi hanya menambah
+ *    item yang belum ada, memperbarui status item yang belum final, dan mengisi field kosong ('-').
+ *    Item yang dihapus pengguna (hf_hidden) atau sebelum 'Hapus semua' (hf_cleared) tidak diimpor ulang.
+ *    Render yang belum selesai tidak ada di R2, jadi hanya terlihat di perangkat yang memulainya.
  *  - Setiap render berstatus 'pending' dipantau oleh pollernya sendiri (peta jobs), jadi beberapa
  *    render bisa jalan bersamaan dan tetap terpantau saat pindah halaman. Poller dilanjutkan otomatis
  *    saat halaman dibuka ulang (resumePending) selama belum lewat 35 menit.
@@ -12,6 +17,11 @@
  */
 export const DATA = String.raw`
 /* ===== data lokal ===== */
+K.hidden = 'hf_hidden';    // id yang dihapus pengguna dari riwayat (agar tidak diimpor ulang)
+K.cleared = 'hf_cleared';  // waktu terakhir 'Hapus semua' riwayat (ms)
+var HIDDEN_MAX = 200;
+var SYNC_MIN_MS = 30000;
+
 function loadHist() {
   var arr = jGet('local', K.hist);
   if (!Array.isArray(arr)) return [];
@@ -62,7 +72,9 @@ function patchHist(id, fields) {
   }
   saveHist(list);
 }
-function removeHist(id) { saveHist(loadHist().filter(function (x) { return x.id !== id; })); }
+function removeHist(id) { hideId(id); saveHist(loadHist().filter(function (x) { return x.id !== id; })); }
+// Hapus semua riwayat lokal dan catat waktunya supaya sinkronisasi tidak mengimpor ulang render lama.
+function clearHist() { markCleared(); sDel('local', K.hist); }
 
 function loadDrafts() {
   var arr = jGet('local', K.drafts);
@@ -103,6 +115,138 @@ function loadAssets() {
   return out;
 }
 function saveAssets(list) { return jSet('local', K.assets, list.slice(0, ASSET_MAX)); }
+
+/* ===== sinkronisasi riwayat dari server (GET /renders) ===== */
+var lastSync = 0;
+var syncing = false;
+
+function loadHidden() {
+  var arr = jGet('local', K.hidden);
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(function (x) { return typeof x === 'string' && ID_RE.test(x); }).slice(0, HIDDEN_MAX);
+}
+function hideId(id) {
+  var list = loadHidden().filter(function (x) { return x !== id; });
+  list.unshift(id);
+  jSet('local', K.hidden, list.slice(0, HIDDEN_MAX));
+}
+function markCleared() { sSet('local', K.cleared, String(Date.now())); }
+function clearedAt() {
+  var n = Number(sGet('local', K.cleared));
+  return isNum(n) ? n : 0;
+}
+
+// Ubah balasan server jadi daftar item tervalidasi (tidak percaya bentuk data dari jaringan).
+function parseRemote(d) {
+  var out = [];
+  if (!d || !Array.isArray(d.renders)) return out;
+  d.renders.forEach(function (r) {
+    if (!r || typeof r.id !== 'string' || !ID_RE.test(r.id)) return;
+    var ts = Date.parse(r.uploaded);
+    if (!isFinite(ts)) return;
+    var o = {
+      id: r.id,
+      status: r.status === 'done' ? 'done' : 'failed',
+      ts: ts,
+      composition: (typeof r.composition === 'string' && ID_RE.test(r.composition)) ? r.composition : '',
+      quality: (typeof r.quality === 'string' && Object.prototype.hasOwnProperty.call(QUALS, r.quality)) ? r.quality : ''
+    };
+    if (isNum(r.size)) o.size = r.size;
+    if (r.reason === 'cancelled' || r.reason === 'failed') o.reason = r.reason;
+    if (typeof r.run_url === 'string' && RUN_URL_RE.test(r.run_url)) o.run_url = r.run_url;
+    out.push(o);
+  });
+  return out;
+}
+
+// Gabungkan item server ke riwayat lokal. Mengembalikan true bila ada yang berubah.
+function mergeRemote(items) {
+  var list = loadHist();
+  var byId = {};
+  list.forEach(function (it) { byId[it.id] = it; });
+  var hidden = {};
+  loadHidden().forEach(function (x) { hidden[x] = 1; });
+  var since = clearedAt();
+  var changed = false;
+
+  items.forEach(function (r) {
+    var cur = byId[r.id];
+    if (cur) {
+      if (r.status === 'done' && cur.status !== 'done') {
+        // Server sudah punya MP4: ini yang menang (sama dengan GET /status/:id).
+        cur.status = 'done';
+        delete cur.reason;
+        if (isNum(r.size)) cur.size = r.size;
+        if (!isNum(cur.doneAt)) cur.doneAt = r.ts;
+        stopTracking(cur.id);
+        changed = true;
+      } else if (r.status === 'failed' && (cur.status === 'pending' || cur.status === 'timeout')) {
+        cur.status = 'failed';
+        cur.reason = r.reason === 'cancelled' ? 'cancelled' : 'failed';
+        if (r.run_url) cur.run_url = r.run_url;
+        if (!isNum(cur.doneAt)) cur.doneAt = r.ts;
+        stopTracking(cur.id);
+        changed = true;
+      } else if (r.status === 'done' && cur.status === 'done' && !isNum(cur.size) && isNum(r.size)) {
+        cur.size = r.size;
+        changed = true;
+      }
+      if (cur.composition === '-' && r.composition) { cur.composition = r.composition; changed = true; }
+      if (cur.quality === '-' && r.quality) { cur.quality = r.quality; changed = true; }
+      return;
+    }
+    // Item baru dari server: lewati yang dihapus pengguna atau lebih lama dari 'Hapus semua'.
+    if (hidden[r.id] || r.ts <= since) return;
+    var o = {
+      id: r.id,
+      composition: r.composition || '-',
+      quality: r.quality || '-',
+      ts: r.ts,
+      status: r.status
+    };
+    if (isNum(r.size)) o.size = r.size;
+    if (r.reason) o.reason = r.reason;
+    if (r.run_url) o.run_url = r.run_url;
+    list.push(o);
+    byId[o.id] = o;
+    changed = true;
+  });
+
+  if (!changed) return false;
+  list.sort(function (a, b) { return b.ts - a.ts; });
+  saveHist(list);
+  return true;
+}
+
+function onSynced() {
+  updateBadges();
+  var r = parseRoute();
+  if (r.name === 'dashboard') renderDashboard();
+  else if (r.name === 'renders') { renderRcList(r.arg); if (r.arg) updateDetail(r.arg); }
+  else if (r.name === 'settings') renderSettings();
+}
+
+// Ambil daftar render dari server dan gabungkan. Butuh API key; gagal diam-diam (riwayat lokal tetap dipakai).
+// force=true melewati jeda minimal antar sinkronisasi.
+async function syncRemote(force) {
+  if (!apiKey || syncing) return;
+  if (!force && Date.now() - lastSync < SYNC_MIN_MS) return;
+  syncing = true;
+  lastSync = Date.now();
+  var ctrl = new AbortController();
+  var to = setTimeout(function () { ctrl.abort(); }, STATUS_TIMEOUT_MS);
+  try {
+    var res = await fetch('/renders?limit=40', { headers: { 'x-api-key': apiKey }, cache: 'no-store', signal: ctrl.signal });
+    if (res.status !== 200) return;
+    var d = await res.json();
+    if (mergeRemote(parseRemote(d))) onSynced();
+  } catch (e) {
+    /* abaikan: jaringan atau header tidak valid */
+  } finally {
+    clearTimeout(to);
+    syncing = false;
+  }
+}
 
 /* ===== status & lencana ===== */
 var STATUS_LABEL = { pending: 'Diproses', done: 'Selesai', timeout: 'Belum selesai', failed: 'Gagal' };
