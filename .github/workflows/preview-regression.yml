@@ -88,11 +88,6 @@ jobs:
           else
             echo "preview=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ -n "$relevant" ]; then
-            echo "preview=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "preview=false" >> "$GITHUB_OUTPUT"
-          fi
   preflight:
     name: Preflight (lint + format)
     needs: changes
