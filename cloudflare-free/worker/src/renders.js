@@ -148,9 +148,7 @@ async function buildFailedRow(bucket, id, entry) {
 }
 
 async function buildRow(bucket, id, entry) {
-  return entry.mp4
-    ? buildDoneRow(bucket, id, entry)
-    : buildFailedRow(bucket, id, entry);
+  return entry.mp4 ? buildDoneRow(bucket, id, entry) : buildFailedRow(bucket, id, entry);
 }
 
 function collectCandidates(byId) {
