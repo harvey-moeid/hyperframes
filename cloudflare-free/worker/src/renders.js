@@ -163,12 +163,19 @@ function collectCandidates(byId) {
   return candidates;
 }
 
+function hasServerConfig(env) {
+  return Boolean(env.API_KEY && env.VIDEOS);
+}
+
+function requestApiKey(request) {
+  return request.headers.get("x-api-key") ?? "";
+}
+
 async function authorize(request, env) {
-  if (!(env.API_KEY && env.VIDEOS)) {
+  if (!hasServerConfig(env)) {
     return json({ error: "server_not_configured" }, 500);
   }
-  const provided = request.headers.get("x-api-key") ?? "";
-  if (!(await safeEqual(provided, env.API_KEY))) {
+  if (!(await safeEqual(requestApiKey(request), env.API_KEY))) {
     return json({ error: "unauthorized" }, 401);
   }
   return null;
