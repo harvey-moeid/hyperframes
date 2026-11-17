@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>JalurTarot - Pikiran yang Terus Kembali (9:16, 60 detik)</title>
+<!-- Satu-satunya skrip eksternal. Semua visual lain = CSS/SVG inline. -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+/* ===== TOKEN: warna & teks utama HANYA di blok :root ini ===== */
+:root{
+  --ground:#0d0a1f; --ink:#ffffff; --accent:#c4b5fd; --warm:#f5c26b;
+  --ink-soft:rgba(255,255,255,.72);
+  --panel:rgba(255,255,255,.06); --edge:rgba(255,255,255,.16);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:monospace;
+  --s-xl:100px; --s-l:84px; --s-m:52px; --s-s:32px;
+
+  /* S1 hook */
+  --t-s1k:"PERNAHKAH MERASA"; --t-s1a:"Seseorang"; --t-s1b:"terus muncul"; --t-s1c:"di pikiranmu?";
+  --t-s1d:"Bahkan saat"; --t-s1e:"kamu berusaha"; --t-s1f:"melupakan.";
+  /* S2 psikologi */
+  --t-s2k:"PSIKOLOGI"; --t-s2a:"Pengalaman"; --t-s2b:"emosional"; --t-s2c:"yang kuat";
+  --t-s2d:"membuatmu lebih"; --t-s2e:"sering mengingat"; --t-s2f:"seseorang.";
+  /* S3 belum selesai */
+  --t-s3a:"Terlebih"; --t-s3b:"ada yang"; --t-s3c:"belum selesai.";
+  --t-c1a:"Pertanyaan"; --t-c1b:"menggantung"; --t-c2a:"Harapan"; --t-c2b:"tertunda"; --t-c3a:"Perasaan"; --t-c3b:"terpendam";
+  /* S4 bukan berarti */
+  --t-s4a:"Terus memikirkan"; --t-s4b:"seseorang"; --t-s4c:"bukan berarti"; --t-s4d:"dia memikirkanmu";
+  --t-you:"kamu"; --t-them:"dia";
+  /* S5 jawaban */
+  --t-s5a:"Yang kamu cari"; --t-s5b:"bukan orang itu";
+  --t-s5c:"melainkan"; --t-s5d:"jawaban atas"; --t-s5e:"perasaanmu"; --t-s5f:"sendiri.";
+  /* S6 langkah */
+  --t-s6a:"Langkah pertama"; --t-s6b:"bukan memaksa"; --t-s6c:"melupakan.";
+  --t-s6d:"tetapi memahami"; --t-s6e:"mengapa itu"; --t-s6f:"berarti.";
+  /* S7 CTA + brand */
+  --t-s7a:"Pernah"; --t-s7b:"mengalaminya?"; --t-pill:"Ceritakan di komentar";
+  --t-brand:"JalurTarot"; --t-g1:"Memahami manusia,"; --t-g2:"membaca pola,"; --t-g3:"menemukan diri.";
+}
+
+/* ===== DASAR (kanvas 1080x1920) ===== */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--ground);font-family:var(--font);color:var(--ink)}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--ground)}
+.clip,#cam{position:absolute;inset:0}
+
+/* ===== LATAR (parallax 3 lapis) ===== */
+.bg-layer{position:absolute;inset:-300px}
+#bg-glow{background:
+  radial-gradient(800px 800px at 30% 24%,rgba(167,139,250,.30),transparent 70%),
+  radial-gradient(760px 760px at 76% 78%,rgba(245,194,107,.16),transparent 70%)}
+#bg-grid{background-image:
+  linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:96px 96px}
+#bg-dots{position:absolute;left:-300px;top:-300px;width:1680px;height:2520px}
+.d-acc{fill:var(--accent)} .d-ink{fill:var(--ink)} .d-warm{fill:var(--warm)}
+#bg-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(13,10,31,.75) 100%)}
+
+/* ===== PANGGUNG: area judul 80% (864x1536), sisakan zona bawah untuk UI platform ===== */
+.stage{position:absolute;inset:200px 108px 340px 108px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:72px}
+.pgrid{display:grid;width:100%;justify-items:center;align-items:center}
+.ph{grid-area:1/1;display:flex;flex-direction:column;align-items:center;gap:64px;width:100%}
+.tb{display:flex;flex-direction:column;align-items:center;text-align:center}
+.ln{white-space:nowrap;text-align:center}
+.h-xl{font-size:var(--s-xl);font-weight:700;letter-spacing:-.03em;line-height:1.04}
+.h-l{font-size:var(--s-l);font-weight:700;letter-spacing:-.03em;line-height:1.08}
+.h-m{font-size:var(--s-m);font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.b-m{font-size:var(--s-m);font-weight:400;line-height:1.25;color:var(--ink-soft)}
+.kick{font-family:var(--mono);font-size:var(--s-s);font-weight:400;letter-spacing:.18em;color:var(--accent);margin-bottom:40px}
+.w-warm{color:var(--warm)}
+.vis{display:grid;place-items:center}
+
+/* Teks lewat content: var(--t-...) */
+.t-s1k::before{content:var(--t-s1k)} .t-s1a::before{content:var(--t-s1a)} .t-s1b::before{content:var(--t-s1b)} .t-s1c::before{content:var(--t-s1c)}
+.t-s1d::before{content:var(--t-s1d)} .t-s1e::before{content:var(--t-s1e)} .t-s1f::before{content:var(--t-s1f)}
+.t-s2k::before{content:var(--t-s2k)} .t-s2a::before{content:var(--t-s2a)} .t-s2b::before{content:var(--t-s2b)} .t-s2c::before{content:var(--t-s2c)}
+.t-s2d::before{content:var(--t-s2d)} .t-s2e::before{content:var(--t-s2e)} .t-s2f::before{content:var(--t-s2f)}
+.t-s3a::before{content:var(--t-s3a)} .t-s3b::before{content:var(--t-s3b)} .t-s3c::before{content:var(--t-s3c)}
+.t-c1a::before{content:var(--t-c1a)} .t-c1b::before{content:var(--t-c1b)} .t-c2a::before{content:var(--t-c2a)}
+.t-c2b::before{content:var(--t-c2b)} .t-c3a::before{content:var(--t-c3a)} .t-c3b::before{content:var(--t-c3b)}
+.t-s4a::before{content:var(--t-s4a)} .t-s4b::before{content:var(--t-s4b)} .t-s4c::before{content:var(--t-s4c)} .t-s4d::before{content:var(--t-s4d)}
+.t-you::before{content:var(--t-you)} .t-them::before{content:var(--t-them)}
+.t-s5a::before{content:var(--t-s5a)} .t-s5b::before{content:var(--t-s5b)} .t-s5c::before{content:var(--t-s5c)}
+.t-s5d::before{content:var(--t-s5d)} .t-s5e::before{content:var(--t-s5e)} .t-s5f::before{content:var(--t-s5f)}
+.t-s6a::before{content:var(--t-s6a)} .t-s6b::before{content:var(--t-s6b)} .t-s6c::before{content:var(--t-s6c)}
+.t-s6d::before{content:var(--t-s6d)} .t-s6e::before{content:var(--t-s6e)} .t-s6f::before{content:var(--t-s6f)}
+.t-s7a::before{content:var(--t-s7a)} .t-s7b::before{content:var(--t-s7b)} .t-pill::before{content:var(--t-pill)}
+.t-brand::before{content:var(--t-brand)} .t-g1::before{content:var(--t-g1)} .t-g2::before{content:var(--t-g2)} .t-g3::before{content:var(--t-g3)}
+
+/* ===== S1 / S5: riak (keluar = hook, ke dalam = jawaban) ===== */
+#rip,#in{width:520px;height:520px}
+.ring{grid-area:1/1;width:520px;height:520px;border:3px solid var(--accent);border-radius:50%}
+.core{grid-area:1/1;width:56px;height:56px;border-radius:50%;background:var(--warm)}
+#in .core{width:72px;height:72px}
+
+/* ===== S2: denyut + gugus ingatan ===== */
+.pulse{width:864px;height:220px}
+.pulse svg{display:block;width:100%;height:100%}
+.pl-bg{fill:none;stroke:var(--edge);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+#pulse{fill:none;stroke:var(--warm);stroke-width:8;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
+.mem{position:relative;width:864px;height:380px}
+.dot{position:absolute;width:var(--sz);height:var(--sz);border-radius:50%;background:var(--accent)}
+.hero{left:396px;top:154px;--sz:72px;background:var(--warm)}
+.a1{left:80px;top:60px;--sz:26px} .a2{left:200px;top:300px;--sz:20px} .a3{left:300px;top:110px;--sz:34px}
+.a4{left:150px;top:190px;--sz:22px} .a5{left:600px;top:70px;--sz:28px} .a6{left:700px;top:230px;--sz:34px}
+.a7{left:560px;top:310px;--sz:22px} .a8{left:780px;top:120px;--sz:20px} .a9{left:380px;top:320px;--sz:26px}
+.a10{left:240px;top:40px;--sz:18px} .a11{left:660px;top:340px;--sz:20px} .a12{left:470px;top:40px;--sz:22px}
+
+/* ===== S3: lingkaran belum utuh + 3 kartu ===== */
+.open{width:320px;height:320px}
+.open svg{display:block;width:100%;height:100%}
+.op-bg{fill:none;stroke:var(--edge);stroke-width:12}
+#op{fill:none;stroke:var(--accent);stroke-width:12;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:0}
+.cards{display:flex;flex-direction:column;gap:36px;width:100%}
+.card{position:relative;display:flex;align-items:center;justify-content:center;gap:36px;width:100%;height:210px;border-radius:32px;background:var(--panel);border:2px solid var(--edge)}
+.card .hl{position:absolute;inset:-4px;border-radius:36px;border:4px solid var(--accent);opacity:0;pointer-events:none}
+.c-ic{width:96px;height:96px;flex:none}
+.c-ic *{fill:none;stroke:var(--warm);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.c-lbl{display:flex;flex-direction:column}
+
+/* ===== S4: kamu -- ? -- dia ===== */
+.duo{display:flex;align-items:center;width:864px}
+.node{width:160px;height:160px;border-radius:50%;display:grid;place-items:center;flex:none;font-family:var(--mono);font-size:var(--s-s)}
+.you{background:var(--accent);color:var(--ground)}
+.them{border:4px solid var(--ink-soft);color:var(--ink)}
+.link{flex:1;display:grid;place-items:center;margin:0 28px}
+.dash{grid-area:1/1;width:100%;height:0;border-top:6px dashed var(--edge)}
+.q{grid-area:1/1;font-size:88px;font-weight:700;color:var(--warm);padding:0 18px;background:var(--ground);line-height:1}
+.q::before{content:"?"}
+
+/* ===== S6: batu pijakan ===== */
+.path{position:relative;width:864px;height:500px}
+.path svg{position:absolute;inset:0;width:100%;height:100%}
+.path polyline{fill:none;stroke:var(--edge);stroke-width:6;stroke-dasharray:6 18;stroke-linecap:round}
+.st{position:absolute;width:72px;height:72px;border-radius:50%;border:4px solid var(--accent)}
+.st4{border-color:var(--warm)}
+.fl{position:absolute;inset:6px;border-radius:50%;background:var(--accent);opacity:0}
+.st4 .fl{background:var(--warm)}
+.s1p{left:40px;top:380px} .s2p{left:250px;top:270px} .s3p{left:480px;top:160px} .s4p{left:700px;top:40px}
+.walker{position:absolute;left:58px;top:398px;width:36px;height:36px;border-radius:50%;background:var(--warm)}
+
+/* ===== S7: ajakan + merek ===== */
+.bub{width:120px;height:120px}
+.bub *{fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.pill{display:flex;align-items:center;justify-content:center;padding:28px 56px;border-radius:999px;background:var(--warm);color:var(--ground);font-size:var(--s-m);font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+#mark{display:block;width:150px;height:150px}
+.mk-bg{fill:var(--accent)} .mk-j{fill:none;stroke:var(--ground);stroke-width:16;stroke-linecap:round;stroke-linejoin:round} .mk-dot{fill:var(--warm)}
+</style>
+</head>
+<body>
+<!-- Root: 1080x1920 (9:16), 60 detik. Tiap adegan = satu .clip; overlap 0.4 s untuk crossfade + geser 40 px. -->
+<div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1080" data-height="1920">
+
+  <!-- Latar permanen -->
+  <div id="bg" class="clip" data-start="0" data-duration="60" data-track-index="0">
+    <div id="bg-glow" class="bg-layer"></div>
+    <div id="bg-grid" class="bg-layer"></div>
+    <svg id="bg-dots" viewBox="0 0 1680 2520" aria-hidden="true"></svg>
+    <div id="bg-vig"></div>
+  </div>
+
+  <!-- Kamera: push-in 1.00 -> 1.06 sepanjang 60 s -->
+  <div id="cam">
+
+    <!-- S1 HOOK 0.0-7.4 -->
+    <div id="s1" class="clip" data-start="0" data-duration="7.4" data-track-index="1">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s1a" class="ph"><div class="tb">
+            <div class="ln kick t-s1k"></div>
+            <div class="ln h-xl t-s1a"></div>
+            <div class="ln h-xl t-s1b"></div>
+            <div class="ln h-xl w-warm t-s1c"></div>
+          </div></div>
+          <div id="s1b" class="ph"><div class="tb">
+            <div class="ln h-xl t-s1d"></div>
+            <div class="ln h-xl t-s1e"></div>
+            <div class="ln h-xl w-warm t-s1f"></div>
+          </div></div>
+        </div>
+        <div id="rip" class="vis"><i class="ring"></i><i class="ring"></i><i class="ring"></i><i class="core"></i></div>
+      </div>
+    </div>
+
+    <!-- S2 PSIKOLOGI 7.0-17.4 -->
+    <div id="s2" class="clip" data-start="7" data-duration="10.4" data-track-index="2">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s2a" class="ph">
+            <div class="tb">
+              <div class="ln kick t-s2k"></div>
+              <div class="ln h-l t-s2a"></div>
+              <div class="ln h-l t-s2b"></div>
+              <div class="ln h-l w-warm t-s2c"></div>
+            </div>
+            <div class="pulse"><svg viewBox="0 0 864 220" aria-hidden="true">
+              <path class="pl-bg" d="M0 120H230L262 120L294 52L334 190L372 80L398 120H864"/>
+              <path id="pulse" pathLength="1" d="M0 120H230L262 120L294 52L334 190L372 80L398 120H864"/>
+            </svg></div>
+          </div>
+          <div id="s2b" class="ph">
+            <div class="tb">
+              <div class="ln h-l t-s2d"></div>
+              <div class="ln h-l t-s2e"></div>
+              <div class="ln h-l w-warm t-s2f"></div>
+            </div>
+            <div id="mem" class="mem">
+              <i class="dot a1"></i><i class="dot a2"></i><i class="dot a3"></i><i class="dot a4"></i><i class="dot a5"></i><i class="dot a6"></i>
+              <i class="dot a7"></i><i class="dot a8"></i><i class="dot a9"></i><i class="dot a10"></i><i class="dot a11"></i><i class="dot a12"></i>
+              <i class="dot hero"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S3 BELUM SELESAI 17.0-30.4 -->
+    <div id="s3" class="clip" data-start="17" data-duration="13.4" data-track-index="3">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s3a" class="ph">
+            <div class="tb">
+              <div class="ln h-l t-s3a"></div>
+              <div class="ln h-l t-s3b"></div>
+              <div class="ln h-l w-warm t-s3c"></div>
+            </div>
+            <div class="open"><svg viewBox="0 0 320 320" aria-hidden="true">
+              <circle class="op-bg" cx="160" cy="160" r="140"/>
+              <circle id="op" pathLength="1" cx="160" cy="160" r="140"/>
+            </svg></div>
+          </div>
+          <div id="s3b" class="ph">
+            <div class="cards">
+              <div id="c1" class="card">
+                <svg class="c-ic" viewBox="0 0 96 96" aria-hidden="true"><path d="M32 36C32 24 40 18 48 18C58 18 66 24 66 34C66 46 50 46 50 60"/><path d="M50 76L50 77"/></svg>
+                <div class="c-lbl"><div class="h-m t-c1a"></div><div class="h-m t-c1b"></div></div>
+                <div class="hl"></div>
+              </div>
+              <div id="c2" class="card">
+                <svg class="c-ic" viewBox="0 0 96 96" aria-hidden="true"><path d="M30 16H66L50 48L66 80H30L46 48Z"/></svg>
+                <div class="c-lbl"><div class="h-m t-c2a"></div><div class="h-m t-c2b"></div></div>
+                <div class="hl"></div>
+              </div>
+              <div id="c3" class="card">
+                <svg class="c-ic" viewBox="0 0 96 96" aria-hidden="true"><path d="M48 80C20 58 14 40 14 30C14 20 22 14 30 14C38 14 44 18 48 26C52 18 58 14 66 14C74 14 82 20 82 30C82 40 76 58 48 80Z"/></svg>
+                <div class="c-lbl"><div class="h-m t-c3a"></div><div class="h-m t-c3b"></div></div>
+                <div class="hl"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S4 BUKAN BERARTI 30.0-37.4 -->
+    <div id="s4" class="clip" data-start="30" data-duration="7.4" data-track-index="4">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s4a" class="ph"><div class="tb">
+            <div class="ln h-l t-s4a"></div>
+            <div class="ln h-l w-warm t-s4b"></div>
+          </div></div>
+          <div id="s4b" class="ph"><div class="tb">
+            <div class="ln h-l t-s4c"></div>
+            <div class="ln h-l w-warm t-s4d"></div>
+          </div></div>
+        </div>
+        <div id="duo" class="duo">
+          <div class="node you"><span class="t-you"></span></div>
+          <div class="link"><i class="dash"></i><span class="q"></span></div>
+          <div class="node them"><span class="t-them"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S5 JAWABAN 37.0-45.0 -->
+    <div id="s5" class="clip" data-start="37" data-duration="8" data-track-index="5">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s5a" class="ph"><div class="tb">
+            <div class="ln h-l t-s5a"></div>
+            <div class="ln h-l w-warm t-s5b"></div>
+          </div></div>
+          <div id="s5b" class="ph"><div class="tb">
+            <div class="ln h-l t-s5c"></div>
+            <div class="ln h-l t-s5d"></div>
+            <div class="ln h-l w-warm t-s5e"></div>
+            <div class="ln h-l w-warm t-s5f"></div>
+          </div></div>
+        </div>
+        <div id="in" class="vis"><i class="ring"></i><i class="ring"></i><i class="ring"></i><i class="core"></i></div>
+      </div>
+    </div>
+
+    <!-- S6 LANGKAH 44.6-53.8 -->
+    <div id="s6" class="clip" data-start="44.6" data-duration="9.2" data-track-index="6">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s6a" class="ph"><div class="tb">
+            <div class="ln h-l t-s6a"></div>
+            <div class="ln h-l t-s6b"></div>
+            <div class="ln h-l w-warm t-s6c"></div>
+          </div></div>
+          <div id="s6b" class="ph"><div class="tb">
+            <div class="ln h-l t-s6d"></div>
+            <div class="ln h-l t-s6e"></div>
+            <div class="ln h-l w-warm t-s6f"></div>
+          </div></div>
+        </div>
+        <div id="path" class="path">
+          <svg viewBox="0 0 864 500" aria-hidden="true"><polyline points="76,416 286,306 516,196 736,76"/></svg>
+          <i class="st s1p"><i class="fl"></i></i>
+          <i class="st s2p"><i class="fl"></i></i>
+          <i class="st s3p"><i class="fl"></i></i>
+          <i class="st s4p st4"><i class="fl"></i></i>
+          <i class="walker"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- S7 CTA + MEREK 53.4-60.0 (tween konten terakhir selesai ~58.5, lalu HOLD) -->
+    <div id="s7" class="clip" data-start="53.4" data-duration="6.6" data-track-index="7">
+      <div class="stage">
+        <div class="pgrid">
+          <div id="s7a" class="ph">
+            <div class="ln"><svg class="bub" viewBox="0 0 96 96" aria-hidden="true"><path d="M12 20H84V64H44L28 80V64H12Z"/><path d="M28 36H68"/><path d="M28 48H56"/></svg></div>
+            <div class="tb">
+              <div class="ln h-xl t-s7a"></div>
+              <div class="ln h-xl w-warm t-s7b"></div>
+            </div>
+            <div class="ln pill t-pill"></div>
+          </div>
+          <div id="s7b" class="ph">
+            <div class="ln"><svg id="mark" viewBox="0 0 160 160" aria-hidden="true">
+              <rect class="mk-bg" width="160" height="160" rx="42"/>
+              <path class="mk-j" d="M100 52V98C100 130 56 134 56 100"/>
+              <circle class="mk-dot" cx="100" cy="30" r="11"/>
+            </svg></div>
+            <div class="ln h-xl w-warm t-brand"></div>
+            <div class="tb">
+              <div class="ln b-m t-g1"></div>
+              <div class="ln b-m t-g2"></div>
+              <div class="ln b-m t-g3"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var IN = "power3.out", OUT = "power2.in", LOOP = "sine.inOut";
+
+  /* --- Partikel latar: PRNG ber-seed (mulberry32), deterministik --- */
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  var rnd = mulberry32(20261117), dots = document.getElementById("bg-dots"), NS = "http://www.w3.org/2000/svg";
+  for (var i = 0; i < 90; i++) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", (rnd() * 1680).toFixed(1));
+    c.setAttribute("cy", (rnd() * 2520).toFixed(1));
+    c.setAttribute("r", (1.5 + rnd() * 3.5).toFixed(1));
+    c.setAttribute("opacity", (0.2 + rnd() * 0.5).toFixed(2));
+    c.setAttribute("class", i % 9 === 0 ? "d-warm" : i % 3 === 0 ? "d-ink" : "d-acc");
+    dots.appendChild(c);
+  }
+
+  var tl = gsap.timeline({paused: true});
+
+  /* --- Helper: stage masuk/keluar (overlap 0.4 s) dan fase teks --- */
+  function stageIn(sel, t){ tl.fromTo(sel, {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, t); }
+  function stageOut(sel, t){ tl.to(sel, {opacity:0, x:-40, duration:.4, ease:OUT}, t); }
+  /* fase: baris masuk bergantian; napas skala 1.00->1.03 sepanjang tampil (anti dead stretch); keluar bila out=true */
+  function phase(id, tIn, tEnd, out, o0, noBreath){
+    tl.from(id + " .ln", {y:56, opacity:(o0 || 0), duration:.7, ease:IN, stagger:.16}, tIn);
+    if (!noBreath) tl.to(id, {scale:1.03, transformOrigin:"50% 50%", duration:(tEnd - tIn), ease:LOOP}, tIn);
+    if (out) tl.to(id, {opacity:0, y:-30, duration:.3, ease:OUT}, tEnd);
+  }
+
+  /* --- LATAR: drift linear + napas glow (60 s) --- */
+  tl.fromTo("#bg-glow", {x:-50, y:20}, {x:50, y:-20, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-grid", {x:0, y:0}, {x:-120, y:-60, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-dots", {x:80, y:40}, {x:-180, y:-90, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-glow", {scale:1}, {scale:1.12, duration:15, ease:LOOP, yoyo:true, repeat:3}, 0);
+
+  /* --- KAMERA: push-in 1.00 -> 1.06 sepanjang 60 s --- */
+  tl.fromTo("#cam", {scale:1, transformOrigin:"50% 50%"}, {scale:1.06, transformOrigin:"50% 50%", duration:60, ease:"power1.inOut"}, 0);
+
+  /* ===== S1 HOOK 0-7.4: "Pernahkah kamu merasa..." (frame 0 sudah berisi) ===== */
+  tl.fromTo("#rip", {opacity:.3, scale:.85}, {opacity:1, scale:1, duration:.9, ease:IN}, 0);
+  phase("#s1a", 0.15, 3.3, true, .3);
+  phase("#s1b", 3.55, 6.9, false);
+  [0, 1, 2].forEach(function (k) {                                                       /* riak keluar, 3 siklus terhingga */
+    tl.fromTo("#rip .ring:nth-child(" + (k + 1) + ")", {scale:.25, opacity:.7}, {scale:1, opacity:0, duration:2.2, ease:"power1.out", repeat:2}, 0.2 + k * .7);
+  });
+  tl.to("#rip .core", {scale:1.3, duration:1.1, ease:LOOP, yoyo:true, repeat:5}, 0.2);
+  stageOut("#s1 .stage", 7.0);
+
+  /* ===== S2 PSIKOLOGI 7-17.4: emosi kuat -> ingatan tertentu ===== */
+  stageIn("#s2 .stage", 7.0);
+  phase("#s2a", 7.4, 11.9, true);
+  tl.from("#s2a .pulse", {opacity:0, duration:.5, ease:IN}, 7.6);
+  tl.fromTo("#pulse", {strokeDashoffset:1}, {strokeDashoffset:0, duration:1.8, ease:"power2.inOut"}, 8.1);
+  tl.fromTo("#pulse", {strokeWidth:8}, {strokeWidth:12, duration:1.1, ease:LOOP, yoyo:true, repeat:3}, 10.0);   /* denyut menebal, hingga 14.4 diredam oleh keluarnya fase */
+  phase("#s2b", 12.2, 16.9, false);
+  tl.from("#mem .dot", {scale:0, opacity:0, transformOrigin:"50% 50%", duration:.5, ease:IN, stagger:.07}, 12.8);
+  tl.to("#mem .dot:not(.hero)", {opacity:.35, duration:.8, ease:LOOP}, 14.2);                                     /* yang lain meredup, satu tetap menyala */
+  tl.to("#mem .hero", {scale:1.35, transformOrigin:"50% 50%", duration:1.1, ease:LOOP, yoyo:true, repeat:2}, 14.2);
+  stageOut("#s2 .stage", 17.0);
+
+  /* ===== S3 BELUM SELESAI 17-30.4: lingkaran terbuka + 3 kartu ===== */
+  stageIn("#s3 .stage", 17.0);
+  phase("#s3a", 17.4, 20.9, true);
+  tl.from("#s3a .open", {opacity:0, duration:.5, ease:IN}, 17.6);
+  tl.fromTo("#op", {strokeDashoffset:1}, {strokeDashoffset:.24, duration:1.8, ease:"power2.inOut"}, 17.9);
+  tl.from("#s3b .card", {x:60, opacity:0, duration:.6, ease:IN, stagger:2.0}, 21.3);                               /* kartu 21.3 / 23.3 / 25.3 */
+  tl.from("#s3b .c-ic", {scale:.5, opacity:0, transformOrigin:"50% 50%", duration:.5, ease:IN, stagger:2.0}, 21.5);
+  tl.to("#s3b", {scale:1.03, transformOrigin:"50% 50%", duration:8.6, ease:LOOP}, 21.3);
+  ["#c1", "#c2", "#c3"].forEach(function (c, i) {
+    var t = 21.3 + i * 2.0;
+    tl.to(c + " .hl", {opacity:1, duration:.4, ease:IN}, t + .3);
+    if (i < 2) tl.to(c + " .hl", {opacity:.25, duration:.4, ease:OUT}, t + 2.0);                                   /* yang baru menyorot, yang lama meredup */
+  });
+  stageOut("#s3 .stage", 30.0);
+
+  /* ===== S4 BUKAN BERARTI 30-37.4: kamu -- ? -- dia ===== */
+  stageIn("#s4 .stage", 30.0);
+  phase("#s4a", 30.4, 33.7, true);
+  phase("#s4b", 33.9, 36.9, false);
+  tl.from("#duo .node", {scale:.5, opacity:0, transformOrigin:"50% 50%", duration:.6, ease:IN, stagger:.2}, 30.7);
+  tl.from("#duo .dash", {scaleX:0, transformOrigin:"0% 50%", duration:.8, ease:IN}, 31.1);
+  tl.to("#duo .you", {scale:1.08, transformOrigin:"50% 50%", duration:1.0, ease:LOOP, yoyo:true, repeat:4}, 31.6);
+  tl.to("#duo .them", {opacity:.7, duration:.6, ease:LOOP}, 34.0);
+  tl.from("#duo .q", {scale:0, opacity:0, transformOrigin:"50% 50%", duration:.5, ease:IN}, 34.3);
+  stageOut("#s4 .stage", 37.0);
+
+  /* ===== S5 JAWABAN 37-45: riak berbalik arah ke dalam ===== */
+  stageIn("#s5 .stage", 37.0);
+  phase("#s5a", 37.4, 41.1, true);
+  phase("#s5b", 41.3, 44.5, false);
+  tl.from("#in", {opacity:0, duration:.6, ease:IN}, 37.4);
+  [0, 1, 2].forEach(function (k) {
+    tl.fromTo("#in .ring:nth-child(" + (k + 1) + ")", {scale:1, opacity:.7}, {scale:.2, opacity:0, duration:2.2, ease:"power1.in", repeat:2}, 37.6 + k * .7);
+  });
+  tl.to("#in .core", {scale:1.6, transformOrigin:"50% 50%", duration:3.2, ease:LOOP}, 41.4);
+  stageOut("#s5 .stage", 44.6);
+
+  /* ===== S6 LANGKAH 44.6-53.8: batu pijakan menuju maju ===== */
+  stageIn("#s6 .stage", 44.6);
+  phase("#s6a", 45.0, 49.1, true);
+  phase("#s6b", 49.3, 53.3, false);
+  tl.from("#path polyline", {opacity:0, duration:.6, ease:IN}, 45.2);
+  tl.from(".st", {scale:.4, opacity:0, transformOrigin:"50% 50%", duration:.5, ease:IN, stagger:.15}, 45.3);
+  tl.from(".walker", {scale:0, opacity:0, transformOrigin:"50% 50%", duration:.4, ease:IN}, 45.8);
+  tl.to(".s1p .fl", {opacity:1, duration:.3, ease:IN}, 45.9);
+  tl.to(".walker", {x:210, y:-110, duration:.9, ease:IN}, 47.0);                    /* langkah pertama */
+  tl.to(".s2p .fl", {opacity:1, duration:.3, ease:IN}, 47.8);
+  tl.to(".walker", {x:440, y:-220, duration:.9, ease:IN}, 49.6);
+  tl.to(".s3p .fl", {opacity:1, duration:.3, ease:IN}, 50.4);
+  tl.to(".walker", {x:660, y:-340, duration:.9, ease:IN}, 51.4);
+  tl.to(".s4p .fl", {opacity:1, duration:.3, ease:IN}, 52.2);
+  tl.to(".s4p", {scale:1.15, transformOrigin:"50% 50%", duration:.6, ease:LOOP, yoyo:true, repeat:1}, 52.3);
+  tl.to(".walker", {scale:1.25, transformOrigin:"50% 50%", duration:.8, ease:LOOP, yoyo:true, repeat:7}, 46.3);   /* napas pejalan, mulai setelah tween masuknya selesai */
+  stageOut("#s6 .stage", 53.4);
+
+  /* ===== S7 CTA + MEREK 53.4-60: semua mendarat <= ~58.5 s, lalu HOLD ===== */
+  stageIn("#s7 .stage", 53.4);
+  phase("#s7a", 53.8, 56.9, true);
+  phase("#s7b", 57.1, 58.5, false, 0, true);
+
+  /* --- Daftarkan SETELAH tween terakhir, lalu seek(0) --- */
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+  tl.seek(0);
+})();
+</script>
+</body>
+</html>
