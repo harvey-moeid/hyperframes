@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>BYGA.AI Before After - {{judul_episode}}</title>
+<!--
+  MODEL: TRANSFORMASI SEBELUM / SESUDAH 45 DETIK (tujuan: RETENTION / SHARE)
+  9:16 | 1080x1920 | 30 FPS | 45 detik. Ide/masalah berubah menjadi produk digital nyata.
+  Adegan: 00-03 Hook | 03-13 Sebelum | 13-27 Transformasi | 27-39 Sesudah | 39-45 CTA
+  Ganti semua {{placeholder}}. Atribut data-* mengikuti konvensi HyperFrames; verifikasi sebelum render.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+  :root { --midnight:#050914; --navy:#0A1428; --blue:#1677FF; --cyan:#00E5FF; --white:#FFFFFF; --glass:rgba(255,255,255,.06); --gb:rgba(0,229,255,.28); --muted:#7b8499; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:1080px; height:1920px; background:var(--midnight); overflow:hidden; font-family:"Inter","Poppins",system-ui,sans-serif; color:var(--white); }
+  #stage { position:relative; width:1080px; height:1920px; overflow:hidden; background:radial-gradient(ellipse at 50% 30%,var(--navy),var(--midnight) 70%); }
+  .bg-grid { position:absolute; inset:0; opacity:.15; background-image:linear-gradient(var(--blue) 1px,transparent 1px),linear-gradient(90deg,var(--blue) 1px,transparent 1px); background-size:90px 90px; }
+  .bg-glow { position:absolute; width:900px; height:900px; left:90px; top:420px; border-radius:50%; background:radial-gradient(circle,rgba(22,119,255,.4),transparent 65%); filter:blur(40px); }
+  .scene { position:absolute; inset:0; padding:150px 70px 380px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:40px; opacity:0; }
+  .headline { font-size:104px; line-height:1.05; font-weight:900; letter-spacing:-2px; }
+  .headline .hl { color:var(--cyan); }
+  .subline { font-size:44px; line-height:1.3; color:rgba(255,255,255,.82); max-width:860px; }
+  .kicker { font-size:34px; letter-spacing:8px; color:var(--cyan); font-weight:700; text-transform:uppercase; }
+  .kicker.dim { color:var(--muted); }
+  .glass { background:var(--glass); border:2px solid var(--gb); border-radius:48px; backdrop-filter:blur(24px); box-shadow:0 0 80px rgba(22,119,255,.25); }
+  .glass.dim { border-color:rgba(255,255,255,.12); box-shadow:none; filter:saturate(.3); }
+  .phone { width:440px; height:800px; padding:26px; }
+  .phone .screen { width:100%; height:100%; border-radius:30px; background:var(--navy); display:flex; align-items:center; justify-content:center; font-size:34px; color:var(--cyan); padding:24px; text-align:left; font-family:"JetBrains Mono",ui-monospace,monospace; line-height:1.5; }
+  .dim .screen { color:var(--muted); }
+  .ai-core { width:360px; height:360px; border-radius:50%; background:radial-gradient(circle,var(--white) 0%,var(--cyan) 18%,var(--blue) 50%,transparent 72%); box-shadow:0 0 140px var(--cyan); }
+  .chip-row { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; }
+  .chip { padding:16px 32px; font-size:34px; font-weight:700; border-radius:999px; }
+  .arrow { font-size:110px; color:var(--cyan); font-weight:900; }
+  .tag { padding:14px 34px; border-radius:999px; font-size:36px; font-weight:800; letter-spacing:4px; }
+  .tag.before { background:rgba(123,132,153,.2); color:var(--muted); }
+  .tag.after { background:rgba(0,229,255,.18); color:var(--cyan); }
+  #subtitle { position:absolute; left:60px; right:60px; bottom:300px; text-align:center; font-size:56px; font-weight:800; line-height:1.25; padding:22px 32px; border-radius:28px; background:rgba(5,9,20,.72); border:2px solid var(--gb); opacity:0; }
+  #progress { position:absolute; left:60px; right:60px; bottom:220px; height:8px; background:rgba(255,255,255,.12); border-radius:8px; }
+  #progress-fill { height:100%; width:0; background:linear-gradient(90deg,var(--blue),var(--cyan)); border-radius:8px; }
+  #brand { position:absolute; top:120px; left:70px; font-weight:900; font-size:40px; letter-spacing:4px; }
+  #brand span { color:var(--cyan); }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="byga-before-after" data-width="1080" data-height="1920" data-fps="30" data-duration="45">
+  <div class="bg-grid"></div><div class="bg-glow"></div>
+  <div id="brand">BYGA<span>.AI</span></div>
+
+  <section class="scene clip" data-start="0" data-duration="3" data-track-index="1" data-sub="{{sub_1}}">
+    <div class="kicker in">{{kicker_hook}}</div>
+    <div class="headline in">{{hook_utama}} <span class="hl">{{kata_kunci}}</span></div>
+    <div class="arrow in">&#8595;</div>
+  </section>
+
+  <section class="scene clip" data-start="3" data-duration="10" data-track-index="1" data-sub="{{sub_2}}">
+    <div class="tag before in">SEBELUM</div>
+    <div class="headline in">{{kondisi_awal}}</div>
+    <div class="glass dim phone in"><div class="screen">{{layar_sebelum}}</div></div>
+    <div class="subline in">{{masalah_yang_dirasakan}}</div>
+  </section>
+
+  <section class="scene clip" data-start="13" data-duration="14" data-track-index="1" data-sub="{{sub_3}}">
+    <div class="kicker in">Prosesnya</div>
+    <div class="ai-core in"></div>
+    <div class="headline in">{{proses_singkat}} <span class="hl">BYGA.AI</span></div>
+    <div class="chip-row in">
+      <div class="glass chip">GitHub</div><div class="glass chip">Cloudflare</div><div class="glass chip">MCP</div><div class="glass chip">AI Skills</div>
+    </div>
+  </section>
+
+  <section class="scene clip" data-start="27" data-duration="12" data-track-index="1" data-sub="{{sub_4}}">
+    <div class="tag after in">SESUDAH</div>
+    <div class="headline in"><span class="hl">{{hasil_akhir}}</span></div>
+    <div class="glass phone in"><div class="screen">{{layar_sesudah}}</div></div>
+    <div class="subline in">{{bukti_verifikasi}}</div>
+  </section>
+
+  <section class="scene clip" data-start="39" data-duration="6" data-track-index="1" data-sub="{{sub_5}}">
+    <div class="headline in">{{cta}} <span class="hl">{{aksi_cta}}</span></div>
+    <div class="subline in">{{open_loop_episode_berikutnya}}</div>
+    <div class="kicker in">Build Anything From Your Phone.</div>
+  </section>
+
+  <div id="subtitle"></div>
+  <div id="progress"><div id="progress-fill"></div></div>
+</div>
+<script>
+  const stage = document.getElementById("stage");
+  const D = +stage.dataset.duration;
+  const sub = document.getElementById("subtitle");
+  const tl = gsap.timeline({ paused: true });
+  document.querySelectorAll(".scene").forEach(el => {
+    const s = +el.dataset.start, d = +el.dataset.duration;
+    tl.set(el, { opacity: 1 }, s);
+    tl.from(el.querySelectorAll(".in"), { y: 70, opacity: 0, scale: .9, duration: .5, stagger: .12, ease: "back.out(1.4)" }, s + .05);
+    tl.to(el, { opacity: 0, duration: .25 }, s + d - .25);
+    tl.call(() => { sub.textContent = el.dataset.sub; }, null, s);
+    tl.to(sub, { opacity: 1, duration: .2 }, s);
+    tl.to(sub, { opacity: 0, duration: .15 }, s + d - .15);
+  });
+  tl.to("#progress-fill", { width: "100%", duration: D, ease: "none" }, 0);
+  window.__timelines = window.__timelines || {};
+  window.__timelines[stage.dataset.compositionId] = tl;
+</script>
+</body>
+</html>
