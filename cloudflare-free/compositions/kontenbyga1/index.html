@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080,height=1920,initial-scale=1">
+<title>BYGA.AI — Satu HP, Banyak Kemungkinan</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+:root{--bg:#050914;--navy:#0A1428;--blue:#1677FF;--cyan:#00E5FF;--white:#fff;--muted:#b8cbe3;--edge:rgba(116,190,255,.24);--panel:rgba(11,29,56,.88);--font:Inter,system-ui,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--bg);color:var(--white);font-family:var(--font)}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:radial-gradient(ellipse at 50% 42%,#102d5a 0%,#09172d 43%,#050914 82%)}
+#ambient{position:absolute;inset:-120px;background:radial-gradient(circle at 50% 35%,rgba(0,229,255,.16),transparent 34%),radial-gradient(circle at 20% 78%,rgba(22,119,255,.16),transparent 35%)}
+#grid{position:absolute;inset:0;opacity:.15;background-image:linear-gradient(rgba(90,160,255,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(90,160,255,.18) 1px,transparent 1px);background-size:64px 64px}
+#orb{position:absolute;width:690px;height:690px;left:195px;top:440px;border:1px solid rgba(0,229,255,.2);border-radius:50%;box-shadow:0 0 100px rgba(0,229,255,.08),inset 0 0 90px rgba(22,119,255,.08)}
+#orb:before,#orb:after{content:"";position:absolute;inset:70px;border:1px solid rgba(22,119,255,.25);border-radius:50%}
+#orb:after{inset:145px;border-color:rgba(0,229,255,.2)}
+.clip{position:absolute;inset:0;overflow:hidden}
+.stage{position:absolute;inset:180px 70px 560px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.kicker{font-size:24px;letter-spacing:.28em;text-transform:uppercase;color:var(--cyan);font-weight:750;margin-bottom:36px}
+.title{font-size:82px;line-height:1.04;letter-spacing:-.055em;font-weight:850}
+.accent{color:var(--cyan)}
+.copy{font-size:34px;line-height:1.35;color:var(--muted);margin-top:28px;max-width:850px}
+.pill{display:inline-flex;align-items:center;gap:14px;padding:16px 25px;border:1px solid rgba(0,229,255,.4);border-radius:99px;background:rgba(0,229,255,.08);color:#e1fcff;font-size:22px;letter-spacing:.08em;margin-top:34px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--cyan);box-shadow:0 0 20px var(--cyan)}
+#brand{position:absolute;left:0;right:0;top:178px;text-align:center;font-size:23px;letter-spacing:.25em;color:rgba(210,235,255,.52);font-weight:750}
+.phone{width:470px;height:810px;border:3px solid rgba(143,208,255,.55);border-radius:58px;background:linear-gradient(155deg,#142d50,#040b18);box-shadow:0 35px 100px rgba(0,0,0,.5),0 0 65px rgba(0,229,255,.13);padding:28px;position:relative}
+.phone:before{content:"";position:absolute;top:18px;left:185px;width:95px;height:12px;border-radius:10px;background:#263d5c}
+.screen{position:absolute;inset:78px 25px 28px;border-radius:32px;background:linear-gradient(160deg,#0c1e39,#07101f);border:1px solid var(--edge);padding:28px;display:flex;flex-direction:column;gap:22px}
+.ui-top{display:flex;justify-content:space-between;align-items:center;color:#c8eaff;font-size:20px}
+.ai-chip{padding:10px 15px;border-radius:12px;background:rgba(0,229,255,.12);color:var(--cyan);font-size:18px}
+.prompt{padding:22px;border-radius:20px;background:rgba(255,255,255,.055);border:1px solid var(--edge);font-size:24px;line-height:1.35;color:#e8f4ff;text-align:left}
+.prompt b{color:var(--cyan)}
+.preview{height:255px;border-radius:20px;background:radial-gradient(circle at 50% 38%,#1c8db7,#16417e 38%,#0b1830 72%);position:relative;overflow:hidden;border:1px solid rgba(0,229,255,.25)}
+.preview:before{content:"";position:absolute;width:190px;height:190px;border-radius:50%;left:110px;top:32px;background:radial-gradient(circle at 35% 30%,#b8ffff,#20b6ef 35%,#1455a0 75%);box-shadow:0 0 55px rgba(0,229,255,.35)}
+.ui-row{height:18px;border-radius:10px;background:rgba(166,213,255,.16)}.ui-row.short{width:62%}
+.ui-button{height:58px;border-radius:16px;background:linear-gradient(90deg,var(--blue),var(--cyan))}
+.float-card{position:absolute;padding:20px 23px;border-radius:20px;background:rgba(9,25,48,.96);border:1px solid rgba(0,229,255,.35);box-shadow:0 20px 55px rgba(0,0,0,.35);font-size:22px;color:#e9faff}
+.float-card strong{display:block;color:var(--cyan);font-size:26px;margin-bottom:6px}
+.stack{position:relative;width:760px;height:680px}
+.stack-card{position:absolute;width:475px;height:570px;left:140px;top:55px;border-radius:34px;border:1px solid rgba(0,229,255,.4);background:linear-gradient(145deg,rgba(19,51,91,.95),rgba(5,15,31,.96));box-shadow:0 30px 90px rgba(0,0,0,.4);padding:28px}
+.stack-card.back{transform:rotate(-10deg) translate(-55px,20px);opacity:.5}
+.stack-card.front{transform:rotate(7deg) translate(40px,-5px)}
+.stack-art{height:325px;border-radius:24px;background:radial-gradient(circle at 48% 35%,#a7fbff,#1677ff 28%,#0a1c3a 70%);margin-bottom:25px}
+.stack-line{height:16px;border-radius:9px;background:rgba(180,220,255,.25);margin:15px 0}.stack-line.small{width:55%}
+.code-window{width:790px;border-radius:28px;border:1px solid rgba(0,229,255,.35);background:rgba(5,14,29,.96);box-shadow:0 30px 100px rgba(0,0,0,.45);overflow:hidden;text-align:left}
+.code-head{height:62px;background:rgba(255,255,255,.055);display:flex;align-items:center;padding:0 24px;gap:12px;color:#b8d5f6;font-size:19px}
+.traffic{width:12px;height:12px;border-radius:50%;background:#ff6b7d}.traffic:nth-child(2){background:#ffd166}.traffic:nth-child(3){background:#06d6a0}
+.code-body{padding:34px;font:24px/1.8 "Space Mono",monospace;color:#c6d9f2}.code-body .c{color:var(--cyan)}.code-body .g{color:#8ef0bb}.code-body .dim{color:#7892b4}
+.flow{display:flex;flex-direction:column;align-items:center;gap:18px}
+.flow-box{width:620px;padding:25px;border:1px solid rgba(0,229,255,.35);border-radius:20px;background:rgba(9,28,54,.95);font-size:27px;text-align:center}
+.flow-arrow{height:38px;width:3px;background:linear-gradient(var(--cyan),transparent);position:relative}
+.flow-arrow:after{content:"";position:absolute;bottom:0;left:-7px;border-left:8px solid transparent;border-right:8px solid transparent;border-top:10px solid var(--cyan)}
+.orbit{position:relative;width:510px;height:510px;border:1px solid rgba(0,229,255,.32);border-radius:50%;margin-top:65px}
+.orbit:before,.orbit:after{content:"";position:absolute;inset:55px;border:1px solid rgba(22,119,255,.3);border-radius:50%}
+.orbit:after{inset:115px;border-color:rgba(0,229,255,.24)}
+.node{position:absolute;width:18px;height:18px;border-radius:50%;background:var(--cyan);box-shadow:0 0 24px var(--cyan)}
+#captions{position:absolute;left:70px;right:70px;top:1235px;min-height:155px;z-index:50;text-align:center}
+.caption{position:absolute;left:0;right:0;top:0;font-size:38px;line-height:1.22;font-weight:800;letter-spacing:-.02em;color:#fff;text-shadow:0 3px 18px #000,0 0 25px rgba(0,0,0,.8)}
+#progress{position:absolute;left:72px;right:72px;bottom:480px;height:4px;background:rgba(255,255,255,.14);border-radius:4px;overflow:hidden}
+#progress-fill{display:block;width:100%;height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));transform:scaleX(0);transform-origin:left center}
+#end-mark{font-size:112px;font-weight:900;letter-spacing:-.07em;line-height:1}#end-mark span{color:var(--cyan)}
+#end-tag{font-size:25px;letter-spacing:.18em;color:#b8d9f6;margin-top:26px}
+#end-cta{margin-top:44px;padding:22px 38px;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--cyan));color:#03101f;font-size:28px;font-weight:850}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1080" data-height="1920">
+  <div id="ambient"></div><div id="grid"></div><div id="orb"></div>
+  <div id="brand">BUILD ANYTHING FROM YOUR PHONE</div>
+  <audio id="voiceover" class="clip" data-start="0" data-track-index="0" data-volume="1" src="assets/suara-9a28a5cf.wav"></audio>
+
+  <div id="scene-hook" class="clip" data-start="0" data-duration="7.5" data-track-index="1"><div class="stage" id="hook-stage">
+    <div class="kicker">IDE BESAR • DIMULAI DARI GENGGAMAN</div><div class="title">BAGAIMANA JIKA<br><span class="accent">IDEMU</span> JADI NYATA?</div><div class="copy">Satu perangkat. Banyak kemungkinan.</div><div class="pill"><i class="dot"></i> EXPLORE THE POSSIBLE</div>
+  </div></div>
+
+  <div id="scene-phone" class="clip" data-start="7.2" data-duration="8.5" data-track-index="2"><div class="stage" id="phone-stage">
+    <div class="kicker">SEMUA BISA DIMULAI DI SINI</div>
+    <div class="phone" id="phone"><div class="screen"><div class="ui-top"><b>BYGA AI STUDIO</b><span class="ai-chip">AI CORE</span></div><div class="prompt">Buatkan konsep<br><b>website modern</b><br>untuk ide bisnisku...</div><div class="preview"></div><div class="ui-row"></div><div class="ui-row short"></div><div class="ui-button"></div></div></div>
+    <div class="float-card" id="phone-float"><strong>IDE → PROMPT</strong>Mulai dari kata-kata</div>
+  </div></div>
+
+  <div id="scene-image" class="clip" data-start="15.3" data-duration="8" data-track-index="3"><div class="stage" id="image-stage">
+    <div class="kicker">DARI KATA MENJADI VISUAL</div>
+    <div class="stack" id="image-stack"><div class="stack-card back"><div class="stack-art"></div><div class="stack-line"></div><div class="stack-line small"></div></div><div class="stack-card front"><div class="stack-art"></div><div class="stack-line"></div><div class="stack-line small"></div></div></div>
+    <div class="pill"><i class="dot"></i> AI IMAGE GENERATION</div>
+  </div></div>
+
+  <div id="scene-video" class="clip" data-start="23" data-duration="7.5" data-track-index="4"><div class="stage" id="video-stage">
+    <div class="kicker">VISUAL MULAI BERGERAK</div><div class="title">SATU GAMBAR<br><span class="accent">JADI CERITA</span></div>
+    <div class="preview" id="video-preview" style="width:760px;height:520px;margin-top:55px;border-radius:34px"><div class="orbit" style="position:absolute;width:480px;height:480px;left:140px;top:20px;margin:0"></div><div class="node" style="left:370px;top:80px"></div><div class="float-card" style="left:35px;bottom:40px"><strong>IMAGE</strong>Still visual</div><div class="float-card" style="right:35px;top:40px"><strong>VIDEO</strong>Motion scene</div></div>
+  </div></div>
+
+  <div id="scene-code" class="clip" data-start="30.2" data-duration="8.2" data-track-index="5"><div class="stage" id="code-stage">
+    <div class="kicker">TANPA HARUS JADI PROGRAMMER</div><div class="title">IDE MENJADI<br><span class="accent">WEBSITE</span></div>
+    <div class="code-window" id="code-window" style="margin-top:58px"><div class="code-head"><i class="traffic"></i><i class="traffic"></i><i class="traffic"></i><span style="margin-left:12px">my-first-website</span></div><div class="code-body"><div class="dim">01</div><div><span class="c">const</span> idea = <span class="g">"your vision"</span>;</div><div><span class="c">build</span>(idea);</div><div class="dim">04</div><div><span class="g">✓</span> website preview ready</div><div class="dim">05</div><div><span class="c">deploy</span>(project);</div></div></div>
+    <div class="pill"><i class="dot"></i> FROM PROMPT TO PRODUCT</div>
+  </div></div>
+
+  <div id="scene-flow" class="clip" data-start="38" data-duration="8.5" data-track-index="6"><div class="stage" id="flow-stage">
+    <div class="kicker">BUKAN HANYA MEMBUAT</div><div class="title">BANGUN<br><span class="accent">ALUR KERJA</span></div>
+    <div class="flow" id="flow"><div class="flow-box">IDE & KEBUTUHAN</div><div class="flow-arrow"></div><div class="flow-box">AI MEMBANTU PROSES</div><div class="flow-arrow"></div><div class="flow-box">WEBSITE • APLIKASI • OTOMASI</div></div>
+  </div></div>
+
+  <div id="scene-future" class="clip" data-start="46.2" data-duration="7.8" data-track-index="7"><div class="stage" id="future-stage">
+    <div class="kicker">ERA BARU KREATIVITAS</div><div class="title">BUKAN SOAL<br>ALAT YANG <span class="accent">MAHAL</span></div><div class="copy">Tapi tentang ide yang berani kamu kembangkan.</div>
+    <div class="orbit" id="future-orbit"><i class="node" style="left:246px;top:-9px"></i><i class="node" style="right:20px;top:240px"></i><i class="node" style="left:70px;bottom:45px"></i></div>
+  </div></div>
+
+  <div id="scene-cta" class="clip" data-start="53.5" data-duration="6.5" data-track-index="8"><div class="stage" id="cta-stage">
+    <div id="end-mark">BYGA<span>.</span>AI</div><div id="end-tag">BUILD ANYTHING FROM YOUR PHONE</div><div id="end-cta">IMAGINE IT. CREATE IT.</div><div class="copy">Mulai wujudkan ide berikutnya.</div>
+  </div></div>
+
+  <div id="captions">
+    <div id="cap0" class="clip" data-start="0" data-duration="3.4" data-track-index="9"><div class="caption">Bayangkan...</div></div>
+    <div id="cap1" class="clip" data-start="3.4" data-duration="4" data-track-index="9"><div class="caption">Bagaimana jika semua ide kreatifmu</div></div>
+    <div id="cap2" class="clip" data-start="7.4" data-duration="4.1" data-track-index="9"><div class="caption">bisa menjadi kenyataan?</div></div>
+    <div id="cap3" class="clip" data-start="11.5" data-duration="4.7" data-track-index="9"><div class="caption">Kamu tidak harus punya kamera mahal</div></div>
+    <div id="cap4" class="clip" data-start="16.2" data-duration="4.6" data-track-index="9"><div class="caption">untuk membuat video.</div></div>
+    <div id="cap5" class="clip" data-start="20.8" data-duration="4.7" data-track-index="9"><div class="caption">Tidak harus menjadi desainer profesional</div></div>
+    <div id="cap6" class="clip" data-start="25.5" data-duration="4.7" data-track-index="9"><div class="caption">untuk menciptakan karya visual.</div></div>
+    <div id="cap7" class="clip" data-start="30.2" data-duration="4.8" data-track-index="9"><div class="caption">Tidak harus menjadi programmer</div></div>
+    <div id="cap8" class="clip" data-start="35" data-duration="4.6" data-track-index="9"><div class="caption">untuk membangun sebuah website.</div></div>
+    <div id="cap9" class="clip" data-start="39.6" data-duration="5.4" data-track-index="9"><div class="caption">Dengan bantuan AI, semua itu semakin mungkin.</div></div>
+    <div id="cap10" class="clip" data-start="45" data-duration="5.5" data-track-index="9"><div class="caption">Satu ide bisa menjadi gambar, lalu video.</div></div>
+    <div id="cap11" class="clip" data-start="50.5" data-duration="4.5" data-track-index="9"><div class="caption">Inilah era baru kreativitas.</div></div>
+    <div id="cap12" class="clip" data-start="55" data-duration="5" data-track-index="9"><div class="caption">BYGA.AI — Build Anything From Your Phone.</div></div>
+  </div>
+  <div id="progress"><i id="progress-fill"></i></div>
+</div>
+<script>
+(function(){
+ const tl=gsap.timeline({paused:true});
+ const scenes=[["#hook-stage",0,7.5],["#phone-stage",7.2,8.5],["#image-stage",15.3,8],["#video-stage",23,7.5],["#code-stage",30.2,8.2],["#flow-stage",38,8.5],["#future-stage",46.2,7.8],["#cta-stage",53.5,6.5]];
+ scenes.forEach((s,i)=>{
+  if(i===0)tl.fromTo(s[0],{y:35,opacity:0},{y:0,opacity:1,duration:.8,ease:"power3.out"},.15);
+  else{tl.fromTo(s[0],{y:55,opacity:0,scale:.97},{y:0,opacity:1,scale:1,duration:.65,ease:"power3.out"},s[1]+.12);tl.to(s[0],{y:-28,opacity:0,duration:.42,ease:"power2.in"},s[1]+s[2]-.42);}
+ });
+ tl.fromTo("#phone",{y:90,rotation:-5,scale:.88,opacity:0},{y:0,rotation:0,scale:1,opacity:1,duration:1,ease:"power3.out"},7.45);
+ tl.fromTo("#phone-float",{x:-70,opacity:0},{x:0,opacity:1,duration:.6,ease:"power3.out"},10.2);
+ tl.fromTo("#image-stack",{scale:.78,rotation:-5,opacity:0},{scale:1,rotation:0,opacity:1,duration:1,ease:"power3.out"},15.55);
+ tl.to("#image-stack",{rotation:2,scale:1.035,duration:2.5,ease:"sine.inOut",yoyo:true,repeat:1},18);
+ tl.fromTo("#video-preview",{scale:.82,opacity:0},{scale:1,opacity:1,duration:.8,ease:"power3.out"},23.35);
+ tl.to("#video-preview .orbit",{rotation:110,duration:6,ease:"none"},23.4);
+ tl.fromTo("#code-window",{y:60,opacity:0},{y:0,opacity:1,duration:.8,ease:"power3.out"},30.6);
+ tl.fromTo("#flow .flow-box",{x:-60,opacity:0},{x:0,opacity:1,duration:.55,stagger:.45,ease:"power3.out"},38.35);
+ tl.fromTo("#future-orbit",{scale:.75,opacity:0},{scale:1,opacity:1,duration:1,ease:"power3.out"},46.55);
+ tl.fromTo("#end-mark",{scale:.7,opacity:0},{scale:1,opacity:1,duration:.7,ease:"back.out(1.4)"},53.7);
+ tl.fromTo("#end-tag",{y:20,opacity:0},{y:0,opacity:1,duration:.6,ease:"power3.out"},54.05);
+ tl.fromTo("#end-cta",{y:24,opacity:0},{y:0,opacity:1,duration:.6,ease:"power3.out"},54.35);
+ tl.fromTo("#ambient",{scale:1},{scale:1.12,duration:30,ease:"sine.inOut",yoyo:true,repeat:1},0);
+ tl.to("#grid",{x:-45,y:-80,duration:60,ease:"none"},0);
+ tl.fromTo("#orb",{scale:.92,rotation:0},{scale:1.08,rotation:45,duration:60,ease:"none"},0);
+ tl.fromTo("#progress-fill",{scaleX:0},{scaleX:1,duration:60,ease:"none"},0);
+ const caps=[[0,3.4],[3.4,7.4],[7.4,11.5],[11.5,16.2],[16.2,20.8],[20.8,25.5],[25.5,30.2],[30.2,35],[35,39.6],[39.6,45],[45,50.5],[50.5,55],[55,60]];
+ caps.forEach((c,i)=>{const el="#cap"+i+" .caption";tl.fromTo(el,{y:18,opacity:0},{y:0,opacity:1,duration:.18,ease:"power2.out"},c[0]);if(i<12)tl.to(el,{y:-12,opacity:0,duration:.14,ease:"power2.in"},c[1]-.14);});
+ window.__timelines=window.__timelines||{};
+ window.__timelines["main"]=tl;
+ tl.seek(0);
+})();
+</script>
+</body>
+</html>
