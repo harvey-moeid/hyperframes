@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>JalurTarot - Pesan Tarot 12 Zodiak</title>
+<!-- Satu-satunya skrip eksternal. Semua visual lain = CSS/SVG inline, tanpa manusia/wajah/tangan. -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+/* ===== TOKEN: palet JalurTarot + teks hook/penutup. Teks per zodiak ada di tabel Z (skrip). ===== */
+:root{
+  --obs:#100E12; --bur:#491D2B; --cri:#9B3548; --gold:#D0B27C; --ivory:#E9E1D7;
+  --soft:rgba(233,225,215,.8); --card:#1A1016;
+  --serif:serif; --sans:sans-serif;
+  --s-hk:110px; --s-h:100px; --s-sub:52px; --s-c:44px;
+  --t-tag:"JALURTAROT";
+  --t-h1:"Satu kartu"; --t-h2:"tiap zodiak"; --t-h3:"minggu ini"; --t-hs:"Cari zodiakmu.";
+  --t-e1:"Tarot itu cermin,"; --t-e2:"bukan kepastian.";
+  --t-s1:"Zodiakmu pas? Tulis kena."; --t-s2:"Follow untuk edisi baru.";
+  --t-dc:"Untuk refleksi dan hiburan";
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--obs);font-family:var(--sans);color:var(--ivory)}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--obs)}
+.clip,.stage,#bgcam,#vig{position:absolute;inset:0}
+.tx{display:inline-block;white-space:nowrap}
+.t-tag::before{content:var(--t-tag)}
+.t-h1::before{content:var(--t-h1)} .t-h2::before{content:var(--t-h2)} .t-h3::before{content:var(--t-h3)} .t-hs::before{content:var(--t-hs)}
+.t-e1::before{content:var(--t-e1)} .t-e2::before{content:var(--t-e2)}
+.t-s1::before{content:var(--t-s1)} .t-s2::before{content:var(--t-s2)} .t-dc::before{content:var(--t-dc)}
+
+/* ===== LATAR: glow burgundy, kabut, partikel emas, vinyet (parallax beda kecepatan) ===== */
+.bgl{position:absolute;inset:-300px}
+#bg-glow{background:radial-gradient(1100px 1000px at 25% 28%,rgba(73,29,43,.95),transparent 70%),radial-gradient(900px 900px at 78% 80%,rgba(155,53,72,.28),transparent 70%)}
+#fog1{background:radial-gradient(1000px 420px at 50% 42%,rgba(73,29,43,.5),transparent 70%)}
+#fog2{background:radial-gradient(900px 380px at 40% 76%,rgba(155,53,72,.18),transparent 70%)}
+#bg-dots{position:absolute;left:-300px;top:-300px;width:1680px;height:2520px}
+.pd{fill:var(--gold)}
+#vig{background:radial-gradient(ellipse at 50% 45%,transparent 50%,rgba(16,14,18,.85) 100%)}
+
+/* ===== KARTU & EMBLEM (prosedural) ===== */
+.cf{fill:var(--card);stroke:var(--gold);stroke-width:4}
+.cb2{fill:none;stroke:var(--gold);stroke-width:2;opacity:.55}
+.cn{font-family:var(--serif);font-size:44px;fill:var(--soft)}
+.orn{fill:none;stroke:var(--gold);stroke-width:3;stroke-linecap:round;opacity:.8}
+.em *{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.em .fl{fill:var(--gold)}
+
+/* ===== HOOK 0-5.4 ===== */
+.ctr{position:absolute;left:120px;width:840px;text-align:center}
+#hk-tag{top:330px;font-size:32px;letter-spacing:.4em;color:var(--gold)}
+#hk-title{top:430px;font-family:var(--serif);font-weight:700;font-size:var(--s-hk);line-height:1.05;letter-spacing:-.01em}
+#hk-title div{height:116px}
+.gold{color:var(--gold)}
+#hk-sub{top:830px;font-size:var(--s-sub);color:var(--soft)}
+#thread{position:absolute;left:0;top:940px;width:1080px;height:220px}
+#thread path{fill:none;stroke:var(--cri);stroke-width:4;stroke-linecap:round;stroke-dasharray:1}
+#fan{position:absolute;left:0;top:1180px;width:1080px;height:260px}
+.cbk{position:absolute;left:465px;top:0;width:150px;height:260px}
+.cbk>svg{display:block;width:150px;height:260px}
+
+/* ===== HUD 12 titik: penanda posisi zodiak ===== */
+#hud-svg{position:absolute;left:0;top:0;width:1080px;height:200px}
+.dt{fill:var(--gold);opacity:.3}
+#ring{fill:none;stroke:var(--gold);stroke-width:3}
+
+/* ===== BAGIAN ELEMEN: 3 slot zodiak per elemen ===== */
+.elbg{position:absolute;left:90px;top:290px;width:900px;height:900px;opacity:.12}
+.elbg svg{width:900px;height:900px}
+.elbg *{fill:none;stroke:var(--gold);stroke-width:1;stroke-linejoin:round;stroke-linecap:round}
+.slots{position:absolute;left:120px;top:210px;width:840px;height:1330px}
+.slot{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;opacity:0}
+.halo{position:absolute;left:-30px;top:110px;width:900px;height:900px;background:radial-gradient(closest-side,rgba(155,53,72,.4),transparent)}
+.tag{position:relative;height:44px;font-size:32px;letter-spacing:.3em;color:var(--gold)}
+.card{position:relative;flex:none;width:540px;height:780px;margin-top:26px}
+.sname{position:relative;margin-top:26px;height:104px;font-family:var(--serif);font-weight:700;font-size:var(--s-h);line-height:1.04}
+.cname{position:relative;margin-top:8px;height:54px;font-size:var(--s-c);letter-spacing:.04em;color:var(--gold)}
+.sub{position:relative;margin-top:26px;font-size:var(--s-sub);line-height:1.25;color:var(--soft);text-align:center}
+.sub span{display:block}
+
+/* ===== PENUTUP 52-60: lilin, cermin refleksi ===== */
+#end-halo{position:absolute;left:90px;top:80px;width:900px;height:900px;background:radial-gradient(closest-side,rgba(155,53,72,.45),transparent)}
+#candle{position:absolute;left:410px;top:250px;width:260px;height:460px}
+.cs{fill:var(--card);stroke:var(--gold);stroke-width:3}
+.cw{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round}
+.cfl{fill:var(--cri)} .cfl2{fill:var(--gold)}
+#e-h{top:770px;font-family:var(--serif);font-weight:700;font-size:88px;line-height:1.05}
+#e-h div{height:94px}
+#e-s{top:1030px;font-size:var(--s-sub);line-height:1.25;color:var(--soft)}
+#e-s span{display:block}
+#e-d{top:1260px;font-size:32px;letter-spacing:.12em;color:var(--soft)}
+</style>
+</head>
+<body>
+<!-- Root 60 s, 1080x1920. Tiap bagian = satu .clip; overlap 0.4 s antar-elemen untuk crossfade. -->
+<div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1080" data-height="1920">
+
+  <div id="bg" class="clip" data-start="0" data-duration="60" data-track-index="0">
+    <div id="bgcam">
+      <div id="bg-glow" class="bgl"></div>
+      <div id="fog1" class="bgl"></div>
+      <div id="fog2" class="bgl"></div>
+      <svg id="bg-dots" viewBox="0 0 1680 2520" aria-hidden="true"></svg>
+    </div>
+    <div id="vig"></div>
+  </div>
+
+  <div id="s-hud" class="clip" data-start="5" data-duration="47.6" data-track-index="1">
+    <div id="hud" class="stage"><svg id="hud-svg" viewBox="0 0 1080 200" aria-hidden="true"></svg></div>
+  </div>
+
+  <!-- 1. HOOK 0-5.4 -->
+  <div id="s-hook" class="clip" data-start="0" data-duration="5.4" data-track-index="2">
+    <div class="stage">
+      <div id="hk-tag" class="ctr"><span class="tx t-tag"></span></div>
+      <div id="hk-title" class="ctr">
+        <div id="hl1"><span class="tx t-h1"></span></div>
+        <div id="hl2" class="gold"><span class="tx t-h2"></span></div>
+        <div id="hl3"><span class="tx t-h3"></span></div>
+      </div>
+      <div id="hk-sub" class="ctr"><span class="tx t-hs"></span></div>
+      <svg id="thread" viewBox="0 0 1080 220" aria-hidden="true"><path id="thr" pathLength="1" d="M40 150C260 20 420 220 640 110S920 60 1040 120"/></svg>
+      <div id="fan"></div>
+    </div>
+  </div>
+
+  <!-- 2-5. ELEMEN: Api 5-17.2, Tanah 16.8-29, Udara 28.6-40.8, Air 40.4-52.6 (3 zodiak x 3.93 s) -->
+  <div id="s-api" class="clip" data-start="5" data-duration="12.2" data-track-index="3">
+    <div class="stage"><div id="eb0" class="elbg"><svg viewBox="0 0 200 210" aria-hidden="true"><path d="M100 10C120 60 170 80 160 140C152 185 110 200 100 200C90 200 48 185 40 140C32 90 80 70 100 10Z"/><path d="M100 90C112 120 130 130 124 160C120 180 105 186 100 186C95 186 80 180 76 160C70 130 92 120 100 90Z"/></svg></div><div id="sl0" class="slots"></div></div>
+  </div>
+  <div id="s-tanah" class="clip" data-start="16.8" data-duration="12.2" data-track-index="4">
+    <div class="stage"><div id="eb1" class="elbg"><svg viewBox="0 0 200 210" aria-hidden="true"><path d="M10 190L80 60L110 110L135 75L190 190Z"/><path d="M80 60L62 92L80 84L96 96Z"/><circle cx="160" cy="40" r="14"/></svg></div><div id="sl1" class="slots"></div></div>
+  </div>
+  <div id="s-udara" class="clip" data-start="28.6" data-duration="12.2" data-track-index="5">
+    <div class="stage"><div id="eb2" class="elbg"><svg viewBox="0 0 200 210" aria-hidden="true"><path d="M20 70H130A28 28 0 1 0 102 42"/><path d="M20 110H160A32 32 0 1 1 128 142"/><path d="M20 150H100A22 22 0 1 1 78 172"/></svg></div><div id="sl2" class="slots"></div></div>
+  </div>
+  <div id="s-air" class="clip" data-start="40.4" data-duration="12.2" data-track-index="6">
+    <div class="stage"><div id="eb3" class="elbg"><svg viewBox="0 0 200 210" aria-hidden="true"><path d="M100 15C100 15 40 95 40 135A60 60 0 0 0 160 135C160 95 100 15 100 15Z"/><path d="M10 175C40 160 60 190 90 175S150 160 190 175"/></svg></div><div id="sl3" class="slots"></div></div>
+  </div>
+
+  <!-- 6. PENUTUP 52-60 -->
+  <div id="s-end" class="clip" data-start="52" data-duration="8" data-track-index="7">
+    <div class="stage">
+      <div id="end-halo"></div>
+      <svg id="candle" viewBox="0 0 260 460" aria-hidden="true">
+        <ellipse class="cs" cx="130" cy="432" rx="92" ry="14"/>
+        <rect class="cs" x="95" y="190" width="70" height="240" rx="10"/>
+        <path class="cw" d="M165 222C165 244 150 250 150 268"/>
+        <path class="cw" d="M130 190V170"/>
+        <g id="flame"><path class="cfl" d="M130 40C150 82 168 104 156 142C150 160 138 168 130 168C122 168 110 160 104 142C92 104 112 82 130 40Z"/><path class="cfl2" d="M130 100C139 122 146 132 141 150C139 158 134 162 130 162C126 162 121 158 119 150C114 132 121 122 130 100Z"/></g>
+      </svg>
+      <div id="e-h" class="ctr"><div id="e1"><span class="tx t-e1"></span></div><div id="e2" class="gold"><span class="tx t-e2"></span></div></div>
+      <div id="e-s" class="ctr"><span class="tx t-s1"></span><span class="tx t-s2"></span></div>
+      <div id="e-d" class="ctr"><span class="tx t-dc"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var IN = "power3.out", OUT = "power2.in", LOOP = "sine.inOut", NS = "http://www.w3.org/2000/svg";
+
+  /* PRNG ber-seed: partikel emas deterministik */
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  var rnd = mulberry32(20261118), dots = document.getElementById("bg-dots");
+  for (var i = 0; i < 64; i++) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", (rnd() * 1680).toFixed(1)); c.setAttribute("cy", (rnd() * 2520).toFixed(1));
+    c.setAttribute("r", (1.5 + rnd() * 2.5).toFixed(1)); c.setAttribute("opacity", (0.15 + rnd() * 0.45).toFixed(2));
+    c.setAttribute("class", "pd"); dots.appendChild(c);
+  }
+
+  /* Emblem kartu (viewBox 200x200). Semua bentuk geometris/benda: tanpa manusia, wajah, tangan. */
+  function circ(p, r){return p.map(function(q){return '<circle cx="'+q[0]+'" cy="'+q[1]+'" r="'+r+'"/>';}).join("");}
+  function cup(x, y){return '<path d="M'+(x-16)+' '+y+'H'+(x+16)+'C'+(x+16)+' '+(y+20)+' '+(x+8)+' '+(y+28)+' '+x+' '+(y+28)+'C'+(x-8)+' '+(y+28)+' '+(x-16)+' '+(y+20)+' '+(x-16)+' '+y+'Z"/><path d="M'+x+' '+(y+28)+'V'+(y+40)+'M'+(x-10)+' '+(y+40)+'H'+(x+10)+'"/>';}
+  var P4 = [[62,62],[138,62],[62,138],[138,138]];
+  var P9 = [[48,48],[100,48],[152,48],[48,100],[100,100],[152,100],[48,152],[100,152],[152,152]];
+  var P8 = [[66,38],[134,38],[66,79],[134,79],[66,120],[134,120],[66,161],[134,161]];
+  var EM = {
+    wheel: '<circle cx="100" cy="100" r="64"/><circle cx="100" cy="100" r="12"/><path d="M100 36V88M100 112V164M36 100H88M112 100H164M55 55L91 91M109 109L145 145M145 55L109 91M91 109L55 145"/>',
+    sun: '<circle class="fl" cx="100" cy="100" r="34"/><path d="M150 100H176M143.3 125L165.8 138M125 143.3L138 165.8M100 150V176M75 143.3L62 165.8M56.7 125L34.2 138M50 100H24M56.7 75L34.2 62M75 56.7L62 34.2M100 50V24M125 56.7L138 34.2M143.3 75L165.8 62"/>',
+    wand: '<path d="M100 178V62"/><path d="M100 40L112 56L100 72L88 56Z"/><path d="M100 120C80 110 74 96 70 84M100 140C122 130 128 116 132 104"/><path d="M52 40H70M61 31V49M130 28H146M138 20V36"/>',
+    p4: circ(P4, 30) + circ(P4, 12),
+    p9: circ(P9, 16),
+    p8: circ(P8, 14),
+    swords: '<path d="M52 176L148 28M148 176L52 28"/><path d="M53 145L80 162.5M147 145L120 162.5"/>',
+    scales: '<path d="M100 30V170M52 170H148M40 62H160"/><path d="M40 62L22 108M40 62L58 108M22 108C24 126 56 126 58 108Z"/><path d="M160 62L142 108M160 62L178 108M142 108C144 126 176 126 178 108Z"/>',
+    star: '<polygon points="170,100 125.9,110.7 149.5,149.5 110.7,125.9 100,170 89.3,125.9 50.5,149.5 74.1,110.7 30,100 74.1,89.3 50.5,50.5 89.3,74.1 100,30 110.7,74.1 149.5,50.5 125.9,89.3"/><circle class="fl" cx="100" cy="100" r="8"/><circle class="fl" cx="24" cy="24" r="4"/><circle class="fl" cx="176" cy="24" r="4"/><circle class="fl" cx="24" cy="176" r="4"/><circle class="fl" cx="176" cy="176" r="4"/>',
+    cups: cup(40,36)+cup(100,36)+cup(160,36)+cup(40,112)+cup(100,112)+cup(160,112),
+    rose: '<circle cx="100" cy="76" r="12"/><circle cx="100" cy="76" r="26"/><circle cx="100" cy="76" r="40"/><path d="M100 116V184"/><path d="M100 150C80 148 66 136 62 124C80 124 94 132 100 150M100 164C120 162 134 150 138 138C120 138 106 146 100 164"/>',
+    moon: '<path d="M131.4 43.6A70 70 0 1 0 131.4 156.4A58 58 0 1 1 131.4 43.6Z"/><circle class="fl" cx="152" cy="62" r="5"/><circle class="fl" cx="164" cy="118" r="4"/><circle class="fl" cx="146" cy="150" r="3"/>'
+  };
+
+  /* Tabel isi: elemen, zodiak, kartu, angka, dua baris pesan (maks ~28 karakter), emblem */
+  var EL = ["API","TANAH","UDARA","AIR"];
+  var Z = [
+    {e:0,n:"Aries",c:"The Chariot",r:"VII",a:"Kamu punya momentum.",b:"Fokus ke satu tujuan.",m:"wheel"},
+    {e:0,n:"Leo",c:"The Sun",r:"XIX",a:"Energimu sedang naik.",b:"Tampil, tapi dengar sekitar.",m:"sun"},
+    {e:0,n:"Sagitarius",c:"Ace of Wands",r:"I",a:"Ada peluang baru.",b:"Mulai dari yang kecil.",m:"wand"},
+    {e:1,n:"Taurus",c:"Four of Pentacles",r:"IV",a:"Jangan menggenggam",b:"terlalu erat.",m:"p4"},
+    {e:1,n:"Virgo",c:"Nine of Pentacles",r:"IX",a:"Kerja kerasmu mulai",b:"terlihat. Hargai dirimu.",m:"p9"},
+    {e:1,n:"Capricorn",c:"Eight of Pentacles",r:"VIII",a:"Konsisten itu kuncimu.",b:"Pelan pun tak apa.",m:"p8"},
+    {e:2,n:"Gemini",c:"Two of Swords",r:"II",a:"Dengarkan hatimu,",b:"bukan hanya pikiran.",m:"swords"},
+    {e:2,n:"Libra",c:"Justice",r:"XI",a:"Jujurlah, termasuk",b:"pada dirimu sendiri.",m:"scales"},
+    {e:2,n:"Aquarius",c:"The Star",r:"XVII",a:"Harapan kembali.",b:"Percayai prosesmu.",m:"star"},
+    {e:3,n:"Cancer",c:"Six of Cups",r:"VI",a:"Kenangan datang.",b:"Rasakan, jangan menetap.",m:"cups"},
+    {e:3,n:"Scorpio",c:"Death",r:"XIII",a:"Satu fase selesai.",b:"Ada ruang untuk yang baru.",m:"rose"},
+    {e:3,n:"Pisces",c:"The Moon",r:"XVIII",a:"Perasaan campur aduk.",b:"Beri waktu dulu.",m:"moon"}
+  ];
+  function card(z){
+    return '<svg class="card" viewBox="0 0 540 780" aria-hidden="true"><rect class="cf" x="6" y="6" width="528" height="768" rx="30"/><rect class="cb2" x="30" y="30" width="480" height="720" rx="18"/><text class="cn" x="270" y="106" text-anchor="middle">'+z.r+'</text><svg class="em" x="120" y="230" width="300" height="300" viewBox="0 0 200 200">'+EM[z.m]+'</svg><path class="orn" d="M150 650H250M290 650H390"/><path class="orn" d="M270 636L284 650L270 664L256 650Z"/></svg>';
+  }
+  Z.forEach(function (z, i) {
+    var d = document.createElement("div"); d.className = "slot"; d.id = "z" + i;
+    d.innerHTML = '<div class="halo"></div><div class="tag"><span class="tx">ELEMEN '+EL[z.e]+'</span></div>'+card(z)+
+      '<div class="sname"><span class="tx">'+z.n+'</span></div><div class="cname"><span class="tx">'+z.c+'</span></div>'+
+      '<div class="sub"><span class="tx">'+z.a+'</span><span class="tx">'+z.b+'</span></div>';
+    document.getElementById("sl" + z.e).appendChild(d);
+  });
+
+  /* HUD 12 titik + cincin penanda */
+  var hud = document.getElementById("hud-svg"), h = "";
+  for (i = 0; i < 12; i++) h += '<circle id="dt'+i+'" class="dt" cx="'+(188+64*i)+'" cy="172" r="8"/>';
+  hud.innerHTML = h + '<circle id="ring" cx="188" cy="172" r="16"/>';
+
+  /* Kipas 12 punggung kartu untuk hook */
+  var back = '<svg viewBox="0 0 150 260"><rect class="cf" x="3" y="3" width="144" height="254" rx="12"/><rect class="cb2" x="12" y="12" width="126" height="236" rx="8"/><svg class="em" x="40" y="95" width="70" height="70" viewBox="0 0 200 200">'+EM.star+'</svg></svg>', fan = document.getElementById("fan");
+  for (i = 0; i < 12; i++) { var b = document.createElement("div"); b.className = "cbk"; b.innerHTML = back; fan.appendChild(b); }
+
+  var tl = gsap.timeline({paused: true});
+
+  /* --- LATAR: push-in pelan 1.00 -> 1.08, drift berbeda tiap lapisan (parallax) --- */
+  tl.fromTo("#bgcam", {scale:1, transformOrigin:"50% 50%"}, {scale:1.08, transformOrigin:"50% 50%", duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-glow", {x:-60, y:30}, {x:60, y:-30, duration:60, ease:"none"}, 0);
+  tl.fromTo("#fog1", {x:-160}, {x:160, duration:60, ease:"none"}, 0);
+  tl.fromTo("#fog2", {x:140, y:40}, {x:-140, y:-40, duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-dots", {x:0, y:0}, {x:-60, y:-240, duration:60, ease:"none"}, 0);
+
+  /* --- 1. HOOK 0-5: frame 0 sudah berisi (tag + baris pertama samar) --- */
+  tl.from("#hl1", {y:60, opacity:.35, duration:.8, ease:IN}, .1);
+  tl.from("#hl2", {y:60, opacity:0, duration:.8, ease:IN}, .45);
+  tl.from("#hl3", {y:60, opacity:0, duration:.8, ease:IN}, .8);
+  tl.from("#hk-sub", {y:30, opacity:0, duration:.6, ease:IN}, 1.5);
+  tl.fromTo("#thr", {strokeDashoffset:1}, {strokeDashoffset:0, duration:1.8, ease:IN}, .8);                 /* benang merah menggambar diri */
+  tl.fromTo(".cbk", {rotation:0, opacity:0, transformOrigin:"75px 520px"},
+    {rotation:function(i){return -33 + i * 6;}, opacity:1, duration:1.2, ease:IN, stagger:.07}, .6);         /* kipas 12 kartu terbuka */
+  tl.to("#fan", {y:-12, duration:1.2, ease:LOOP, yoyo:true, repeat:1}, 2.4);
+  tl.to("#hk-title", {scale:1.03, transformOrigin:"50% 50%", duration:1.6, ease:LOOP}, 2.0);
+  tl.to("#s-hook .stage", {opacity:0, y:-30, duration:.4, ease:OUT}, 5.0);
+
+  /* --- 2-5. ELEMEN: tiap zodiak 3.9333 s; slot berikutnya masuk 0.2 s sebelum slot lama selesai keluar --- */
+  var D = 3.9333, ES = [5, 16.8, 28.6, 40.4], DEG = [];
+  ES.forEach(function (t, e) {
+    var eb = "#eb" + e;
+    tl.fromTo(eb, {opacity:0}, {opacity:.12, duration:.8, ease:IN}, t);
+    tl.to(eb, {scale:1.08, transformOrigin:"50% 50%", duration:11.8, ease:LOOP}, t);
+    tl.to(eb, {opacity:0, duration:.5, ease:OUT}, t + 11.7);
+  });
+  tl.fromTo("#s-hud .stage", {opacity:0}, {opacity:1, duration:.4, ease:IN}, 5.0);
+  Z.forEach(function (z, i) {
+    var k = i % 3, t0 = ES[z.e] + k * D, te = t0 - (k ? .2 : 0), S = "#z" + i;
+    tl.fromTo(S, {opacity:0}, {opacity:1, duration:.3, ease:IN}, te);
+    tl.from(S + " .halo", {opacity:0, duration:.8, ease:IN}, te + .05);
+    tl.from(S + " .tag", {y:-16, opacity:0, duration:.4, ease:IN}, te);
+    tl.from(S + " .card", {y:70, opacity:0, duration:.7, ease:IN}, te + .05);
+    tl.from(S + " .em > *", {opacity:0, duration:.4, ease:IN, stagger:.05}, te + .4);
+    tl.from(S + " .sname", {y:40, opacity:0, duration:.55, ease:IN}, te + .3);
+    tl.from(S + " .cname", {opacity:0, duration:.4, ease:IN}, te + .55);
+    tl.from(S + " .sub span", {y:24, opacity:0, duration:.5, ease:IN, stagger:.15}, te + .75);
+    tl.to(S + " .card", {y:-14, duration:2.9, ease:LOOP}, te + .75);                                       /* melayang pelan */
+    tl.to(S, {opacity:0, y:-24, duration:.35, ease:OUT}, t0 + D - .35);
+    /* HUD: cincin pindah ke zodiak aktif */
+    if (i > 0) tl.to("#ring", {x:64 * i, duration:.35, ease:IN}, te);
+    tl.to("#dt" + i, {opacity:.85, duration:.3, ease:IN}, te);
+  });
+  tl.to("#s-hud .stage", {opacity:0, duration:.4, ease:OUT}, 52.0);
+
+  /* --- 6. PENUTUP 52-60: lilin menyala, pesan refleksi --- */
+  tl.fromTo("#s-end .stage", {opacity:0}, {opacity:1, duration:.5, ease:IN}, 52.0);
+  tl.from("#candle", {y:40, opacity:0, duration:.8, ease:IN}, 52.1);
+  tl.from("#end-halo", {opacity:0, duration:1.2, ease:IN}, 52.5);
+  tl.from("#flame", {scaleY:.2, scaleX:.6, opacity:0, transformOrigin:"50% 100%", duration:.7, ease:IN}, 52.5);
+  tl.from("#e1", {y:40, opacity:0, duration:.7, ease:IN}, 53.2);
+  tl.from("#e2", {y:40, opacity:0, duration:.7, ease:IN}, 53.8);
+  tl.from("#e-s span", {y:24, opacity:0, duration:.6, ease:IN, stagger:.3}, 55.0);
+  tl.from("#e-d", {opacity:0, duration:.8, ease:IN}, 56.4);
+  tl.to("#flame", {scaleY:1.08, scaleX:.95, transformOrigin:"50% 100%", duration:.9, ease:LOOP, yoyo:true, repeat:6}, 53.4);   /* kelip lilin, berakhir 59.7 */
+  tl.to("#end-halo", {scale:1.06, transformOrigin:"50% 50%", duration:3, ease:LOOP, yoyo:true, repeat:1}, 53.5);
+
+  /* Daftarkan SETELAH tween terakhir, lalu seek(0) */
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+  tl.seek(0);
+})();
+</script>
+</body>
+</html>
