@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;1,400;1,600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:#07070d;overflow:hidden}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;font-family:'Cormorant Garamond',Georgia,serif;color:#efe9dc;
+background:radial-gradient(ellipse at 50% 35%,#16131f 0%,#07070d 70%)}
+.clip{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 90px}
+.star{position:absolute;color:#d4af37;opacity:.0;font-size:28px}
+.eyebrow{font-family:'Cinzel',serif;letter-spacing:14px;font-size:30px;color:#b8963a;margin-bottom:50px}
+.gold{font-family:'Cinzel',serif;font-weight:900;font-size:230px;line-height:1;background:linear-gradient(90deg,#b8963a,#f0d77a,#b8963a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.white{font-family:'Cinzel',serif;font-weight:900;font-size:230px;line-height:1.05;color:#f3eee3}
+.sub{font-family:'Cinzel',serif;letter-spacing:12px;font-size:32px;color:#8b8678;margin-top:60px}
+.quote{font-style:italic;font-weight:600;font-size:76px;line-height:1.35;color:#efe9dc}
+.quote b{color:#e6c765;font-weight:600}
+.line{width:260px;height:2px;background:linear-gradient(90deg,transparent,#d4af37,transparent);margin:60px 0}
+.stat{margin:55px 0}
+.num{font-family:'Cinzel',serif;font-size:210px;font-weight:700;color:#e6c765;line-height:1}
+.lbl{font-family:'Cinzel',serif;letter-spacing:16px;font-size:40px;color:#9a947f;margin-top:10px}
+.btn{font-family:'Cinzel',serif;letter-spacing:8px;font-size:44px;color:#e6c765;border:3px solid #b8963a;padding:44px 70px;background:rgba(212,175,55,.1);margin-top:70px}
+.url{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:52px;color:#cfc8b6;margin-top:60px}
+.glow{position:absolute;width:900px;height:900px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,.16),transparent 65%);left:90px;top:510px}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="jalurtarot" data-start="0" data-duration="16" data-width="1080" data-height="1920">
+  <div class="glow" id="glow"></div>
+  <div class="star" style="left:140px;top:200px">✦</div>
+  <div class="star" style="left:880px;top:340px">✧</div>
+  <div class="star" style="left:220px;top:1500px">✦</div>
+  <div class="star" style="left:860px;top:1650px">✧</div>
+  <div class="star" style="left:520px;top:120px">✦</div>
+  <div class="star" style="left:90px;top:900px">✧</div>
+  <div class="star" style="left:950px;top:1000px">✦</div>
+
+  <div id="s1" class="clip" data-start="0" data-duration="4" data-track-index="1">
+    <div class="eyebrow" id="a1">DIVINASI · TAROT ONLINE</div>
+    <div class="gold" id="a2">JALUR</div>
+    <div class="white" id="a3">TAROT</div>
+    <div class="sub" id="a4">BACA KARTU · TEMUKAN MAKNA</div>
+  </div>
+
+  <div id="s2" class="clip" data-start="4" data-duration="4" data-track-index="1">
+    <div class="quote" id="b1">Setiap kartu adalah <b>cermin</b> —<br>bukan ramalan.</div>
+    <div class="line" id="b2"></div>
+    <div class="quote" id="b3" style="font-size:58px;color:#bdb6a3">Bawa pertanyaanmu, biarkan simbol berbicara dalam bahasa yang hanya kamu yang bisa terjemahkan.</div>
+  </div>
+
+  <div id="s3" class="clip" data-start="8" data-duration="4" data-track-index="1">
+    <div class="stat" id="c1"><div class="num">78</div><div class="lbl">KARTU</div></div>
+    <div class="stat" id="c2"><div class="num">6</div><div class="lbl">SUSUNAN</div></div>
+    <div class="stat" id="c3"><div class="num">✦</div><div class="lbl">ORACLE</div></div>
+  </div>
+
+  <div id="s4" class="clip" data-start="12" data-duration="4" data-track-index="1">
+    <div class="gold" id="d1" style="font-size:160px">JALUR</div>
+    <div class="white" id="d2" style="font-size:160px">TAROT</div>
+    <div class="btn" id="d3">BERTANYA KE ORACLE</div>
+    <div class="url" id="d4">jalurtarotfree.muidsoft.com</div>
+  </div>
+</div>
+
+<script>
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({paused:true});
+const fadeIn=(s,t,y=40)=>tl.from(s,{opacity:0,y:y,duration:.8,ease:"power3.out"},t);
+const out=(s,t)=>tl.to(s,{opacity:0,duration:.5,ease:"power2.in"},t);
+
+// twinkling stars + glow
+gsap.utils.toArray(".star").forEach((el,i)=>{
+  tl.to(el,{opacity:.8,duration:1,yoyo:true,repeat:7,ease:"sine.inOut"},i*.4);
+});
+tl.fromTo("#glow",{scale:.8},{scale:1.2,duration:16,ease:"sine.inOut"},0);
+
+// Scene 1
+fadeIn("#a1",.2,20); fadeIn("#a2",.6,60); fadeIn("#a3",1,60); fadeIn("#a4",1.8,20);
+out("#s1",3.5);
+// Scene 2
+fadeIn("#b1",4.2); tl.from("#b2",{scaleX:0,duration:.8,ease:"power2.out"},5); fadeIn("#b3",5.4,30);
+out("#s2",7.5);
+// Scene 3
+fadeIn("#c1",8.2,50); fadeIn("#c2",9,50); fadeIn("#c3",9.8,50);
+out("#s3",11.5);
+// Scene 4
+fadeIn("#d1",12.2,50); fadeIn("#d2",12.6,50); fadeIn("#d3",13.4,30);
+tl.to("#d3",{boxShadow:"0 0 40px rgba(212,175,55,.5)",duration:.8,yoyo:true,repeat:2},14);
+fadeIn("#d4",14.2,20);
+
+window.__timelines["jalurtarot"] = tl;
+</script>
+</body>
+</html>
