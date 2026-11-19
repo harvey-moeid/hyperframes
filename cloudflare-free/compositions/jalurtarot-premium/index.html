@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:#050509;overflow:hidden}
+:root{--gold:#d4af37;--gold2:#f3dc85;--gold3:#9c7a22;--ink:#07070d;--cream:#f1ebdd}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;font-family:'Cormorant Garamond',Georgia,serif;color:var(--cream);
+background:radial-gradient(ellipse at 50% 40%,#1a1526 0%,#0b0912 55%,#050509 100%)}
+.clip{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 100px}
+.abs{position:absolute}
+#mandala{left:-120px;top:410px;width:1320px;height:1320px;opacity:.28}
+#vig{inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.75) 100%);pointer-events:none}
+#frame{left:46px;top:46px;right:46px;bottom:46px;border:2px solid rgba(212,175,55,.55)}
+#frame2{left:64px;top:64px;right:64px;bottom:64px;border:1px solid rgba(212,175,55,.25)}
+.corner{width:60px;height:60px;border:3px solid var(--gold);}
+.star{color:var(--gold);font-size:26px;opacity:0}
+.dust{width:6px;height:6px;border-radius:50%;background:var(--gold2);opacity:0;box-shadow:0 0 14px 3px rgba(243,220,133,.6)}
+.eyebrow{font-family:'Cinzel',serif;letter-spacing:16px;font-size:30px;color:#bf9b3b;display:flex;align-items:center;gap:30px}
+.eyebrow i{display:block;width:90px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
+.eyebrow i.r{background:linear-gradient(90deg,var(--gold),transparent)}
+.gold{font-family:'Cinzel',serif;font-weight:900;font-size:240px;line-height:1;background:linear-gradient(100deg,#9c7a22 0%,#f3dc85 40%,#d4af37 60%,#9c7a22 100%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 30px rgba(212,175,55,.35))}
+.white{font-family:'Cinzel',serif;font-weight:900;font-size:240px;line-height:1.05;color:#f6f1e6;filter:drop-shadow(0 0 24px rgba(255,255,255,.15))}
+.sub{font-family:'Cinzel',serif;letter-spacing:13px;font-size:32px;color:#8e8878}
+.h2{font-family:'Cinzel',serif;font-weight:600;letter-spacing:10px;font-size:34px;color:#bf9b3b;margin-bottom:40px}
+.quote{font-style:italic;font-weight:600;font-size:80px;line-height:1.3;color:var(--cream)}
+.quote b{color:var(--gold2);font-weight:600}
+.body{font-style:italic;font-size:54px;line-height:1.45;color:#bdb6a3}
+.line{width:300px;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:55px 0}
+.diamond{width:22px;height:22px;border:2px solid var(--gold);transform:rotate(45deg);margin:0 auto}
+/* cards */
+#cards{position:relative;width:1000px;height:760px;margin-top:20px}
+.card{position:absolute;width:290px;height:480px;top:140px}
+.card .back,.card .front{position:absolute;inset:0;border-radius:18px;border:3px solid var(--gold);overflow:hidden}
+.card .back{background:repeating-linear-gradient(45deg,#1c1730 0 14px,#15112500 14px 28px),radial-gradient(circle at 50% 50%,#2a2145,#120e20);display:flex;align-items:center;justify-content:center}
+.card .back::before{content:"";position:absolute;inset:14px;border:1.5px solid rgba(212,175,55,.6);border-radius:10px}
+.card .back span{font-size:110px;color:var(--gold);text-shadow:0 0 30px rgba(212,175,55,.6)}
+.card .front{background:linear-gradient(180deg,#f3e9cf,#d8c391);color:#1a1424;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:26px 14px;box-shadow:inset 0 0 60px rgba(120,80,20,.35)}
+.card .front::before{content:"";position:absolute;inset:12px;border:2px solid #7a5a1c;border-radius:10px}
+.card .num{font-family:'Cinzel',serif;font-weight:700;font-size:36px;color:#5a3f12;position:relative}
+.card .nm{font-family:'Cinzel',serif;font-weight:700;font-size:30px;letter-spacing:4px;color:#3a2a0a;position:relative}
+.card svg{width:200px;height:230px;position:relative}
+.cap{font-style:italic;font-size:44px;color:#cfc8b6;margin-top:20px;opacity:0}
+/* stats */
+.stat{margin:40px 0}
+.num2{font-family:'Cinzel',serif;font-size:220px;font-weight:700;line-height:1;background:linear-gradient(180deg,#f3dc85,#b8963a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lbl{font-family:'Cinzel',serif;letter-spacing:18px;font-size:40px;color:#9a947f;margin-top:6px}
+.sep{width:140px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0 auto}
+/* chat */
+.chat{width:860px;text-align:left}
+.bubble{border-radius:26px;padding:42px 48px;margin:26px 0}
+.q{background:rgba(212,175,55,.12);border:2px solid rgba(212,175,55,.5);font-size:52px;font-style:italic;color:#efe6c8;margin-left:120px}
+.a{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.12);font-size:50px;line-height:1.45;color:#d8d2c0}
+.a .w{opacity:0;display:inline-block;margin-right:.28em}
+.tag{font-family:'Cinzel',serif;letter-spacing:8px;font-size:26px;color:#bf9b3b;margin-bottom:16px;display:block}
+/* features */
+.feat{display:flex;align-items:center;gap:40px;width:820px;padding:38px 0;border-bottom:1px solid rgba(212,175,55,.25);text-align:left}
+.feat .ic{font-size:60px;color:var(--gold);width:80px;text-align:center}
+.feat .t{font-family:'Cinzel',serif;font-size:46px;letter-spacing:8px;color:#f1ebdd}
+.feat .d{font-style:italic;font-size:36px;color:#9a947f;margin-top:6px}
+.btn{font-family:'Cinzel',serif;font-weight:600;letter-spacing:9px;font-size:46px;color:#1a1424;background:linear-gradient(100deg,#b8963a,#f3dc85,#b8963a);padding:46px 80px;margin-top:80px;border-radius:4px;box-shadow:0 0 60px rgba(212,175,55,.45)}
+.url{font-style:italic;font-size:56px;color:#d8d2c0;margin-top:70px;letter-spacing:2px}
+.free{font-family:'Cinzel',serif;letter-spacing:12px;font-size:30px;color:#8e8878;margin-top:40px}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="jalurtarot-premium" data-start="0" data-duration="40" data-width="1080" data-height="1920">
+
+  <svg id="mandala" class="abs" viewBox="-500 -500 1000 1000"></svg>
+  <div id="stars"></div>
+  <div id="dusts"></div>
+  <div id="vig" class="abs"></div>
+  <div id="frame" class="abs"></div>
+  <div id="frame2" class="abs"></div>
+  <div class="abs corner" style="left:36px;top:36px;border-right:none;border-bottom:none"></div>
+  <div class="abs corner" style="right:36px;top:36px;border-left:none;border-bottom:none"></div>
+  <div class="abs corner" style="left:36px;bottom:36px;border-right:none;border-top:none"></div>
+  <div class="abs corner" style="right:36px;bottom:36px;border-left:none;border-top:none"></div>
+
+  <!-- S1 INTRO 0-6 -->
+  <div id="s1" class="clip" data-start="0" data-duration="6" data-track-index="1">
+    <div class="eyebrow" id="a1"><i></i>DIVINASI · TAROT ONLINE<i class="r"></i></div>
+    <div style="height:60px"></div>
+    <div class="gold" id="a2">JALUR</div>
+    <div class="white" id="a3">TAROT</div>
+    <div class="line" id="a4"></div>
+    <div class="sub" id="a5">BACA KARTU · TEMUKAN MAKNA</div>
+  </div>
+
+  <!-- S2 QUOTE 6-12 -->
+  <div id="s2" class="clip" data-start="6" data-duration="6" data-track-index="1">
+    <div class="diamond" id="b0"></div>
+    <div style="height:60px"></div>
+    <div class="quote" id="b1">Setiap kartu adalah <b>cermin</b>,<br>bukan ramalan.</div>
+    <div class="line" id="b2"></div>
+    <div class="body" id="b3">Bawa pertanyaanmu, biarkan simbol berbicara dalam bahasa yang hanya kamu yang bisa terjemahkan.</div>
+  </div>
+
+  <!-- S3 CARDS 12-20 -->
+  <div id="s3" class="clip" data-start="12" data-duration="8" data-track-index="1">
+    <div class="h2" id="c0">TIGA KARTU · SATU JALUR</div>
+    <div id="cards">
+      <div class="card" id="k1" style="left:20px">
+        <div class="front"><div class="num">0</div>
+          <svg viewBox="0 0 200 230"><circle cx="100" cy="95" r="60" fill="none" stroke="#5a3f12" stroke-width="3"/><circle cx="100" cy="95" r="28" fill="#c9a24a" stroke="#5a3f12" stroke-width="3"/><path d="M20 200 L100 150 L180 200" fill="none" stroke="#5a3f12" stroke-width="4"/><circle cx="100" cy="40" r="6" fill="#5a3f12"/></svg>
+          <div class="nm">SANG PENGEMBARA</div></div>
+        <div class="back"><span>✦</span></div></div>
+      <div class="card" id="k2" style="left:355px">
+        <div class="front"><div class="num">XVII</div>
+          <svg viewBox="0 0 200 230"><g stroke="#5a3f12" stroke-width="3" fill="#c9a24a"><polygon points="100,20 114,78 172,78 125,112 143,170 100,136 57,170 75,112 28,78 86,78"/></g><circle cx="40" cy="190" r="6" fill="#5a3f12"/><circle cx="100" cy="205" r="6" fill="#5a3f12"/><circle cx="160" cy="190" r="6" fill="#5a3f12"/></svg>
+          <div class="nm">BINTANG</div></div>
+        <div class="back"><span>✦</span></div></div>
+      <div class="card" id="k3" style="left:690px">
+        <div class="front"><div class="num">XVIII</div>
+          <svg viewBox="0 0 200 230"><path d="M120 30 A70 70 0 1 0 120 190 A55 55 0 1 1 120 30Z" fill="#c9a24a" stroke="#5a3f12" stroke-width="3"/><path d="M30 205 Q100 175 170 205" fill="none" stroke="#5a3f12" stroke-width="4"/></svg>
+          <div class="nm">BULAN</div></div>
+        <div class="back"><span>✦</span></div></div>
+    </div>
+    <div class="cap" id="c9">Masa lalu · Masa kini · Arah yang terbuka</div>
+  </div>
+
+  <!-- S4 STATS 20-26 -->
+  <div id="s4" class="clip" data-start="20" data-duration="6" data-track-index="1">
+    <div class="h2" id="d0">SEMESTA DALAM GENGGAMAN</div>
+    <div class="stat" id="d1"><div class="num2">78</div><div class="lbl">KARTU</div></div>
+    <div class="sep" id="d1s"></div>
+    <div class="stat" id="d2"><div class="num2">6</div><div class="lbl">SUSUNAN</div></div>
+    <div class="sep" id="d2s"></div>
+    <div class="stat" id="d3"><div class="num2">✦</div><div class="lbl">ORACLE</div></div>
+  </div>
+
+  <!-- S5 ORACLE 26-33 -->
+  <div id="s5" class="clip" data-start="26" data-duration="7" data-track-index="1">
+    <div class="h2" id="e0">BERTANYA KE ORACLE</div>
+    <div class="chat">
+      <div class="bubble q" id="e1">Apa yang perlu kuperhatikan minggu ini?</div>
+      <div class="bubble a" id="e2"><span class="tag">✦ ORACLE</span><span id="ans"></span></div>
+    </div>
+  </div>
+
+  <!-- S6 FEATURES 33-37 -->
+  <div id="s6" class="clip" data-start="33" data-duration="4" data-track-index="1">
+    <div class="h2" id="f0">JELAJAHI JALURMU</div>
+    <div class="feat" id="f1"><div class="ic">☀</div><div><div class="t">HARIAN</div><div class="d">Satu kartu untuk hari ini</div></div></div>
+    <div class="feat" id="f2"><div class="ic">❂</div><div><div class="t">RAMALAN</div><div class="d">Enam susunan bacaan</div></div></div>
+    <div class="feat" id="f3"><div class="ic">♜</div><div><div class="t">KARTU</div><div class="d">Pustaka 78 kartu lengkap</div></div></div>
+    <div class="feat" id="f4"><div class="ic">❦</div><div><div class="t">RIWAYAT</div><div class="d">Simpan perjalananmu</div></div></div>
+  </div>
+
+  <!-- S7 CTA 37-40 -->
+  <div id="s7" class="clip" data-start="37" data-duration="3" data-track-index="1">
+    <div class="gold" id="g1" style="font-size:170px">JALUR</div>
+    <div class="white" id="g2" style="font-size:170px">TAROT</div>
+    <div class="btn" id="g3">MULAI RAMALAN</div>
+    <div class="url" id="g4">jalurtarotfree.muidsoft.com</div>
+    <div class="free" id="g5">GRATIS · TANPA DAFTAR</div>
+  </div>
+</div>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+const mand=document.getElementById("mandala");
+const gM=document.createElementNS(NS,"g");gM.setAttribute("id","mg");mand.appendChild(gM);
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);gM.appendChild(e);return e;}
+[460,400,330,250,150].forEach((r,i)=>el("circle",{cx:0,cy:0,r:r,fill:"none",stroke:"#d4af37","stroke-width":i==0?2:1,"stroke-dasharray":i%2?"4 10":"none"}));
+for(let i=0;i<24;i++){const a=i*Math.PI/12;const x1=Math.cos(a)*400,y1=Math.sin(a)*400,x2=Math.cos(a)*460,y2=Math.sin(a)*460;el("line",{x1,y1,x2,y2,stroke:"#d4af37","stroke-width":1.5});}
+for(let i=0;i<12;i++){const a=i*Math.PI/6;el("circle",{cx:Math.cos(a)*330,cy:Math.sin(a)*330,r:7,fill:"#d4af37"});el("line",{x1:Math.cos(a)*150,y1:Math.sin(a)*150,x2:Math.cos(a+Math.PI*5/6)*330,y2:Math.sin(a+Math.PI*5/6)*330,stroke:"#d4af37","stroke-width":.8,opacity:.6});}
+// seeded random
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+const stars=document.getElementById("stars"),dusts=document.getElementById("dusts");
+const glyphs=["✦","✧","·","✦"];
+for(let i=0;i<26;i++){const s=document.createElement("div");s.className="abs star";s.textContent=glyphs[i%4];s.style.left=(90+rnd()*900)+"px";s.style.top=(100+rnd()*1720)+"px";s.style.fontSize=(14+rnd()*26)+"px";stars.appendChild(s);}
+for(let i=0;i<22;i++){const d=document.createElement("div");d.className="abs dust";d.style.left=(100+rnd()*880)+"px";d.style.top=(1000+rnd()*850)+"px";dusts.appendChild(d);}
+
+// words for oracle answer
+const text="Kartu Bintang mengingatkanmu pada harapan yang tenang. Lepaskan keraguan, percayai langkah kecil, dan dengarkan intuisimu sebelum akhir pekan.";
+const ans=document.getElementById("ans");
+text.split(" ").forEach(w=>{const s=document.createElement("span");s.className="w";s.textContent=w;ans.appendChild(s);});
+
+window.__timelines=window.__timelines||{};
+const tl=gsap.timeline({paused:true});
+const inn=(s,t,y=40,d=.9)=>tl.from(s,{opacity:0,y:y,duration:d,ease:"power3.out"},t);
+const out=(s,t,d=.6)=>tl.to(s,{opacity:0,y:-20,duration:d,ease:"power2.in"},t);
+
+// ambient
+tl.to("#mg",{rotation:90,transformOrigin:"0px 0px",duration:40,ease:"none"},0);
+tl.fromTo("#mandala",{opacity:0,scale:.8},{opacity:.28,scale:1,duration:3,ease:"power2.out"},0);
+tl.from("#frame",{opacity:0,scale:1.04,duration:1.6,ease:"power2.out"},0);
+tl.from("#frame2",{opacity:0,duration:2,ease:"power2.out"},.4);
+tl.from(".corner",{opacity:0,duration:1.2,stagger:.15},.6);
+gsap.utils.toArray(".star").forEach((e,i)=>tl.to(e,{opacity:.25+((i*37)%60)/100,duration:1.3,yoyo:true,repeat:14,ease:"sine.inOut"},(i%10)*.35));
+gsap.utils.toArray(".dust").forEach((e,i)=>{const t=(i*1.7)%34;tl.fromTo(e,{opacity:0,y:0},{opacity:.9,y:-260-(i%5)*60,duration:5,ease:"sine.out"},t);tl.to(e,{opacity:0,duration:1.5},t+4.2);});
+
+// S1 (0-6)
+inn("#a1",.5,20); tl.from("#a2",{opacity:0,y:80,scale:.9,duration:1.2,ease:"power3.out"},1);
+tl.from("#a3",{opacity:0,y:80,scale:.9,duration:1.2,ease:"power3.out"},1.5);
+tl.from("#a4",{scaleX:0,duration:1,ease:"power2.out"},2.6); inn("#a5",3,20);
+tl.to("#a2",{backgroundPosition:"100% 0",duration:3,ease:"sine.inOut"},2);
+out("#s1",5.3);
+// S2 (6-12)
+tl.from("#b0",{scale:0,rotation:-180,duration:.9,ease:"back.out(1.7)"},6.3); inn("#b1",6.8,50,1.1);
+tl.from("#b2",{scaleX:0,duration:.9,ease:"power2.out"},8); inn("#b3",8.4,30,1);
+out("#s2",11.3);
+// S3 (12-20)
+inn("#c0",12.4,20);
+[["#k1",13.0,-12],["#k2",13.4,0],["#k3",13.8,12]].forEach(([k,t,r])=>{
+  tl.from(k,{y:700,opacity:0,rotation:r*3,duration:1,ease:"power3.out"},t);
+  tl.to(k,{rotation:r,duration:.8,ease:"power2.out"},t+1);
+});
+// flip: hide back, show front
+["#k1","#k2","#k3"].forEach((k,i)=>{const t=15.2+i*.9;
+  tl.set(k+" .front",{scaleX:0},0);
+  tl.to(k+" .back",{scaleX:0,duration:.35,ease:"power2.in"},t);
+  tl.to(k+" .front",{scaleX:1,duration:.35,ease:"power2.out"},t+.35);
+  tl.to(k,{boxShadow:"0 0 70px rgba(243,220,133,.55)",duration:.6,yoyo:true,repeat:1},t+.5);
+});
+tl.to("#c9",{opacity:1,duration:.8},18.1);
+out("#s3",19.3);
+// S4 (20-26)
+inn("#d0",20.4,20);
+["#d1","#d1s","#d2","#d2s","#d3"].forEach((s,i)=>inn(s,21+i*.45,40,.9));
+out("#s4",25.3);
+// S5 (26-33)
+inn("#e0",26.4,20); tl.from("#e1",{opacity:0,x:60,duration:.9,ease:"power3.out"},27);
+tl.from("#e2",{opacity:0,y:40,duration:.9,ease:"power3.out"},28.2);
+tl.to(".a .w",{opacity:1,duration:.3,stagger:.14,ease:"none"},29);
+out("#s5",32.3);
+// S6 (33-37)
+inn("#f0",33.3,20,.7); ["#f1","#f2","#f3","#f4"].forEach((s,i)=>tl.from(s,{opacity:0,x:-60,duration:.7,ease:"power3.out"},33.7+i*.4));
+out("#s6",36.4,.5);
+// S7 (37-40)
+tl.from("#g1",{opacity:0,y:60,duration:.9,ease:"power3.out"},37.2);
+tl.from("#g2",{opacity:0,y:60,duration:.9,ease:"power3.out"},37.5);
+tl.from("#g3",{opacity:0,scale:.85,duration:.8,ease:"back.out(1.6)"},38);
+tl.to("#g3",{boxShadow:"0 0 100px rgba(243,220,133,.8)",duration:.7,yoyo:true,repeat:2},38.6);
+inn("#g4",38.5,20,.8); inn("#g5",39,10,.7);
+
+window.__timelines["jalurtarot-premium"]=tl;
+</script>
+</body>
+</html>
