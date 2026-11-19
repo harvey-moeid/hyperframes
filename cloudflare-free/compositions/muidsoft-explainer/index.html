@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=1920,height=1080"/>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#07111f;color:#f4f7fb;font-family:Inter,Arial,sans-serif}
+#root{position:relative;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(ellipse at 78% 18%,#12304a 0%,#0b1a2b 36%,#07111f 72%)}
+.bggrid{position:absolute;inset:0;opacity:.13;background-image:linear-gradient(rgba(105,190,220,.25) 1px,transparent 1px),linear-gradient(90deg,rgba(105,190,220,.25) 1px,transparent 1px);background-size:64px 64px}
+.glow{position:absolute;width:650px;height:650px;border-radius:50%;filter:blur(100px);background:#087eaa;opacity:.18;right:-120px;top:-220px}
+.scene{position:absolute;inset:0;padding:104px 132px;opacity:0;visibility:hidden}
+.kicker{font-size:22px;letter-spacing:7px;text-transform:uppercase;color:#59d5dc;font-weight:700;margin-bottom:30px}
+h1{font-size:92px;line-height:1.04;letter-spacing:-4px;margin:0 0 28px;font-weight:800;max-width:1400px}
+h2{font-size:66px;line-height:1.06;letter-spacing:-2px;margin:0 0 24px;font-weight:800}
+.sub{font-size:32px;line-height:1.45;color:#b9c8d7;max-width:1120px}
+.accent{color:#65e2df}.muted{color:#8ca3b7}
+.pill{display:inline-block;border:1px solid rgba(101,226,223,.55);border-radius:50px;padding:13px 23px;color:#8af0e9;font-size:20px;letter-spacing:2px;margin-top:28px}
+.brand{font-size:25px;letter-spacing:5px;font-weight:800;color:#eaf6ff}
+.brand span{color:#61e1dc}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px;max-width:1450px}
+.card{border:1px solid rgba(135,180,205,.22);background:linear-gradient(145deg,rgba(24,49,70,.88),rgba(12,27,43,.86));border-radius:22px;padding:26px 30px;min-height:112px;box-shadow:0 18px 50px rgba(0,0,0,.18)}
+.card b{display:block;font-size:26px;margin-bottom:9px;color:#f5fbff}
+.card small{font-size:18px;color:#91aabd;letter-spacing:1px}
+.num{font-size:72px;font-weight:800;color:#5de0dc;line-height:1}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center;margin-top:48px}
+.stat{border-left:3px solid #5de0dc;padding:8px 0 8px 28px;margin:22px 0}
+.stat strong{font-size:58px;display:block}.stat span{font-size:22px;color:#9eb3c4}
+.orbit{width:470px;height:470px;border:1px solid rgba(91,219,220,.5);border-radius:50%;margin:auto;position:relative;display:grid;place-items:center;box-shadow:0 0 90px rgba(31,180,200,.12),inset 0 0 90px rgba(31,180,200,.08)}
+.orbit:before,.orbit:after{content:"";position:absolute;border:1px solid rgba(91,219,220,.28);border-radius:50%;inset:48px}.orbit:after{inset:105px}
+.orbitcore{width:190px;height:190px;border-radius:50%;background:linear-gradient(145deg,#1b6b82,#12364d);display:grid;place-items:center;text-align:center;font-size:28px;font-weight:800;box-shadow:0 0 65px rgba(65,222,220,.25)}
+.orbitlabel{position:absolute;background:#10283b;border:1px solid rgba(101,226,223,.4);padding:12px 18px;border-radius:30px;font-size:18px;color:#d9f9f7}
+.l1{top:25px;left:145px}.l2{right:-22px;top:190px}.l3{bottom:22px;left:155px}.l4{left:-28px;top:190px}
+.footer{position:absolute;bottom:58px;left:132px;right:132px;display:flex;justify-content:space-between;color:#668197;font-size:17px;letter-spacing:2px}
+.line{height:4px;width:100px;background:#5de0dc;margin:34px 0;border-radius:5px}
+.endline{font-size:26px;color:#b9c8d7;margin-top:24px}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="muidsoft-explainer" data-start="0" data-width="1920" data-height="1080">
+<div class="bggrid"></div><div class="glow"></div>
+<section class="scene" id="s1"><div class="brand">MUID<span>SOFT</span></div><div style="margin-top:125px" class="kicker">DIGITAL PRODUCT ECOSYSTEM</div><h1>Ide besar tidak harus<br/>berhenti di <span class="accent">satu produk.</span></h1><p class="sub">Di balik setiap kebutuhan, ada peluang untuk menciptakan solusi digital yang berguna.</p><div class="pill">BUILT FROM CURIOSITY</div></section>
+<section class="scene" id="s2"><div class="kicker">KENALAN DENGAN MUIDSOFT</div><h2>Bukan sekadar kumpulan website.<br/><span class="accent">Ini sebuah ekosistem.</span></h2><p class="sub">Muidsoft adalah digital product studio yang membangun teknologi, AI, dan solusi bisnis untuk membantu manusia bekerja, berkreasi, dan berkembang.</p><div class="split"><div><div class="stat"><strong>24</strong><span>produk dan proyek digital</span></div><div class="stat"><strong>4</strong><span>pilar solusi yang saling terhubung</span></div></div><div class="orbit"><div class="orbitcore">MUID<br/>SOFT</div><div class="orbitlabel l1">AI & KREASI</div><div class="orbitlabel l2">TRADING</div><div class="orbitlabel l3">BISNIS</div><div class="orbitlabel l4">TAROT</div></div></div></section>
+<section class="scene" id="s3"><div class="kicker">PILAR 01 / AI & KREASI</div><h2>Teknologi untuk<br/><span class="accent">memperluas kemungkinan.</span></h2><p class="sub">Dari asisten cerdas hingga produksi konten dan integrasi sistem.</p><div class="cards"><div class="card"><b>Muidsoft AI</b><small>AI ASSISTANT</small></div><div class="card"><b>Muidsoft Gen Video</b><small>GENERATIVE VIDEO</small></div><div class="card"><b>Karyawan AI</b><small>AI WORKFORCE</small></div><div class="card"><b>MCP Hub</b><small>AI INTEGRATION</small></div><div class="card"><b>MCP R2</b><small>TOOLS & INFRASTRUCTURE</small></div><div class="card"><b>Live Jalur</b><small>LIVE DIGITAL EXPERIENCE</small></div></div></section>
+<section class="scene" id="s4"><div class="kicker">PILAR 02 / TRADING & DATA</div><h2>Mengubah data menjadi<br/><span class="accent">keputusan yang lebih tajam.</span></h2><p class="sub">Perangkat untuk voting, sinyal, pemantauan, dan analisis aktivitas trading.</p><div class="cards"><div class="card"><b>BYGA Vote</b><small>VOTING & SENTIMENT</small></div><div class="card"><b>BYGA AI Multivote</b><small>AI-ASSISTED VOTING</small></div><div class="card"><b>BYGA Signal</b><small>TRADING SIGNALS</small></div><div class="card"><b>Trading Office</b><small>TRADING WORKSPACE</small></div><div class="card"><b>Chart Studio</b><small>CHART & ANALYSIS</small></div><div class="card"><b>BYGA TC</b><small>TRADING TOOLS</small></div></div></section>
+<section class="scene" id="s5"><div class="kicker">PILAR 03 / TAROT & NUMEROLOGI</div><h2>Ruang untuk refleksi,<br/><span class="accent">makna, dan eksplorasi diri.</span></h2><p class="sub">Menggabungkan pengalaman digital dengan tarot, numerologi, dan layanan pendukungnya.</p><div class="cards"><div class="card"><b>JalurTarot</b><small>TAROT EXPERIENCE</small></div><div class="card"><b>JalurTarot New</b><small>NEW GENERATION</small></div><div class="card"><b>JalurTarot Free</b><small>ACCESSIBLE READING</small></div><div class="card"><b>JalurTarot Bio</b><small>PERSONAL PROFILE</small></div><div class="card"><b>Kalkulator Numerologi</b><small>NUMEROLOGY</small></div><div class="card"><b>Jalur API</b><small>INTEGRATION</small></div></div></section>
+<section class="scene" id="s6"><div class="kicker">PILAR 04 / BISNIS & UTILITAS</div><h2>Solusi praktis untuk<br/><span class="accent">operasional sehari-hari.</span></h2><p class="sub">Mendukung proses penjualan, pengelolaan, perencanaan, dan kebutuhan bisnis.</p><div class="cards"><div class="card"><b>Kasir Pro</b><small>POINT OF SALE</small></div><div class="card"><b>Kasir Free</b><small>POS STARTER</small></div><div class="card"><b>Etalase Digital</b><small>DIGITAL CATALOG</small></div><div class="card"><b>PPIC Dashboard</b><small>PRODUCTION PLANNING</small></div><div class="card"><b>Kapasitas Kontainer</b><small>LOGISTICS CALCULATOR</small></div><div class="card"><b>Muidsoft Portfolio</b><small>PROJECT SHOWCASE</small></div></div></section>
+<section class="scene" id="s7"><div class="kicker">SATU EKOSISTEM, BANYAK PINTU MASUK</div><h2>Setiap produk punya peran.<br/><span class="accent">Semuanya tumbuh dari satu visi.</span></h2><div class="split"><div><p class="sub">Muidsoft menyatukan eksperimen, teknologi, dan kebutuhan nyata menjadi portofolio solusi digital yang terus berkembang.</p><div class="line"></div><p class="endline">Jelajahi proyek. Temukan solusi. Ikuti perkembangannya.</p></div><div class="orbit"><div class="orbitcore">ONE<br/>ECOSYSTEM</div><div class="orbitlabel l1">CREATE</div><div class="orbitlabel l2">ANALYZE</div><div class="orbitlabel l3">OPERATE</div><div class="orbitlabel l4">EXPLORE</div></div></div><div class="pill">MUIDSOFT.COM</div></section>
+<section class="scene" id="s8"><div class="brand">MUID<span>SOFT</span></div><div style="margin-top:190px" class="kicker">BUILT FROM CURIOSITY</div><h1>Teknologi yang<br/><span class="accent">membuka kemungkinan.</span></h1><p class="sub">Muidsoft — ruang ide, dunia digital.</p><div class="pill">JELAJAHI MUIDSOFT.COM</div></section>
+<div class="footer"><span>MUIDSOFT / DIGITAL PRODUCT STUDIO</span><span>IDEAS → TECHNOLOGY → SOLUTIONS</span></div>
+</div>
+<script>
+const tl=gsap.timeline({paused:true});
+const scenes=["#s1","#s2","#s3","#s4","#s5","#s6","#s7","#s8"];
+scenes.forEach((sel,i)=>{
+ const start=i*8;
+ tl.set(sel,{visibility:"visible"},start);
+ tl.fromTo(sel,{autoAlpha:0,y:34},{autoAlpha:1,y:0,duration:.8,ease:"power3.out"},start);
+ tl.fromTo(sel+" .kicker, "+sel+" h1, "+sel+" h2, "+sel+" .sub, "+sel+" .brand, "+sel+" .pill",{y:24,autoAlpha:0},{y:0,autoAlpha:1,duration:.65,stagger:.12,ease:"power2.out"},start+.18);
+ tl.fromTo(sel+" .card",{y:30,autoAlpha:0,scale:.97},{y:0,autoAlpha:1,scale:1,duration:.55,stagger:.09,ease:"power2.out"},start+.9);
+ tl.fromTo(sel+" .orbit",{scale:.88,rotation:-8,autoAlpha:0},{scale:1,rotation:0,autoAlpha:1,duration:1,ease:"back.out(1.4)"},start+.7);
+ tl.to(sel,{autoAlpha:0,y:-22,duration:.55,ease:"power2.in"},start+7.35);
+});
+tl.set({}, {},64);
+window.__timelines=window.__timelines||{};
+window.__timelines["muidsoft-explainer"]=tl;
+</script>
+</body></html>
