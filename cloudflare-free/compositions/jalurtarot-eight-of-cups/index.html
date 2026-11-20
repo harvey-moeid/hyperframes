@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>JalurTarot - Eight of Cups</title>
+<!--
+  JALURTAROT: "Kartu penutup pekan: apa yang perlu kamu lepaskan?" (9:16, 1080x1920, 30 fps, 60 detik, tanpa suara, tanpa manusia)
+  Turunan template-jalurtarot (byga-hyperframes). Kartu: Eight of Cups. Simbol: jam pasir, delapan cangkir, benang merah,
+  kartu membalik, jalan menuju bulan, pintu terbuka. Semua SVG/CSS prosedural. Tarot = cermin refleksi, bukan ramalan.
+  Struktur: hook 0-5, identifikasi 5-15, konflik batin 15-25, simbolisme tarot 25-37, pengungkapan 37-52, penutup 52-60.
+  Teks layar lewat token --t-*, subtitle lewat --sb1..--sb14 di :root. Satu-satunya skrip eksternal: GSAP.
+-->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+:root{
+  --ground:#100e12; --burg:#491d2b; --crim:#9b3548; --gold:#d0b27c; --ivory:#e9e1d7;
+  --ivory-soft:rgba(233,225,215,.82);
+  --edge:rgba(208,178,124,.28);
+  --serif:serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+
+  /* 1 HOOK */
+  --t-h1:"Ada satu hal"; --t-h2:"yang perlu"; --t-h3:"kamu lepaskan.";
+  /* 2 IDENTIFIKASI */
+  --t-i1a:"Semuanya tampak"; --t-i1b:"baik-baik saja.";
+  --t-i2a:"Cangkir penuh,"; --t-i2b:"terasa hambar.";
+  /* 3 KONFLIK BATIN */
+  --t-c1a:"Mungkin ini"; --t-c1b:"bukan arahmu.";
+  --t-c2a:"Pergi terasa"; --t-c2b:"seperti salah.";
+  /* 4 TAROT */
+  --t-k1a:"Eight of Cups"; --t-k1n:"tentang melangkah pergi";
+  --t-k2a:"Cangkir penuh,"; --t-k2b:"tapi dilepas.";
+  --t-k3a:"Bukan ramalan,"; --t-k3b:"hanya cermin.";
+  --t-cn:"VIII"; --t-ct:"CANGKIR";
+  /* 5 PENGUNGKAPAN */
+  --t-r1a:"Melepas bukan"; --t-r1b:"berarti kalah.";
+  --t-r2a:"Mungkin itu"; --t-r2b:"cara jujur.";
+  --t-r3a:"Kebiasaan lama,"; --t-r3b:"atau harapan.";
+  /* 6 PENUTUP */
+  --t-e1a:"Tulis satu hal,"; --t-e1b:"sebelum Senin.";
+  --t-brand:"JALUR TAROT"; --t-tag:"Tarot untuk refleksi diri.";
+
+  /* SUBTITLE = naskah VO (maks 2 baris) */
+  --sb1:"Sebelum pekan ini berakhir,";
+  --sb2:"ada satu hal yang perlu kamu lepaskan.";
+  --sb3:"Dari luar, semuanya tampak tertata rapi.";
+  --sb4:"Cangkir masih penuh, tapi terasa hambar.";
+  --sb5:"Mungkin kamu sudah tahu ini bukan lagi arahmu.";
+  --sb6:"Atau rasa bersalah yang membuatmu bertahan.";
+  --sb7:"Kartu ini bernama Eight of Cups.";
+  --sb8:"Delapan cangkir penuh, tapi ia memilih pergi.";
+  --sb9:"Bukan ramalan, hanya simbol untuk merenung.";
+  --sb10:"Melepaskan bukan berarti kamu kalah.";
+  --sb11:"Mungkin itu cara jujur pada dirimu sendiri.";
+  --sb12:"Bisa kebiasaan lama, harapan, atau rasa bersalah.";
+  --sb13:"Malam ini, tulis satu hal yang ingin kamu lepas.";
+  --sb14:"JalurTarot. Tarot untuk refleksi diri.";
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--ground);font-family:var(--sans);color:var(--ivory)}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--ground)}
+.clip,#cam{position:absolute;inset:0}
+
+/* ===== LATAR ===== */
+.bg-layer{position:absolute;inset:-300px}
+#bg-fog1{background:
+  radial-gradient(820px 980px at 28% 26%,rgba(73,29,43,.78),transparent 70%),
+  radial-gradient(700px 860px at 82% 78%,rgba(73,29,43,.55),transparent 70%)}
+#bg-fog2{background:
+  radial-gradient(900px 600px at 72% 22%,rgba(155,53,72,.16),transparent 70%),
+  radial-gradient(760px 700px at 20% 84%,rgba(208,178,124,.08),transparent 70%)}
+#tint-red{background:radial-gradient(900px 1000px at 50% 52%,rgba(155,53,72,.5),transparent 72%);opacity:0}
+#tint-gold{background:radial-gradient(900px 1000px at 50% 52%,rgba(208,178,124,.3),transparent 72%);opacity:0}
+#dust,#grain{position:absolute;left:-300px;top:-300px;width:1680px;height:2520px}
+.d-g{fill:var(--gold)} .d-i{fill:var(--ivory)} .d-c{fill:var(--crim)}
+#sweep{position:absolute;left:-900px;top:-300px;width:260px;height:2520px;background:linear-gradient(90deg,transparent,rgba(208,178,124,.2),transparent)}
+#bg-vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 48%,transparent 50%,rgba(16,14,18,.88) 100%)}
+
+/* ===== PANGGUNG: x 136-944, y 260-1280 (subtitle y 1300-1450) ===== */
+.stage{position:absolute;inset:260px 136px 640px 136px;display:flex;flex-direction:column;align-items:center}
+.tx{display:inline-block;white-space:nowrap}
+.art{position:relative;width:808px;height:620px;flex:none;display:flex;align-items:center;justify-content:center}
+.art svg{display:block}
+.copy{position:relative;width:808px;height:340px;margin-top:30px;flex:none}
+.d{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;align-items:center;text-align:center}
+.ln{display:block}
+.h{font-family:var(--serif);font-size:96px;font-weight:700;letter-spacing:-.01em;line-height:1.06;color:var(--ivory)}
+.h.xl{font-size:108px}
+.h.gold{color:var(--gold)}
+.note{font-family:var(--sans);font-size:38px;letter-spacing:.04em;color:var(--gold);margin-top:18px}
+.t-h1::before{content:var(--t-h1)} .t-h2::before{content:var(--t-h2)} .t-h3::before{content:var(--t-h3)}
+.t-i1a::before{content:var(--t-i1a)} .t-i1b::before{content:var(--t-i1b)} .t-i2a::before{content:var(--t-i2a)} .t-i2b::before{content:var(--t-i2b)}
+.t-c1a::before{content:var(--t-c1a)} .t-c1b::before{content:var(--t-c1b)} .t-c2a::before{content:var(--t-c2a)} .t-c2b::before{content:var(--t-c2b)}
+.t-k1a::before{content:var(--t-k1a)} .t-k1n::before{content:var(--t-k1n)} .t-k2a::before{content:var(--t-k2a)} .t-k2b::before{content:var(--t-k2b)}
+.t-k3a::before{content:var(--t-k3a)} .t-k3b::before{content:var(--t-k3b)} .t-cn::before{content:var(--t-cn)} .t-ct::before{content:var(--t-ct)}
+.t-r1a::before{content:var(--t-r1a)} .t-r1b::before{content:var(--t-r1b)} .t-r2a::before{content:var(--t-r2a)} .t-r2b::before{content:var(--t-r2b)}
+.t-r3a::before{content:var(--t-r3a)} .t-r3b::before{content:var(--t-r3b)}
+.t-e1a::before{content:var(--t-e1a)} .t-e1b::before{content:var(--t-e1b)} .t-brand::before{content:var(--t-brand)} .t-tag::before{content:var(--t-tag)}
+
+/* ===== 1. HOOK: jam pasir (pekan hampir habis) ===== */
+#hourg .glass{fill:rgba(73,29,43,.35);stroke:var(--gold);stroke-width:8;stroke-linejoin:round}
+#hourg .post{stroke:var(--gold);stroke-width:6;stroke-linecap:round;opacity:.55}
+#hourg .cap{fill:var(--gold)}
+#stream{stroke:var(--gold);stroke-width:4;stroke-linecap:round;stroke-dasharray:6 8}
+
+/* ===== 2. IDENTIFIKASI: delapan cangkir tertata rapi ===== */
+.rail{stroke:var(--gold);stroke-width:4;stroke-linecap:round;opacity:.6}
+
+/* ===== 3. KONFLIK BATIN: cangkir ditarik dua benang ===== */
+#thL{fill:none;stroke:var(--crim);stroke-width:5;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+#thR{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;opacity:.7}
+#ring{fill:none;stroke:var(--gold);stroke-width:6}
+#star{fill:var(--gold)}
+
+/* ===== 4. TAROT: kartu membalik ===== */
+#halo{position:absolute;width:640px;height:640px;border-radius:50%;background:radial-gradient(circle,rgba(208,178,124,.4),transparent 68%)}
+#card-wrap{position:relative;width:330px;height:560px}
+#card{position:absolute;inset:0}
+.face{position:absolute;inset:0;border-radius:26px;overflow:hidden}
+#back{background:linear-gradient(160deg,#5a2335,#2a0f19);border:6px solid var(--gold)}
+#back svg,#front svg{position:absolute;inset:0;width:100%;height:100%}
+#front{background:var(--ivory);border:6px solid var(--gold)}
+.cn,.ct{position:absolute;left:0;right:0;text-align:center;font-family:var(--serif);font-weight:700;color:var(--burg)}
+.cn{top:20px;font-size:40px;letter-spacing:.12em}
+.ct{bottom:24px;font-size:34px;letter-spacing:.2em}
+#glint{position:absolute;top:-40px;left:-200px;width:120px;height:700px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)}
+
+/* ===== 5. PENGUNGKAPAN: jalan menuju bulan ===== */
+#arch .archline{fill:none;stroke:var(--gold);stroke-width:8}
+#roadfill{fill:#2e1220;stroke:var(--gold);stroke-opacity:.35;stroke-width:2}
+#road{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+#mtn1{fill:#2a0f19;stroke:var(--gold);stroke-opacity:.4;stroke-width:2}
+#mtn2{fill:#1b0f15}
+
+/* ===== 6. PENUTUP: pintu terbuka + lockup ===== */
+#s-end .art{height:440px}
+#s-end .copy{height:200px}
+#cdl-b{position:absolute;left:70px;bottom:0;width:100px;height:180px}
+#leaf{fill:var(--burg);stroke:var(--gold);stroke-width:5}
+#lockup{display:flex;flex-direction:column;align-items:center;gap:16px;margin-top:6px}
+#mark{width:56px;height:80px}
+.brand{font-family:var(--serif);font-size:58px;font-weight:700;letter-spacing:.22em;color:var(--gold);line-height:1;padding-left:.22em}
+.tag{font-family:var(--sans);font-size:34px;letter-spacing:.06em;color:var(--ivory-soft)}
+
+/* ===== SUBTITLE: y 1300-1450 ===== */
+#sub-box{position:absolute;left:120px;top:1300px;width:840px;height:150px;border-radius:28px;background:rgba(16,14,18,.62);border:2px solid var(--edge)}
+.sub{position:absolute;inset:0;padding:0 28px;display:flex;align-items:center;justify-content:center;text-align:center;
+  font-size:52px;font-weight:600;line-height:1.14;color:var(--ivory);opacity:0}
+.x1::before{content:var(--sb1)} .x2::before{content:var(--sb2)} .x3::before{content:var(--sb3)} .x4::before{content:var(--sb4)}
+.x5::before{content:var(--sb5)} .x6::before{content:var(--sb6)} .x7::before{content:var(--sb7)} .x8::before{content:var(--sb8)}
+.x9::before{content:var(--sb9)} .x10::before{content:var(--sb10)} .x11::before{content:var(--sb11)} .x12::before{content:var(--sb12)}
+.x13::before{content:var(--sb13)} .x14::before{content:var(--sb14)}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1080" data-height="1920">
+
+  <!-- Latar permanen -->
+  <div id="bg" class="clip" data-start="0" data-duration="60" data-track-index="0">
+    <div id="bg-fog1" class="bg-layer"></div>
+    <div id="bg-fog2" class="bg-layer"></div>
+    <div id="tint-red" class="bg-layer"></div>
+    <div id="tint-gold" class="bg-layer"></div>
+    <svg id="dust" viewBox="0 0 1680 2520" aria-hidden="true"></svg>
+    <svg id="grain" viewBox="0 0 1680 2520" aria-hidden="true"></svg>
+    <div id="sweep"></div>
+    <div id="bg-vig"></div>
+  </div>
+
+  <div id="cam">
+
+    <!-- 1. HOOK 0-5.4: jam pasir, pasir mengalir, pekan hampir habis -->
+    <div id="s-hook" class="clip" data-start="0" data-duration="5.4" data-track-index="1">
+      <div class="stage">
+        <div class="art">
+          <svg id="hourg" width="560" height="560" viewBox="0 0 520 520" aria-hidden="true">
+            <defs>
+              <radialGradient id="gglow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d0b27c" stop-opacity=".35"/><stop offset="1" stop-color="#d0b27c" stop-opacity="0"/></radialGradient>
+              <linearGradient id="gsand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6cc99"/><stop offset="1" stop-color="#b08a4e"/></linearGradient>
+              <clipPath id="gtop"><path d="M176 62H344C344 148 282 206 268 256H252C238 206 176 148 176 62Z"/></clipPath>
+              <clipPath id="gbot"><path d="M252 264H268C282 314 344 372 344 458H176C176 372 238 314 252 264Z"/></clipPath>
+            </defs>
+            <circle id="hglow" cx="260" cy="260" r="250" fill="url(#gglow)"/>
+            <line class="post" x1="148" y1="60" x2="148" y2="458"/>
+            <line class="post" x1="372" y1="60" x2="372" y2="458"/>
+            <path class="glass" d="M162 58H358C358 150 292 212 276 260C292 308 358 370 358 462H162C162 370 228 308 244 260C228 212 162 150 162 58Z"/>
+            <g clip-path="url(#gtop)"><rect id="sandtop" x="170" y="62" width="180" height="200" fill="url(#gsand)"/></g>
+            <g clip-path="url(#gbot)"><rect id="sandbot" x="170" y="264" width="180" height="200" fill="url(#gsand)"/></g>
+            <line id="stream" x1="260" y1="256" x2="260" y2="455"/>
+            <rect class="cap" x="136" y="36" width="248" height="24" rx="8"/>
+            <rect class="cap" x="136" y="460" width="248" height="24" rx="8"/>
+          </svg>
+        </div>
+        <div class="copy">
+          <div id="d-hook" class="d">
+            <span class="ln h xl l1"><span class="tx t-h1"></span></span>
+            <span class="ln h xl l2"><span class="tx t-h2"></span></span>
+            <span class="ln h xl gold l3"><span class="tx t-h3"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. IDENTIFIKASI 5-15.4: delapan cangkir penuh, tertata rapi di dua rak -->
+    <div id="s-ident" class="clip" data-start="5" data-duration="10.4" data-track-index="2">
+      <div class="stage">
+        <div class="art">
+          <svg id="shelf" width="760" height="476" viewBox="0 0 670 420" aria-hidden="true">
+            <defs>
+              <radialGradient id="gcg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d0b27c" stop-opacity=".3"/><stop offset="1" stop-color="#d0b27c" stop-opacity="0"/></radialGradient>
+              <linearGradient id="gcupI" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9b3548"/><stop offset="1" stop-color="#491d2b"/></linearGradient>
+            </defs>
+            <ellipse id="cglow" cx="335" cy="215" rx="330" ry="200" fill="url(#gcg)"/>
+            <line class="rail" x1="20" y1="190" x2="650" y2="190"/>
+            <line class="rail" x1="20" y1="372" x2="650" y2="372"/>
+            <g id="cupsI"></g>
+          </svg>
+        </div>
+        <div class="copy">
+          <div id="d-i1" class="d">
+            <span class="ln h"><span class="tx t-i1a"></span></span>
+            <span class="ln h gold"><span class="tx t-i1b"></span></span>
+          </div>
+          <div id="d-i2" class="d">
+            <span class="ln h"><span class="tx t-i2a"></span></span>
+            <span class="ln h gold"><span class="tx t-i2b"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. KONFLIK BATIN 15-25.4: satu cangkir ditarik benang merah (masa lalu) dan bintang emas (arah baru) -->
+    <div id="s-conf" class="clip" data-start="15" data-duration="10.4" data-track-index="3">
+      <div class="stage">
+        <div class="art">
+          <svg id="conf" width="520" height="620" viewBox="0 0 520 620" aria-hidden="true">
+            <defs>
+              <linearGradient id="gcupB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9b3548"/><stop offset="1" stop-color="#491d2b"/></linearGradient>
+            </defs>
+            <ellipse cx="260" cy="506" rx="200" ry="18" fill="#d0b27c" opacity=".12"/>
+            <line class="rail" x1="30" y1="500" x2="490" y2="500"/>
+            <g id="bigcup"></g>
+            <path id="thL" pathLength="1" d="M260 440C196 470 118 452 68 470"/>
+            <path id="thR" pathLength="1" d="M260 440C346 440 420 350 470 276"/>
+            <circle id="ring" cx="52" cy="472" r="18"/>
+            <path id="star" d="M470 228L475.9 243.9L492.8 244.6L479.5 255.1L484.1 271.4L470 262L455.9 271.4L460.5 255.1L447.2 244.6L464.1 243.9Z"/>
+          </svg>
+        </div>
+        <div class="copy">
+          <div id="d-c1" class="d">
+            <span class="ln h"><span class="tx t-c1a"></span></span>
+            <span class="ln h gold"><span class="tx t-c1b"></span></span>
+          </div>
+          <div id="d-c2" class="d">
+            <span class="ln h"><span class="tx t-c2a"></span></span>
+            <span class="ln h gold"><span class="tx t-c2b"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. SIMBOLISME TAROT 25-37.4: Eight of Cups membalik (refleksi, bukan ramalan; tanpa sosok manusia) -->
+    <div id="s-tarot" class="clip" data-start="25" data-duration="12.4" data-track-index="4">
+      <div class="stage">
+        <div class="art">
+          <div id="halo"></div>
+          <div id="card-wrap">
+            <div id="card">
+              <div id="back" class="face">
+                <svg viewBox="0 0 330 560" aria-hidden="true">
+                  <g fill="none" stroke="#d0b27c" stroke-width="3">
+                    <circle cx="165" cy="280" r="96"/><circle cx="165" cy="280" r="64" opacity=".6"/><circle cx="165" cy="280" r="30"/>
+                    <path d="M165 150V410M35 280H295M73 188L257 372M257 188L73 372" opacity=".7"/>
+                    <rect x="22" y="22" width="286" height="516" rx="14" opacity=".5"/>
+                  </g>
+                </svg>
+              </div>
+              <div id="front" class="face">
+                <svg viewBox="0 0 330 560" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="gnight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b0f15"/><stop offset="1" stop-color="#491d2b"/></linearGradient>
+                    <linearGradient id="gcupC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9b3548"/><stop offset="1" stop-color="#491d2b"/></linearGradient>
+                  </defs>
+                  <rect x="22" y="76" width="286" height="408" rx="10" fill="url(#gnight)"/>
+                  <circle cx="165" cy="170" r="54" fill="#d0b27c"/>
+                  <circle cx="183" cy="160" r="46" fill="#241219"/>
+                  <polygon points="22,350 92,262 146,322 214,244 308,340 308,484 22,484" fill="#3a1624"/>
+                  <path d="M165 484C118 452 214 416 168 372C150 352 176 344 168 330" fill="none" stroke="#d0b27c" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+                  <g id="cardcups"></g>
+                </svg>
+                <div class="cn tx t-cn"></div>
+                <div class="ct tx t-ct"></div>
+                <div id="glint"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="copy">
+          <div id="d-k1" class="d">
+            <span class="ln h"><span class="tx t-k1a"></span></span>
+            <span class="ln note"><span class="tx t-k1n"></span></span>
+          </div>
+          <div id="d-k2" class="d">
+            <span class="ln h"><span class="tx t-k2a"></span></span>
+            <span class="ln h gold"><span class="tx t-k2b"></span></span>
+          </div>
+          <div id="d-k3" class="d">
+            <span class="ln h"><span class="tx t-k3a"></span></span>
+            <span class="ln h gold"><span class="tx t-k3b"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. PENGUNGKAPAN 37-52.4: bulan terbit di atas jalan, cangkir tertinggal -->
+    <div id="s-rev" class="clip" data-start="37" data-duration="15.4" data-track-index="5">
+      <div class="stage">
+        <div class="art">
+          <svg id="arch" width="520" height="620" viewBox="0 0 520 620" aria-hidden="true">
+            <defs>
+              <clipPath id="garch"><path d="M60 590V220C60 110 150 40 260 40C370 40 460 110 460 220V590Z"/></clipPath>
+              <linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#100e12"/><stop offset=".6" stop-color="#3a1624"/><stop offset="1" stop-color="#6b2a3d"/></linearGradient>
+              <radialGradient id="gmoon" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d0b27c" stop-opacity=".55"/><stop offset="1" stop-color="#d0b27c" stop-opacity="0"/></radialGradient>
+            </defs>
+            <g clip-path="url(#garch)">
+              <rect x="60" y="40" width="400" height="550" fill="url(#gsky)"/>
+              <g id="stars"></g>
+              <g id="moonG">
+                <circle id="mhalo" cx="260" cy="250" r="150" fill="url(#gmoon)"/>
+                <circle id="moon" cx="260" cy="250" r="62" fill="#d0b27c"/>
+              </g>
+              <polygon id="mtn1" points="30,470 130,382 200,440 290,350 390,448 490,396 490,600 30,600"/>
+              <polygon id="mtn2" points="30,520 110,470 190,510 270,462 350,512 430,474 490,514 490,600 30,600"/>
+              <polygon id="roadfill" points="262,468 332,596 192,596"/>
+              <path id="road" pathLength="1" d="M260 592C196 548 330 516 262 472"/>
+              <g id="cupsL"></g>
+            </g>
+            <path class="archline" d="M60 590V220C60 110 150 40 260 40C370 40 460 110 460 220V590Z"/>
+          </svg>
+        </div>
+        <div class="copy">
+          <div id="d-r1" class="d">
+            <span class="ln h"><span class="tx t-r1a"></span></span>
+            <span class="ln h gold"><span class="tx t-r1b"></span></span>
+          </div>
+          <div id="d-r2" class="d">
+            <span class="ln h"><span class="tx t-r2a"></span></span>
+            <span class="ln h gold"><span class="tx t-r2b"></span></span>
+          </div>
+          <div id="d-r3" class="d">
+            <span class="ln h"><span class="tx t-r3a"></span></span>
+            <span class="ln h gold"><span class="tx t-r3b"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. PENUTUP 52-60: pintu terbuka, cahaya, ajakan menulis, identitas -->
+    <div id="s-end" class="clip" data-start="52" data-duration="8" data-track-index="6">
+      <div class="stage">
+        <div class="art">
+          <svg id="endart" width="520" height="440" viewBox="0 0 520 440" aria-hidden="true">
+            <defs>
+              <linearGradient id="gin" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#d0b27c"/><stop offset="1" stop-color="#9b3548"/></linearGradient>
+              <linearGradient id="gsp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d0b27c" stop-opacity=".7"/><stop offset="1" stop-color="#d0b27c" stop-opacity="0"/></linearGradient>
+            </defs>
+            <rect x="106" y="16" width="308" height="408" fill="none" stroke="#d0b27c" stroke-width="6"/>
+            <rect id="inner" x="120" y="30" width="280" height="380" fill="url(#gin)"/>
+            <rect id="leaf" x="120" y="30" width="280" height="380"/>
+            <polygon id="spill" points="150,410 370,410 480,436 40,436" fill="url(#gsp)"/>
+          </svg>
+          <svg id="cdl-b" viewBox="0 0 120 220" aria-hidden="true">
+            <circle class="gl-b" cx="60" cy="52" r="70" fill="#d0b27c" opacity=".16"/>
+            <g class="fl-b"><path d="M60 16C78 44 80 66 60 84 40 66 42 44 60 16Z" fill="#d0b27c"/><path d="M60 42C68 56 68 68 60 76 52 68 52 56 60 42Z" fill="#e9e1d7"/></g>
+            <line x1="60" y1="84" x2="60" y2="94" stroke="#e9e1d7" stroke-width="3"/>
+            <rect x="36" y="92" width="48" height="118" rx="6" fill="#e9e1d7"/>
+          </svg>
+        </div>
+        <div class="copy">
+          <div id="d-e1" class="d">
+            <span class="ln h"><span class="tx t-e1a"></span></span>
+            <span class="ln h gold"><span class="tx t-e1b"></span></span>
+          </div>
+        </div>
+        <div id="lockup">
+          <svg id="mark" viewBox="0 0 56 80" aria-hidden="true">
+            <rect x="3" y="3" width="50" height="74" rx="8" fill="none" stroke="#d0b27c" stroke-width="3"/>
+            <path d="M28 22L32 34L44 34L34 42L38 54L28 46L18 54L22 42L12 34L24 34Z" fill="#d0b27c"/>
+          </svg>
+          <div class="brand tx t-brand"></div>
+          <div class="tag tx t-tag"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Subtitle permanen -->
+  <div id="subs" class="clip" data-start="0" data-duration="60" data-track-index="7">
+    <div id="sub-box">
+      <div id="sub1" class="sub"><span class="x1"></span></div>
+      <div id="sub2" class="sub"><span class="x2"></span></div>
+      <div id="sub3" class="sub"><span class="x3"></span></div>
+      <div id="sub4" class="sub"><span class="x4"></span></div>
+      <div id="sub5" class="sub"><span class="x5"></span></div>
+      <div id="sub6" class="sub"><span class="x6"></span></div>
+      <div id="sub7" class="sub"><span class="x7"></span></div>
+      <div id="sub8" class="sub"><span class="x8"></span></div>
+      <div id="sub9" class="sub"><span class="x9"></span></div>
+      <div id="sub10" class="sub"><span class="x10"></span></div>
+      <div id="sub11" class="sub"><span class="x11"></span></div>
+      <div id="sub12" class="sub"><span class="x12"></span></div>
+      <div id="sub13" class="sub"><span class="x13"></span></div>
+      <div id="sub14" class="sub"><span class="x14"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var IN = "power3.out", OUT = "power2.in", LOOP = "sine.inOut";
+  var NS = "http://www.w3.org/2000/svg";
+
+  /* PRNG ber-seed (mulberry32): semua elemen "acak" deterministik */
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  var rnd = mulberry32(20261120);
+  function el(tag, attrs, parent){var e=document.createElementNS(NS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);parent.appendChild(e);return e;}
+
+  /* cangkir prosedural: grup luar = target GSAP (tanpa transform CSS), grup dalam = posisi/skala statis */
+  function mkCup(parent, x, y, s, cls, gid, dark){
+    var o = el("g", {"class":"cup " + cls}, parent);
+    var g = el("g", {transform:"translate(" + x + " " + y + ") scale(" + s + ")"}, o);
+    var sw = s < 0.5 ? (1.5 / s).toFixed(1) : 4;
+    el("path", {d:"M8 20H92C92 64 72 84 50 84C28 84 8 64 8 20Z", fill: dark ? "#140f16" : "url(#" + gid + ")", stroke:"#d0b27c", "stroke-width":sw, "stroke-linejoin":"round", "stroke-opacity": dark ? .7 : 1}, g);
+    if (!dark) el("ellipse", {"class":"liq", cx:50, cy:22, rx:40, ry:5, fill:"#d0b27c", opacity:.55}, g);
+    el("rect", {x:46, y:84, width:8, height:24, fill:"#d0b27c", opacity: dark ? .7 : 1}, g);
+    el("path", {d:"M26 116C34 102 66 102 74 116Z", fill:"#d0b27c", opacity: dark ? .7 : 1}, g);
+    return o;
+  }
+
+  /* debu emas + grain halus */
+  var dust = document.getElementById("dust"), grain = document.getElementById("grain"), i;
+  for (i = 0; i < 70; i++) el("circle", {cx:(rnd()*1680).toFixed(1), cy:(rnd()*2520).toFixed(1), r:(1.4+rnd()*3).toFixed(1), opacity:(0.15+rnd()*0.45).toFixed(2), "class": i%7===0 ? "d-c" : i%3===0 ? "d-i" : "d-g"}, dust);
+  for (i = 0; i < 170; i++) el("circle", {cx:(rnd()*1680).toFixed(1), cy:(rnd()*2520).toFixed(1), r:(0.6+rnd()*0.8).toFixed(1), opacity:(0.05+rnd()*0.08).toFixed(2), "class":"d-i"}, grain);
+
+  /* delapan cangkir: 5 di rak bawah, 3 di rak atas (rak y=372 dan y=190, alas cangkir = y+116) */
+  var cupsI = document.getElementById("cupsI");
+  [82, 285, 488].forEach(function (x) { mkCup(cupsI, x, 74, 1, "cI", "gcupI", false); });
+  [15, 150, 285, 420, 555].forEach(function (x) { mkCup(cupsI, x, 256, 1, "cI", "gcupI", false); });
+
+  /* satu cangkir besar untuk bagian konflik batin */
+  mkCup(document.getElementById("bigcup"), 135, 210, 2.5, "cB", "gcupB", false);
+
+  /* delapan cangkir mini pada kartu */
+  var cc = document.getElementById("cardcups");
+  [68, 148, 228].forEach(function (x) { mkCup(cc, x, 392, 0.34, "cC", "gcupC", false); });
+  [44, 96, 148, 200, 252].forEach(function (x) { mkCup(cc, x, 440, 0.34, "cC", "gcupC", false); });
+
+  /* cangkir yang ditinggalkan (siluet gelap) di sisi jalan */
+  var cl = document.getElementById("cupsL");
+  [80, 122, 370, 412].forEach(function (x) { mkCup(cl, x, 544, 0.36, "cupL", "", true); });
+
+  /* bintang langit */
+  var stars = document.getElementById("stars");
+  for (i = 0; i < 14; i++) el("circle", {cx:(110+rnd()*300).toFixed(1), cy:(70+rnd()*150).toFixed(1), r:(1.5+rnd()*2).toFixed(1), fill: i%3===0 ? "#e9e1d7" : "#d0b27c", opacity:.9, "class":"star"}, stars);
+
+  var tl = gsap.timeline({paused: true});
+
+  function show(id, t0, t1) {
+    tl.fromTo(id + " .ln", {y:40, opacity:0}, {y:0, opacity:1, duration:.75, ease:IN, stagger:.4}, t0);
+    if (t1) tl.to(id, {opacity:0, y:-24, duration:.4, ease:OUT}, t1);
+  }
+  function flicker(fl, gl, t0, secs) {
+    var n = Math.max(1, Math.round(secs / .5) - 1);
+    tl.fromTo(fl, {scaleY:.9, scaleX:.96, svgOrigin:"60 84"}, {scaleY:1.1, scaleX:1.04, svgOrigin:"60 84", duration:.5, ease:LOOP, yoyo:true, repeat:n}, t0);
+    tl.fromTo(gl, {opacity:.1}, {opacity:.26, duration:.5, ease:LOOP, yoyo:true, repeat:n}, t0);
+  }
+  function enter(id, t) { tl.fromTo(id + " .stage", {opacity:0, x:40}, {opacity:1, x:0, duration:.5, ease:IN}, t); }
+  function leave(id, t) { tl.to(id + " .stage", {opacity:0, x:-40, duration:.4, ease:OUT}, t); }
+
+  /* --- LATAR --- */
+  tl.fromTo("#bg-fog1", {x:-70, y:30},  {x:70,   y:-30,  duration:60, ease:"none"}, 0);
+  tl.fromTo("#bg-fog2", {x:60,  y:-20}, {x:-80,  y:50,   duration:60, ease:"none"}, 0);
+  tl.fromTo("#dust",    {x:60,  y:80},  {x:-140, y:-240, duration:60, ease:"none"}, 0);
+  tl.fromTo("#grain",   {x:0,   y:0},   {x:-60,  y:-90,  duration:60, ease:"none"}, 0);
+  tl.fromTo("#tint-red",  {opacity:0}, {opacity:1, duration:1.6, ease:LOOP}, 15.0);
+  tl.to("#tint-red",  {opacity:0, duration:1.2, ease:LOOP}, 24.4);
+  tl.fromTo("#tint-gold", {opacity:0}, {opacity:1, duration:1.4, ease:LOOP}, 26.2);
+  tl.to("#tint-gold", {opacity:0, duration:1.4, ease:LOOP}, 36.0);
+  tl.fromTo("#tint-gold", {opacity:0}, {opacity:1, duration:2.4, ease:LOOP, immediateRender:false}, 52.4);
+
+  tl.set("#sweep", {rotation:16}, 0);
+  [0.2, 5.0, 15.0, 25.0, 37.0, 52.0].forEach(function (t, k) {
+    tl.fromTo("#sweep", {x:0}, {x:2500, duration:1.8, ease:"power1.inOut", immediateRender: k === 0}, t);
+  });
+
+  /* kamera: push-in pelan 0-52, pull-out 52-60 */
+  tl.fromTo("#cam", {scale:1, transformOrigin:"50% 50%"}, {scale:1.04, transformOrigin:"50% 50%", duration:52, ease:"power1.inOut"}, 0);
+  tl.fromTo("#cam", {scale:1.04, transformOrigin:"50% 50%"}, {scale:1, transformOrigin:"50% 50%", duration:8, ease:"power1.inOut", immediateRender:false}, 52);
+
+  /* --- 1. HOOK 0-5.4: frame 0 berisi (jam pasir penuh + baris pertama samar) --- */
+  tl.fromTo("#hourg", {opacity:.5, scale:.94, transformOrigin:"50% 50%"}, {opacity:1, scale:1, transformOrigin:"50% 50%", duration:1.2, ease:IN}, 0);
+  tl.fromTo("#hglow", {opacity:.4}, {opacity:.95, duration:1.6, ease:LOOP, yoyo:true, repeat:2}, 0);
+  tl.to("#sandtop", {y:150, duration:4.6, ease:"none"}, 0.2);
+  tl.fromTo("#sandbot", {y:200}, {y:64, duration:4.6, ease:"none"}, 0.2);
+  tl.fromTo("#stream", {attr:{y2:455}}, {attr:{y2:332}, duration:4.6, ease:"none"}, 0.2);
+  tl.fromTo("#stream", {strokeDashoffset:0}, {strokeDashoffset:-120, duration:4.6, ease:"none"}, 0.2);
+  tl.fromTo("#d-hook .l1", {y:50, opacity:.3}, {y:0, opacity:1, duration:.7, ease:IN}, 0.1);
+  tl.fromTo("#d-hook .l2", {y:50, opacity:0}, {y:0, opacity:1, duration:.7, ease:IN}, 0.8);
+  tl.fromTo("#d-hook .l3", {y:50, opacity:0}, {y:0, opacity:1, duration:.8, ease:IN}, 1.6);
+  tl.to("#hourg", {scale:1.03, transformOrigin:"50% 50%", duration:1.6, ease:LOOP, yoyo:true, repeat:1}, 2.0);
+  leave("#s-hook", 5.0);
+
+  /* --- 2. IDENTIFIKASI 5-15.4: cangkir muncul rapi, lalu isinya meredup (hambar) --- */
+  enter("#s-ident", 5.0);
+  tl.fromTo("#shelf", {opacity:0, y:40}, {opacity:1, y:0, duration:.8, ease:IN}, 5.1);
+  tl.to("#shelf", {scale:1.04, transformOrigin:"50% 50%", duration:10, ease:"none"}, 5.1);
+  tl.fromTo("#cupsI .cup", {y:30, opacity:0}, {y:0, opacity:1, duration:.6, ease:IN, stagger:.12}, 5.3);
+  tl.fromTo("#cglow", {opacity:0}, {opacity:1, duration:1.2, ease:IN}, 5.4);
+  tl.to("#cglow", {scale:1.12, svgOrigin:"335 215", duration:2.4, ease:LOOP, yoyo:true, repeat:3}, 6.6);
+  tl.to("#cupsI .liq", {opacity:.12, duration:2.2, ease:LOOP}, 10.4);
+  tl.to("#cglow", {opacity:.3, duration:2.0, ease:LOOP}, 10.4);
+  show("#d-i1", 5.6, 9.9);
+  show("#d-i2", 10.3, 0);
+  leave("#s-ident", 15.0);
+
+  /* --- 3. KONFLIK BATIN 15-25.4: cangkir ditarik dua arah, tarikan masa lalu mengendur --- */
+  enter("#s-conf", 15.0);
+  tl.fromTo("#conf", {opacity:0, y:40}, {opacity:1, y:0, duration:.8, ease:IN}, 15.1);
+  tl.to("#conf", {scale:1.05, transformOrigin:"50% 50%", duration:10, ease:"none"}, 15.1);
+  tl.fromTo("#ring, #star", {opacity:0}, {opacity:1, duration:.6, ease:IN}, 15.6);
+  tl.to("#thL", {strokeDashoffset:0, duration:1.8, ease:IN}, 15.8);
+  tl.to("#thR", {strokeDashoffset:0, duration:1.8, ease:IN}, 16.4);
+  tl.fromTo("#bigcup", {rotation:-3, svgOrigin:"260 500"}, {rotation:3, svgOrigin:"260 500", duration:1.6, ease:LOOP, yoyo:true, repeat:4}, 16.4);
+  tl.fromTo("#star", {scale:1, svgOrigin:"470 252"}, {scale:1.22, svgOrigin:"470 252", duration:1.4, ease:LOOP, yoyo:true, repeat:5}, 16.6);
+  tl.to("#thL", {opacity:.3, duration:1.6, ease:LOOP}, 20.4);
+  tl.to("#thR", {opacity:1, duration:1.6, ease:LOOP}, 20.4);
+  show("#d-c1", 15.6, 20.1);
+  show("#d-c2", 20.5, 0);
+  leave("#s-conf", 25.0);
+
+  /* --- 4. TAROT 25-37.4: kartu melayang, membalik, kilau --- */
+  enter("#s-tarot", 25.0);
+  tl.fromTo("#halo", {opacity:0, scale:.7}, {opacity:1, scale:1, duration:1.2, ease:IN}, 25.2);
+  tl.to("#halo", {scale:1.1, duration:3, ease:LOOP, yoyo:true, repeat:3}, 26.4);
+  tl.fromTo("#card", {opacity:0, y:60}, {opacity:1, y:0, duration:.9, ease:IN}, 25.2);
+  tl.fromTo("#card-wrap", {y:0, rotation:-3}, {y:-14, rotation:3, duration:2.2, ease:LOOP, yoyo:true, repeat:3}, 26.2);
+  tl.fromTo("#back",  {scaleX:1}, {scaleX:0, duration:.5, ease:"power2.in"}, 26.4);
+  tl.fromTo("#front", {scaleX:0}, {scaleX:1, duration:.5, ease:IN}, 26.9);
+  tl.fromTo("#glint", {x:0}, {x:620, duration:1.0, ease:"power1.inOut"}, 27.4);
+  show("#d-k1", 25.6, 29.2);
+  show("#d-k2", 29.6, 33.0);
+  show("#d-k3", 33.4, 0);
+  leave("#s-tarot", 37.0);
+
+  /* --- 5. PENGUNGKAPAN 37-52.4: bulan terbit di atas jalan, cangkir tertinggal --- */
+  enter("#s-rev", 37.0);
+  tl.fromTo("#arch", {opacity:0, y:40}, {opacity:1, y:0, duration:.8, ease:IN}, 37.1);
+  tl.fromTo("#moonG", {y:170}, {y:0, duration:5.5, ease:"power2.out"}, 37.6);
+  tl.fromTo("#mhalo", {opacity:0, scale:.6, svgOrigin:"260 250"}, {opacity:1, scale:1, svgOrigin:"260 250", duration:5.5, ease:IN}, 37.6);
+  tl.to("#mhalo", {scale:1.1, svgOrigin:"260 250", duration:2.4, ease:LOOP, yoyo:true, repeat:2}, 43.4);
+  tl.fromTo("#mtn1", {x:-14}, {x:14, duration:14, ease:"none"}, 37.2);
+  tl.fromTo("#mtn2", {x:12}, {x:-12, duration:14, ease:"none"}, 37.2);
+  tl.to("#road", {strokeDashoffset:0, duration:2.4, ease:IN}, 38.2);
+  tl.fromTo(".star", {opacity:0}, {opacity:.9, duration:.8, ease:IN, stagger:.1}, 37.8);
+  tl.to(".star", {opacity:.3, duration:1.4, ease:LOOP, yoyo:true, repeat:5, stagger:.15}, 40.0);
+  tl.fromTo(".cupL", {opacity:0, y:20}, {opacity:1, y:0, duration:.6, ease:IN, stagger:.15}, 42.0);
+  tl.to("#arch", {scale:1.03, transformOrigin:"50% 50%", duration:2.4, ease:LOOP, yoyo:true, repeat:4}, 40.6);
+  show("#d-r1", 37.6, 42.0);
+  show("#d-r2", 42.3, 46.7);
+  show("#d-r3", 47.0, 0);
+  leave("#s-rev", 52.0);
+
+  /* --- 6. PENUTUP 52-60: pintu terbuka, ajakan menulis, identitas; hold setelah 56.9 --- */
+  enter("#s-end", 52.0);
+  tl.fromTo("#inner", {opacity:.25}, {opacity:1, duration:3.0, ease:LOOP}, 52.6);
+  tl.fromTo("#leaf", {scaleX:1, svgOrigin:"120 220"}, {scaleX:.36, svgOrigin:"120 220", duration:3.0, ease:"power2.inOut"}, 52.6);
+  tl.fromTo("#spill", {opacity:0}, {opacity:1, duration:2.4, ease:IN}, 53.0);
+  tl.fromTo("#cdl-b", {opacity:0, y:20}, {opacity:1, y:0, duration:.7, ease:IN}, 52.8);
+  flicker(".fl-b", ".gl-b", 52.8, 6.0);
+  show("#d-e1", 52.8, 0);
+  tl.fromTo("#mark", {opacity:0, y:24}, {opacity:1, y:0, duration:.6, ease:IN}, 55.4);
+  tl.fromTo(".brand", {opacity:0, y:24}, {opacity:1, y:0, duration:.6, ease:IN}, 55.8);
+  tl.fromTo(".tag",   {opacity:0, y:20}, {opacity:1, y:0, duration:.6, ease:IN}, 56.3);
+
+  /* --- SUBTITLE (= naskah VO): [mulai, selesai] --- */
+  var SUB = [[0,2.8],[2.8,5],[5,9.5],[9.5,15],[15,19.5],[19.5,25],[25,29],[29,33.5],[33.5,37],[37,41.5],[41.5,46.5],[46.5,52],[52,55.5],[55.5,60]];
+  SUB.forEach(function (s, k) {
+    var id = "#sub" + (k + 1);
+    if (k === 0) tl.set(id, {opacity:1}, 0);
+    else tl.fromTo(id, {opacity:0, y:12}, {opacity:1, y:0, duration:.3, ease:IN}, s[0]);
+    if (k < SUB.length - 1) tl.to(id, {opacity:0, duration:.2, ease:OUT}, s[1] - .2);
+  });
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+  tl.seek(0);
+})();
+</script>
+</body>
+</html>
