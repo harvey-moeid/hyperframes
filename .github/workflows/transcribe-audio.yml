@@ -1,0 +1,248 @@
+# Transkripsi audio berwaktu per kata -> R2 (paket GRATIS).
+#
+# Pemicu:
+#   - repository_dispatch (event_type: transcribe-audio) dari Worker `hyperframes-render` (POST /transcribe)
+#   - workflow_dispatch (manual, untuk tes dari tab Actions)
+#
+# Alur: validasi input -> ambil aset audio (Git, atau R2 untuk aset besar)
+#       -> `npx hyperframes transcribe` (whisper) -> validasi kata berwaktu
+#       -> R2: transcripts/<id>.json (sukses) atau transcripts/<id>.failed.json (gagal)
+#
+# Hasil dibaca lewat Worker: GET /transcript/:id (x-api-key).
+# Secret yang dibutuhkan: CLOUDFLARE_API_TOKEN (izin R2 edit), CLOUDFLARE_ACCOUNT_ID.
+# Input TIDAK diinterpolasi langsung ke shell: semuanya lewat `env:` lalu divalidasi.
+#
+# CATATAN: repository_dispatch hanya berjalan dari workflow di default branch.
+name: Transcribe audio
+
+on:
+  repository_dispatch:
+    types: [transcribe-audio]
+  workflow_dispatch:
+    inputs:
+      id:
+        description: "ID output (^[a-zA-Z0-9_-]{1,64}$) -> transcripts/<id>.json"
+        required: true
+        type: string
+      composition:
+        description: "Nama folder di cloudflare-free/compositions/"
+        required: true
+        type: string
+      filename:
+        description: "Nama file audio di folder assets/ komposisi (mis. narasi.wav)"
+        required: true
+        type: string
+      language:
+        description: "Kode bahasa (mis. id, en)"
+        required: false
+        default: id
+        type: string
+      model:
+        description: "Model whisper"
+        required: false
+        default: small
+        type: choice
+        options: [tiny.en, base.en, small.en, medium.en, small, medium, large-v3]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transcribe-audio-${{ github.event.client_payload.id || inputs.id }}
+  cancel-in-progress: false
+
+env:
+  # Versi dipin supaya hasil bisa diulang. Samakan dengan render-video.yml.
+  HYPERFRAMES_VERSION: "0.9.19"
+  WRANGLER_VERSION: "4.156.2"
+  R2_BUCKET: hyperframes-renders
+  HYPERFRAMES_NO_TELEMETRY: "1"
+  DO_NOT_TRACK: "1"
+  HYPERFRAMES_NO_UPDATE_CHECK: "1"
+
+jobs:
+  transcribe:
+    # Jangan jalan di repo upstream bila workflow ini ikut ter-merge ke sana.
+    if: github.repository_owner != 'heygen-com'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (hanya aset komposisi)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.client_payload.sha || github.sha }}
+          sparse-checkout: cloudflare-free/compositions
+          persist-credentials: false
+
+      - name: Validasi input
+        env:
+          INPUT_ID: ${{ github.event.client_payload.id || inputs.id }}
+          INPUT_COMPOSITION: ${{ github.event.client_payload.composition || inputs.composition }}
+          INPUT_FILENAME: ${{ github.event.client_payload.filename || inputs.filename }}
+          INPUT_LANGUAGE: ${{ github.event.client_payload.language || inputs.language || 'id' }}
+          INPUT_MODEL: ${{ github.event.client_payload.model || inputs.model || 'small' }}
+        run: |
+          set -euo pipefail
+          re='^[a-zA-Z0-9_-]{1,64}$'
+          fre='^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'
+          lre='^[a-z]{2,3}$'
+          [[ "$INPUT_ID" =~ $re ]] || { echo "::error::id tidak valid"; exit 1; }
+          [[ "$INPUT_COMPOSITION" =~ $re ]] || { echo "::error::composition tidak valid"; exit 1; }
+          [[ "$INPUT_FILENAME" =~ $fre ]] || { echo "::error::filename tidak valid"; exit 1; }
+          shopt -s nocasematch
+          [[ "$INPUT_FILENAME" =~ \.(wav|mp3|m4a|aac|ogg|flac|mp4|webm|mov)$ ]] || { echo "::error::ekstensi audio tidak didukung"; exit 1; }
+          shopt -u nocasematch
+          [[ "$INPUT_LANGUAGE" =~ $lre ]] || { echo "::error::language tidak valid"; exit 1; }
+          case "$INPUT_MODEL" in
+            tiny.en|base.en|small.en|medium.en|small|medium|large-v3) ;;
+            *) echo "::error::model tidak valid"; exit 1 ;;
+          esac
+          # Nilai sudah lolos regex (tanpa newline), aman ditulis ke GITHUB_ENV.
+          {
+            echo "TR_ID=$INPUT_ID"
+            echo "TR_COMPOSITION=$INPUT_COMPOSITION"
+            echo "TR_FILENAME=$INPUT_FILENAME"
+            echo "TR_LANGUAGE=$INPUT_LANGUAGE"
+            echo "TR_MODEL=$INPUT_MODEL"
+            echo "TR_FILE=cloudflare-free/compositions/$INPUT_COMPOSITION/assets/$INPUT_FILENAME"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      # Aset besar (>8 MiB) tidak ada di Git: ambil dari R2 (assets/<composition>/<filename>).
+      # Token R2 hanya tersedia di step ini dan step upload.
+      - name: Ambil audio dari R2 bila tidak ada di Git
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -f "$TR_FILE" ]; then
+            echo "Audio ditemukan di Git: $TR_FILE"
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::Audio tidak ada di Git dan secret Cloudflare belum diset"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$TR_FILE")"
+          code=$(curl -sS -o "$TR_FILE" -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/$R2_BUCKET/objects/assets/$TR_COMPOSITION/$TR_FILENAME")
+          if [ "$code" != "200" ]; then
+            rm -f "$TR_FILE"
+            echo "::error::Audio tidak ditemukan di Git maupun R2 (HTTP $code): $TR_COMPOSITION/$TR_FILENAME"
+            exit 1
+          fi
+          echo "Audio diunduh dari R2: $(stat -c%s "$TR_FILE") byte"
+
+      - name: Pasang FFmpeg
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Transkripsi
+        run: |
+          set -euo pipefail
+          # Folder keluaran bersih: transcribe menulis transcript.json ke --dir dan menambal
+          # file .html di folder itu, jadi jangan arahkan ke folder komposisi.
+          OUTDIR="$RUNNER_TEMP/transcribe-out"
+          mkdir -p "$OUTDIR"
+          ffprobe -v error -show_entries format=duration -of default=nw=1 "$TR_FILE"
+          npx --yes "hyperframes@$HYPERFRAMES_VERSION" transcribe "$PWD/$TR_FILE" \
+            --dir "$OUTDIR" --engine whisper \
+            --model "$TR_MODEL" --language "$TR_LANGUAGE"
+          [ -s "$OUTDIR/transcript.json" ] || { echo "::error::transcript.json tidak dibuat"; exit 1; }
+          echo "OUTDIR=$OUTDIR" >> "$GITHUB_ENV"
+
+      - name: Susun hasil
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const e = process.env;
+          const words = JSON.parse(readFileSync(`${e.OUTDIR}/transcript.json`, "utf8"));
+          if (!Array.isArray(words) || words.length === 0) throw new Error("Transkrip kosong");
+          const clean = words.map((w, i) => {
+            const ok = w && typeof w.text === "string" && Number.isFinite(w.start) && Number.isFinite(w.end);
+            if (!ok) throw new Error(`Kata ke-${i} tidak valid`);
+            return { id: typeof w.id === "string" ? w.id : `w${i}`, text: w.text, start: w.start, end: w.end };
+          });
+          const result = {
+            id: e.TR_ID,
+            status: "done",
+            composition: e.TR_COMPOSITION,
+            filename: e.TR_FILENAME,
+            language: e.TR_LANGUAGE,
+            model: e.TR_MODEL,
+            duration: clean[clean.length - 1].end,
+            word_count: clean.length,
+            transcribed_at: new Date().toISOString(),
+            words: clean,
+          };
+          writeFileSync(`${e.RUNNER_TEMP}/result.json`, JSON.stringify(result));
+          console.log(`Kata: ${clean.length}, selesai di ${result.duration}s`);
+          NODE
+
+      - name: Upload hasil ke R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::Secret CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID belum diset"
+            exit 1
+          fi
+          npx --yes "wrangler@$WRANGLER_VERSION" r2 object put \
+            "$R2_BUCKET/transcripts/$TR_ID.json" \
+            --file "$RUNNER_TEMP/result.json" \
+            --content-type application/json \
+            --remote --force
+          echo "Terupload: transcripts/$TR_ID.json" >> "$GITHUB_STEP_SUMMARY"
+
+      # ---- Penanda gagal ------------------------------------------------------
+      - name: Setup Node.js 22 (penanda gagal)
+        if: ${{ always() && job.status != 'success' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Tulis penanda gagal ke R2
+        if: ${{ always() && job.status != 'success' }}
+        continue-on-error: true
+        env:
+          INPUT_ID: ${{ github.event.client_payload.id || inputs.id }}
+          JOB_STATUS: ${{ job.status }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          re='^[a-zA-Z0-9_-]{1,64}$'
+          if ! [[ "${INPUT_ID:-}" =~ $re ]]; then
+            echo "::warning::id tidak valid, penanda gagal dilewati"
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::Secret Cloudflare belum diset, penanda gagal dilewati"
+            exit 0
+          fi
+          case "$JOB_STATUS" in
+            cancelled) reason=cancelled ;;
+            *) reason=failure ;;
+          esac
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          marker="$RUNNER_TEMP/failed.json"
+          printf '{"status":"failed","reason":"%s","run_url":"%s","failed_at":"%s"}\n' \
+            "$reason" "$run_url" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker"
+          npx --yes "wrangler@$WRANGLER_VERSION" r2 object put \
+            "$R2_BUCKET/transcripts/$INPUT_ID.failed.json" \
+            --file "$marker" \
+            --content-type application/json \
+            --remote --force
+          echo "Penanda gagal ($reason): transcripts/$INPUT_ID.failed.json" >> "$GITHUB_STEP_SUMMARY"
