@@ -4,6 +4,8 @@ import { CORE } from "./ui/client-core.js";
 import { DATA } from "./ui/client-data.js";
 import { VIEWS } from "./ui/client-views.js";
 import { CREATE } from "./ui/client-create.js";
+import { TRANSCRIBE } from "./ui/client-transcribe.js";
+import { TRANSCRIBE_MARKUP, TRANSCRIBE_STYLES } from "./ui/markup-transcribe.js";
 
 function makeNonce() {
   const bytes = new Uint8Array(16);
@@ -97,11 +99,31 @@ const COMPOSITION_TEMPLATE = String.raw`<!doctype html>
 </html>
 `;
 const TEMPLATE_JSON = JSON.stringify(COMPOSITION_TEMPLATE).replace(/</g, "\\u003c");
+
+/**
+ * Sisipkan kartu Transkrip tepat setelah kartu "Pustaka aset" di halaman Media. Penanda dicari dari
+ * <p id="mEmptyText"> lalu dua </div> berikutnya (penutup #mEmpty dan penutup kartu), jadi tidak peka
+ * terhadap spasi. Bila penanda hilang (markup.js diubah), markup dipakai apa adanya dan klien
+ * melewati fitur ini (initTranscribe/renderTranscribe berhenti bila #trCard tidak ada).
+ */
+function withTranscribe(markup) {
+  const marker = '<p id="mEmptyText">';
+  const at = markup.indexOf(marker);
+  if (at < 0) return markup;
+  const first = markup.indexOf("</div>", at);
+  const second = first < 0 ? -1 : markup.indexOf("</div>", first + 6);
+  if (second < 0) return markup;
+  const cut = second + 6;
+  return markup.slice(0, cut) + "\n" + TRANSCRIBE_MARKUP + markup.slice(cut);
+}
+const MARKUP_FULL = withTranscribe(MARKUP);
+
 const CLIENT_JS = [
   CORE.replace("__TEMPLATE_JSON__", TEMPLATE_JSON),
   DATA,
   VIEWS,
   CREATE,
+  TRANSCRIBE,
   String.raw`
 var mediaFilter='all';
 function renderMedia(){
@@ -119,6 +141,7 @@ function renderMedia(){
  $('mEmpty').hidden=list.length>0;
  $('mEmptyTitle').textContent=all.length?'Tidak ada hasil':'Belum ada aset';
  $('mEmptyText').textContent=all.length?'Ubah pencarian atau filter.':'Unggah aset untuk mulai.';
+ renderTranscribe();
 }
 function mediaUpload(file){
  var comp=$('mComp').value.trim()||'contoh';
@@ -179,21 +202,22 @@ function initSettings(){
  $('clrDrafts').addEventListener('click',function(){sDel('local',K.drafts);renderSettings();});
  $('clrAssets').addEventListener('click',function(){sDel('local',K.assets);renderSettings();renderMedia();});
  $('clrAll').addEventListener('click',async function(){if(!await confirmBox('Hapus semua data lokal?','Data browser dihapus; file GitHub dan video server tetap ada.','Hapus semua',true))return;
-  ['hf_history','hf_hidden','hf_cleared','hf_drafts','hf_assets','hf_prefs','hf_theme','hf_onboard_done'].forEach(function(k){sDel('local',k);});sDel('session',K.key);apiKey='';prefs={quality:'standard',composition:'contoh'};applyTheme('auto');renderSettings();renderMedia();updateKeyBars();});
+  ['hf_history','hf_hidden','hf_cleared','hf_drafts','hf_assets','hf_prefs','hf_theme','hf_onboard_done','hf_transcripts'].forEach(function(k){sDel('local',k);});sDel('session',K.key);apiKey='';prefs={quality:'standard',composition:'contoh'};applyTheme('auto');renderSettings();renderMedia();updateKeyBars();});
 }
 function initApp(){
  loadPrefs();applyTheme(loadTheme());apiKey=sGet('session',K.key)||'';
- initViews();initCreate();initMedia();initSettings();
+ initViews();initCreate();initMedia();initSettings();initTranscribe();
  if(!location.hash)location.hash='#/dashboard';
- window.addEventListener('hashchange',onRoute);onRoute();resumePending();syncRemote(true);
+ window.addEventListener('hashchange',onRoute);onRoute();resumePending();resumeTranscripts();syncRemote(true);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initApp);else initApp();
 `,
 ].join("\n");
 export function htmlPage() {
   const nonce = makeNonce();
-  const body = MARKUP.replace("__CSS__", STYLES)
-    .replace("__JS__", CLIENT_JS)
+  // Pengganti berupa fungsi supaya karakter $ di CSS/JS tidak ditafsirkan sebagai pola pengganti.
+  const body = MARKUP_FULL.replace("__CSS__", () => STYLES + TRANSCRIBE_STYLES)
+    .replace("__JS__", () => CLIENT_JS)
     .replaceAll("__NONCE__", nonce);
   return new Response(body, {
     status: 200,
