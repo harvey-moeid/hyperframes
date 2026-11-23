@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920, initial-scale=1.0" />
+  <title>Jalur Tarot — 9:16 Single File Composition</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 34%, #2a1052 0%, #120724 58%, #090314 100%);
+    }
+
+    .stage {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+    }
+
+    .subcomp {
+      position: absolute;
+      left: 0;
+      width: 1080px;
+      border: 0;
+      background: transparent;
+    }
+
+    #header-comp { top: 0; height: 280px; }
+    #avatar-comp { top: 260px; height: 620px; }
+    #cards-comp  { top: 820px; height: 780px; }
+    #cta-comp    { bottom: 100px; height: 220px; }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage" data-duration="7" data-fps="60">
+    <div class="subcomp" id="header-comp" data-start="0" data-duration="7"></div>
+    <div class="subcomp" id="avatar-comp" data-start="0" data-duration="7"></div>
+    <div class="subcomp" id="cards-comp" data-start="0.5" data-duration="6.5"></div>
+    <div class="subcomp" id="cta-comp" data-start="1.6" data-duration="5.4"></div>
+  </div>
+
+  <script>
+    (function () {
+      // Sesuaikan jika file sprite berada di folder assets relatif terhadap komposisi
+      const SPRITE_URL = new URL('./assets/file_0000000032088207a7e0e27a1d97812c.png', window.location.href).href;
+
+      const subTemplates = {
+        'header-comp': `<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{width:1080px;height:280px;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;text-align:center;overflow:hidden}.wrap{padding-top:115px}.badge{display:inline-block;padding:10px 28px;border-radius:999px;background:rgba(255,209,102,.14);border:1px solid rgba(255,209,102,.55);color:#ffd166;font-weight:700;font-size:23px;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px}.title{font-family:'Cinzel Decorative',serif;font-size:74px;font-weight:900;background:linear-gradient(180deg,#fff3c4 0%,#ffd166 55%,#e09f3e 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px}</style></head><body><div class="wrap" id="w"><div class="badge">✨ Pesan Semesta Hari Ini</div><h1 class="title">JALUR TAROT</h1></div><script>const w=document.getElementById('w');window.renderAtTime=(t=0)=>{const p=Math.max(0,Math.min(1,t/0.8));const e=1-Math.pow(1-p,3);w.style.opacity=e;w.style.transform='translateY('+((1-e)*-28).toFixed(2)+'px)'};window.renderAtTime(0)<\/script></body></html>`,
+
+        'avatar-comp': `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{width:1080px;height:620px;background:transparent;overflow:hidden;position:relative}.mandala{position:absolute;top:310px;left:50%;width:720px;height:720px;transform:translate(-50%,-50%);border:2px dashed rgba(255,209,102,.28);border-radius:50%;box-shadow:0 0 90px rgba(157,78,221,.35),inset 0 0 60px rgba(157,78,221,.22)}.stage{position:absolute;top:115px;left:50%;transform:translateX(-50%);width:440px;height:400px;display:flex;justify-content:center;align-items:center}.glow{position:absolute;width:340px;height:340px;background:radial-gradient(circle,rgba(199,125,255,.55) 0%,transparent 70%);border-radius:50%;filter:blur(22px)}.crop{position:relative;width:360px;height:330px;overflow:hidden;border-radius:28px;filter:drop-shadow(0 18px 28px rgba(0,0,0,.65))}.sprite{position:relative;width:360px;height:330px;background-image:url("${SPRITE_URL}");background-size:800% 820%;background-position:0% 4%}</style></head><body><div class="mandala" id="m"></div><div class="stage" id="s"><div class="glow"></div><div class="crop"><div class="sprite" id="a"></div></div></div><script>const COLS=8;const ROW_Y={idle:4,blink:17.5,talk:31,happy:44.5,wave:58,float:71.5};const m=document.getElementById('m'),s=document.getElementById('s'),a=document.getElementById('a');window.renderAtTime=(t=0)=>{const time=Math.max(0,Number(t)||0);m.style.transform='translate(-50%,-50%) rotate('+((time*14.4)%360).toFixed(2)+'deg)';s.style.transform='translate(-50%,'+(Math.sin(time*Math.PI*0.625)*20).toFixed(2)+'px)';let row='idle';if(time<1.6)row='wave';else if(time<4.6)row='talk';else row='happy';const c=Math.floor(time*8)%COLS;a.style.backgroundPosition=((c/(COLS-1))*100).toFixed(4)+'% '+(ROW_Y[row]??4)+'%'};window.renderAtTime(0)<\/script></body></html>`,
+
+        'cards-comp': `<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Plus+Jakarta+Sans:wght@400;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{width:1080px;height:780px;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;color:#fff;overflow:hidden;position:relative}.box{position:absolute;top:30px;left:50%;transform:translateX(-50%);width:860px;padding:48px 44px;border-radius:36px;background:linear-gradient(145deg,rgba(45,20,82,.88),rgba(18,7,38,.94));border:2px solid rgba(255,209,102,.45);box-shadow:0 25px 60px rgba(0,0,0,.65),inset 0 0 30px rgba(157,78,221,.25);text-align:center}.hook{font-size:42px;font-weight:700;line-height:1.35;margin-bottom:18px}.hook span{color:#ffd166}.sub{font-size:29px;line-height:1.48;color:#dcc6f5;margin-bottom:36px}.row{display:flex;justify-content:center;gap:30px}.card{width:215px;height:315px;border-radius:22px;background:linear-gradient(160deg,#4b1d8c 0%,#220947 100%);border:2px solid #ffd166;display:flex;flex-direction:column;justify-content:center;align-items:center;box-shadow:0 12px 26px rgba(0,0,0,.5)}.card.feat{border-color:#fff;box-shadow:0 0 36px rgba(255,209,102,.55)}.icon{font-size:64px;margin-bottom:16px}.lbl{font-family:'Cinzel Decorative',serif;font-size:27px;font-weight:700;color:#ffd166}</style></head><body><div class="box" id="box"><p class="hook">Tarik napas dalam...<br><span>Pilih 1 kartu</span> yang paling memanggil energimu!</p><p class="sub">Jawaban untuk situasi yang sedang kamu pikirkan ada di balik salah satu kartu ini.</p><div class="row"><div class="card" id="c1"><div class="icon">🌙</div><div class="lbl">KARTU I</div></div><div class="card feat" id="c2"><div class="icon">✨</div><div class="lbl">KARTU II</div></div><div class="card" id="c3"><div class="icon">🔮</div><div class="lbl">KARTU III</div></div></div></div><script>const clamp01=(v)=>Math.max(0,Math.min(1,v));const ease=(t)=>1-Math.pow(1-t,3);const box=document.getElementById('box');const cards=[document.getElementById('c1'),document.getElementById('c2'),document.getElementById('c3')];window.renderAtTime=(t=0)=>{const time=Math.max(0,Number(t)||0);const pBox=ease(clamp01(time/0.7));box.style.opacity=pBox;box.style.transform='translateX(-50%) scale('+(0.93+0.07*pBox).toFixed(4)+')';cards.forEach((c,i)=>{const p=ease(clamp01((time-(0.45+i*0.2))/0.6));c.style.opacity=p;c.style.transform='translateY('+((1-p)*36).toFixed(2)+'px)'})};window.renderAtTime(0)<\/script></body></html>`,
+
+        'cta-comp': `<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{width:1080px;height:220px;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;text-align:center;overflow:hidden}.wrap{padding-top:30px}.pill{display:inline-block;background:linear-gradient(90deg,#ffd166,#f4a261);color:#190733;font-weight:800;font-size:32px;padding:22px 54px;border-radius:999px;box-shadow:0 10px 30px rgba(255,209,102,.45)}</style></head><body><div class="wrap" id="w"><div class="pill">Tulis Pilihanmu di Komentar 👇</div></div><script>const w=document.getElementById('w');window.renderAtTime=(t=0)=>{const p=Math.max(0,Math.min(1,t/0.6));const e=1-Math.pow(1-p,3);w.style.opacity=e;w.style.transform='translateY('+((1-e)*20).toFixed(2)+'px)'};window.renderAtTime(0)<\/script></body></html>`
+      };
+
+      const childRenderers = [];
+
+      Object.entries(subTemplates).forEach(([id, html]) => {
+        const host = document.getElementById(id);
+        if (!host) return;
+        const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        host.setAttribute('data-composition-src', blobUrl);
+
+        const iframe = document.createElement('iframe');
+        iframe.src = blobUrl;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = '0';
+        iframe.style.background = 'transparent';
+        iframe.onload = () => {
+          if (iframe.contentWindow && typeof iframe.contentWindow.renderAtTime === 'function') {
+            childRenderers.push({ host, fn: iframe.contentWindow.renderAtTime });
+            iframe.contentWindow.renderAtTime(0);
+          }
+        };
+        host.appendChild(iframe);
+      });
+
+      window.renderAtTime = (t = 0) => {
+        const globalT = Math.max(0, Number(t) || 0);
+        childRenderers.forEach(({ host, fn }) => {
+          const start = Number(host.getAttribute('data-start') || 0);
+          fn(Math.max(0, globalT - start));
+        });
+      };
+    })();
+  </script>
+</body>
+</html>
