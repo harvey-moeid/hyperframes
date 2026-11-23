@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920, initial-scale=1.0" />
+  <title>Jalur Tarot — Mascot Composition (9:16)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #090314;
+      --purple-mid: #2a1052;
+      --gold-light: #fff3c4;
+      --gold: #ffd166;
+      --gold-amber: #e09f3e;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 34%, var(--purple-mid) 0%, #120724 58%, var(--bg-deep) 100%);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: #ffffff;
+    }
+
+    .stage {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+    }
+
+    .stars-layer {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(2.5px 2.5px at 140px 240px, var(--gold), transparent),
+        radial-gradient(3.5px 3.5px at 880px 390px, #e0aaff, transparent),
+        radial-gradient(2px 2px at 260px 1120px, #ffffff, transparent),
+        radial-gradient(3px 3px at 820px 1460px, var(--gold), transparent),
+        radial-gradient(2.5px 2.5px at 540px 190px, #ffffff, transparent),
+        radial-gradient(3px 3px at 190px 1680px, #c77dff, transparent);
+      opacity: 0.75;
+    }
+
+    .mandala-ring {
+      position: absolute;
+      top: 520px;
+      left: 50%;
+      width: 760px;
+      height: 760px;
+      transform: translate(-50%, -50%) rotate(0deg);
+      border: 2px dashed rgba(255, 209, 102, 0.28);
+      border-radius: 50%;
+      box-shadow: 0 0 90px rgba(157, 78, 221, 0.35), inset 0 0 60px rgba(157, 78, 221, 0.22);
+    }
+
+    .header {
+      position: absolute;
+      top: 125px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 10px 28px;
+      border-radius: 999px;
+      background: rgba(255, 209, 102, 0.14);
+      border: 1px solid rgba(255, 209, 102, 0.55);
+      color: var(--gold);
+      font-weight: 700;
+      font-size: 23px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    .title {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 74px;
+      font-weight: 900;
+      background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 55%, var(--gold-amber) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 6px 22px rgba(255, 209, 102, 0.32));
+      letter-spacing: 2px;
+    }
+
+    /* Stage Avatar */
+    .avatar-stage {
+      position: absolute;
+      top: 335px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 440px;
+      height: 410px;
+      z-index: 15;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .avatar-glow {
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle, rgba(199, 125, 255, 0.55) 0%, transparent 70%);
+      border-radius: 50%;
+      filter: blur(22px);
+    }
+
+    /* Crop window agar label judul baris tidak ikut tampil */
+    .avatar-crop {
+      position: relative;
+      width: 360px;
+      height: 330px;
+      overflow: hidden;
+      border-radius: 28px;
+      filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.65));
+    }
+
+    .avatar-sprite {
+      position: relative;
+      width: 360px;
+      height: 330px;
+      background-image: url('./assets/file_0000000032088207a7e0e27a1d97812c.png');
+      /* 8 kolom menyamping, ~8.2 baris vertikal termasuk label & bagian bawah */
+      background-size: 800% 820%;
+      background-position: 0% 4%;
+    }
+
+    .tarot-card-box {
+      position: absolute;
+      top: 815px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 860px;
+      padding: 50px 46px;
+      border-radius: 36px;
+      background: linear-gradient(145deg, rgba(45, 20, 82, 0.88), rgba(18, 7, 38, 0.94));
+      border: 2px solid rgba(255, 209, 102, 0.45);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), inset 0 0 30px rgba(157, 78, 221, 0.25);
+      text-align: center;
+      z-index: 20;
+    }
+
+    .card-hook {
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: #ffffff;
+      margin-bottom: 20px;
+    }
+
+    .card-hook span {
+      color: var(--gold);
+    }
+
+    .card-sub {
+      font-size: 29px;
+      line-height: 1.48;
+      color: #dcc6f5;
+      margin-bottom: 38px;
+    }
+
+    .cards-row {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+    }
+
+    .mini-card {
+      width: 215px;
+      height: 315px;
+      border-radius: 22px;
+      background: linear-gradient(160deg, #4b1d8c 0%, #220947 100%);
+      border: 2px solid var(--gold);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5);
+    }
+
+    .mini-card.featured {
+      border-color: #ffffff;
+      box-shadow: 0 0 36px rgba(255, 209, 102, 0.55);
+    }
+
+    .mini-card-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .mini-card-label {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 27px;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .cta-footer {
+      position: absolute;
+      bottom: 120px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      z-index: 20;
+    }
+
+    .cta-pill {
+      display: inline-block;
+      background: linear-gradient(90deg, var(--gold), #f4a261);
+      color: #190733;
+      font-weight: 800;
+      font-size: 32px;
+      padding: 22px 54px;
+      border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(255, 209, 102, 0.45);
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" data-duration="7" data-fps="60">
+    <div class="stars-layer" id="stars"></div>
+    <div class="mandala-ring" id="mandala"></div>
+
+    <header class="header" id="header" data-start="0" data-duration="7">
+      <div class="badge">✨ Pesan Semesta Hari Ini</div>
+      <h1 class="title">JALUR TAROT</h1>
+    </header>
+
+    <div class="avatar-stage" id="avatarStage" data-start="0" data-duration="7">
+      <div class="avatar-glow"></div>
+      <div class="avatar-crop">
+        <div class="avatar-sprite" id="avatar"></div>
+      </div>
+    </div>
+
+    <main class="tarot-card-box" id="cardBox" data-start="0.5" data-duration="6.5">
+      <p class="card-hook">Tarik napas dalam...<br><span>Pilih 1 kartu</span> yang paling memanggil energimu!</p>
+      <p class="card-sub">Jawaban untuk situasi yang sedang kamu pikirkan ada di balik salah satu kartu ini.</p>
+
+      <div class="cards-row">
+        <div class="mini-card" id="card1">
+          <div class="mini-card-icon">🌙</div>
+          <div class="mini-card-label">KARTU I</div>
+        </div>
+        <div class="mini-card featured" id="card2">
+          <div class="mini-card-icon">✨</div>
+          <div class="mini-card-label">KARTU II</div>
+        </div>
+        <div class="mini-card" id="card3">
+          <div class="mini-card-icon">🔮</div>
+          <div class="mini-card-label">KARTU III</div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="cta-footer" id="cta" data-start="1.6" data-duration="5.4">
+      <div class="cta-pill">Tulis Pilihanmu di Komentar 👇</div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const clamp01 = (v) => Math.max(0, Math.min(1, v));
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+      const progress = (time, start, dur) => clamp01((time - start) / dur);
+
+      const COLS = 8;
+
+      // Kalibrasi posisi Y (%) per baris karakter pada sheet seperti 1000825098.png
+      // Bisa di-tweak +/- 1% hingga 2% jika karakter agak naik/turun saat render
+      const ROW_Y_PERCENT = {
+        idle:  4.0,
+        blink: 17.5,
+        talk:  31.0,
+        happy: 44.5,
+        wave:  58.0,
+        float: 71.5
+      };
+
+      const elHeader = document.getElementById('header');
+      const elMandala = document.getElementById('mandala');
+      const elStars = document.getElementById('stars');
+      const elAvatarStage = document.getElementById('avatarStage');
+      const elAvatar = document.getElementById('avatar');
+      const elCardBox = document.getElementById('cardBox');
+      const elCards = [
+        document.getElementById('card1'),
+        document.getElementById('card2'),
+        document.getElementById('card3')
+      ];
+      const elCta = document.getElementById('cta');
+
+      function applySpriteFrame(rowKey, frameInRow) {
+        const cIdx = ((frameInRow % COLS) + COLS) % COLS;
+        const xPercent = (cIdx / (COLS - 1)) * 100;
+        const yPercent = ROW_Y_PERCENT[rowKey] ?? ROW_Y_PERCENT.idle;
+        elAvatar.style.backgroundPosition = `${xPercent.toFixed(4)}% ${yPercent.toFixed(4)}%`;
+      }
+
+      function renderAtTime(t) {
+        const time = Math.max(0, Number(t) || 0);
+
+        const pHeader = easeOutCubic(progress(time, 0, 0.8));
+        elHeader.style.opacity = pHeader;
+        elHeader.style.transform = `translateY(${(1 - pHeader) * -28}px)`;
+
+        const angle = (time * 14.4) % 360;
+        elMandala.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+        elStars.style.opacity = (0.65 + 0.25 * Math.sin(time * Math.PI * 0.8)).toFixed(3);
+
+        const bobY = Math.sin(time * Math.PI * 0.625) * 20;
+        elAvatarStage.style.transform = `translate(-50%, ${bobY.toFixed(2)}px)`;
+
+        let rowKey = 'idle';
+        if (time < 1.6) {
+          rowKey = 'wave';
+        } else if (time < 4.6) {
+          rowKey = 'talk';
+        } else {
+          rowKey = 'happy';
+        }
+
+        const spriteFrame = Math.floor(time * 8) % COLS;
+        applySpriteFrame(rowKey, spriteFrame);
+
+        const pBox = easeOutCubic(progress(time, 0.5, 0.7));
+        elCardBox.style.opacity = pBox;
+        elCardBox.style.transform = `translateX(-50%) scale(${(0.93 + 0.07 * pBox).toFixed(4)})`;
+
+        elCards.forEach((card, idx) => {
+          const pCard = easeOutCubic(progress(time, 0.95 + idx * 0.2, 0.6));
+          card.style.opacity = pCard;
+          card.style.transform = `translateY(${((1 - pCard) * 36).toFixed(2)}px)`;
+        });
+
+        const pCta = easeOutCubic(progress(time, 1.6, 0.6));
+        elCta.style.opacity = pCta;
+        elCta.style.transform = `translateY(${((1 - pCta) * 20).toFixed(2)}px)`;
+      }
+
+      window.renderAtTime = renderAtTime;
+      window.seekTo = renderAtTime;
+      window.setFrame = (frame, fps = 60) => renderAtTime(frame / fps);
+      window.onHyperframesFrame = (frame, fps = 60) => renderAtTime(frame / fps);
+      window.__HYPERFRAMES__ = Object.assign({}, window.__HYPERFRAMES__, {
+        seek: renderAtTime,
+        setFrame: (frame, fps = 60) => renderAtTime(frame / fps)
+      });
+
+      renderAtTime(0);
+    })();
+  </script>
+</body>
+</html>
