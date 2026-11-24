@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           lfs: false
           show-progress: false
           persist-credentials: true
@@ -111,7 +111,7 @@ jobs:
             .github/workflows/ci.yml
       - name: Export formatter diff and commit source files
         run: |
-          git diff --unified=3
+          git diff --unified=0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json cloudflare-free/worker/src/index.js cloudflare-free/worker/src/render-guard.js cloudflare-free/worker/src/page.js cloudflare-free/worker/src/ui/client-core.js cloudflare-free/worker/src/ui/client-data.js cloudflare-free/worker/src/ui/client-create.js cloudflare-free/worker/tests/render-guard.test.mjs
