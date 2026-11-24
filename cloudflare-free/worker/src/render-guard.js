@@ -44,14 +44,7 @@ export async function removeRenderAssetSnapshot(bucket, id) {
  * render-specific prefix. R2 conditional reads ensure the copied bytes match
  * the ETag observed in the listing; create-only writes prevent replacement.
  */
-export async function snapshotCompositionAssets(bucket, composition, id) {
-  if (!ID_RE.test(composition) || !ID_RE.test(id)) throw new TypeError("invalid_snapshot_path");
-  const sourcePrefix = `assets/${composition}/`;
-  const destinationPrefix = snapshotPrefix(id);
-  const listed = await bucket.list({ prefix: sourcePrefix, limit: MAX_ASSETS });
-  if (listed.truncated) throw new Error("too_many_render_assets");
-
-  const objects = listed.objects || [];
+function validateAssetObjects(objects, sourcePrefix) {
   let totalBytes = 0;
   for (const item of objects) {
     const filename = item.key.slice(sourcePrefix.length);
@@ -60,25 +53,40 @@ export async function snapshotCompositionAssets(bucket, composition, id) {
     totalBytes += item.size;
     if (totalBytes > MAX_SNAPSHOT_BYTES) throw new Error("render_assets_too_large");
   }
+  return totalBytes;
+}
 
+async function copySnapshotAsset(bucket, item, sourcePrefix, destinationPrefix) {
+  const filename = item.key.slice(sourcePrefix.length);
+  const source = await bucket.get(item.key, { onlyIf: { etagMatches: item.etag } });
+  if (!source || !source.body) throw new Error("render_asset_changed_during_snapshot");
+
+  const stream = new FixedLengthStream(item.size);
+  const destinationKey = destinationPrefix + filename;
+  const write = bucket.put(destinationKey, stream.readable, {
+    onlyIf: { etagDoesNotMatch: "*" },
+    httpMetadata: source.httpMetadata,
+    customMetadata: source.customMetadata,
+  });
+  await source.body.pipeTo(stream.writable);
+  const stored = await write;
+  if (!stored) throw new Error("render_asset_snapshot_conflict");
+  return destinationKey;
+}
+
+export async function snapshotCompositionAssets(bucket, composition, id) {
+  if (!ID_RE.test(composition) || !ID_RE.test(id)) throw new TypeError("invalid_snapshot_path");
+  const sourcePrefix = `assets/${composition}/`;
+  const destinationPrefix = snapshotPrefix(id);
+  const listed = await bucket.list({ prefix: sourcePrefix, limit: MAX_ASSETS });
+  if (listed.truncated) throw new Error("too_many_render_assets");
+
+  const objects = listed.objects || [];
+  const totalBytes = validateAssetObjects(objects, sourcePrefix);
   const copied = [];
   try {
     for (const item of objects) {
-      const filename = item.key.slice(sourcePrefix.length);
-      const source = await bucket.get(item.key, { onlyIf: { etagMatches: item.etag } });
-      if (!source || !source.body) throw new Error("render_asset_changed_during_snapshot");
-
-      const stream = new FixedLengthStream(item.size);
-      const destinationKey = destinationPrefix + filename;
-      const write = bucket.put(destinationKey, stream.readable, {
-        onlyIf: { etagDoesNotMatch: "*" },
-        httpMetadata: source.httpMetadata,
-        customMetadata: source.customMetadata,
-      });
-      await source.body.pipeTo(stream.writable);
-      const stored = await write;
-      if (!stored) throw new Error("render_asset_snapshot_conflict");
-      copied.push(destinationKey);
+      copied.push(await copySnapshotAsset(bucket, item, sourcePrefix, destinationPrefix));
     }
   } catch (error) {
     if (copied.length) await bucket.delete(copied);
