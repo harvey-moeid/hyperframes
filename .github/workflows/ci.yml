@@ -56,18 +56,18 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
-      - name: Format CI workflow
+      - name: Format and export CI workflow outside the workflows directory
         run: |
+          set -euo pipefail
           git checkout HEAD^ -- .github/workflows/ci.yml
           bunx --yes oxfmt@0.41.0 --write .github/workflows/ci.yml
-          mkdir -p /tmp/format-out
-          cp .github/workflows/ci.yml /tmp/format-out/ci.yml
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: formatted-ci-workflow
-          path: /tmp/format-out/ci.yml
-          if-no-files-found: error
-          retention-days: 1
+          mkdir -p .tmp
+          cp .github/workflows/ci.yml .tmp/ci-formatted.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .tmp/ci-formatted.yml
+          git commit -m "chore: export Oxfmt-formatted CI workflow"
+          git push origin "HEAD:$GITHUB_REF_NAME"
   test-reachability:
     name: Test reachability
     runs-on: ubuntu-latest
