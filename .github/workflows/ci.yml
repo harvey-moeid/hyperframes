@@ -50,17 +50,23 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
+          show-progress: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
       - name: Install workspace dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: |
+          if ! bun install --frozen-lockfile --ignore-scripts >/tmp/oxfmt-install.log 2>&1; then
+            tail -n 80 /tmp/oxfmt-install.log
+            exit 1
+          fi
       - name: Format the reported files and restore the temporary workflow
         run: |
-          bun run oxfmt --write cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
+          set -euxo pipefail
+          ./node_modules/.bin/oxfmt --write cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           git checkout HEAD^ -- .github/workflows/ci.yml
-          bun run oxfmt --write .github/workflows/ci.yml
+          ./node_modules/.bin/oxfmt --write .github/workflows/ci.yml
           git add .github/workflows/ci.yml cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           if git diff --cached --quiet; then
             echo "No formatting changes were produced."
