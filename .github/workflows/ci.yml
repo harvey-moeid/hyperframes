@@ -63,12 +63,14 @@ jobs:
           fi
       - name: Format the reported files and restore the temporary workflow
         run: |
-          set -euxo pipefail
+          set -euo pipefail
+          {
+            set -x
           ./node_modules/.bin/oxfmt --write cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           git checkout HEAD^ -- .github/workflows/ci.yml
           ./node_modules/.bin/oxfmt --write .github/workflows/ci.yml
           cp .github/workflows/ci.yml /tmp/ci-formatted.yml
-          git reset HEAD -- .github/workflows/ci.yml
+          git restore --staged .github/workflows/ci.yml
           git add cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           if git diff --cached --quiet; then
             echo "No formatting changes were produced."
@@ -78,6 +80,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "style: apply Oxfmt to reported files"
           git push origin "HEAD:$GITHUB_REF_NAME"
+          } >/tmp/oxfmt-run.log 2>&1 || { tail -n 100 /tmp/oxfmt-run.log; exit 1; }
       - name: Upload formatted CI workflow
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
