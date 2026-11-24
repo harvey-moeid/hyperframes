@@ -33,7 +33,12 @@
 
 import { htmlPage } from "./page.js";
 import { safeEqual } from "./auth.js";
-import { reserveRender, releaseRender, snapshotCompositionAssets, removeRenderAssetSnapshot } from "./render-guard.js";
+import {
+  reserveRender,
+  releaseRender,
+  snapshotCompositionAssets,
+  removeRenderAssetSnapshot,
+} from "./render-guard.js";
 
 // Aturan input yang sama dipakai ulang di workflow (validasi dua lapis).
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;

@@ -20,7 +20,11 @@ function makeBucket(initial = {}) {
   const objects = new Map();
   for (const [key, value] of Object.entries(initial)) {
     const bytes = new TextEncoder().encode(value);
-    objects.set(key, { bytes, etag: "etag-" + key, httpMetadata: { contentType: "application/octet-stream" } });
+    objects.set(key, {
+      bytes,
+      etag: "etag-" + key,
+      httpMetadata: { contentType: "application/octet-stream" },
+    });
   }
   return {
     objects,
@@ -30,7 +34,10 @@ function makeBucket(initial = {}) {
       if (options.onlyIf?.etagDoesNotMatch === "*") {
         objects.set(key, { bytes: new Uint8Array(), etag: "pending-" + key, httpMetadata: {} });
       }
-      const bytes = typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(await new Response(value).arrayBuffer());
+      const bytes =
+        typeof value === "string"
+          ? new TextEncoder().encode(value)
+          : new Uint8Array(await new Response(value).arrayBuffer());
       objects.set(key, { bytes, etag: "new-" + key, httpMetadata: options.httpMetadata || {} });
       return { key, size: bytes.length };
     },
@@ -47,8 +54,14 @@ function makeBucket(initial = {}) {
     async get(key, options = {}) {
       const value = objects.get(key);
       if (!value) return null;
-      if (options.onlyIf?.etagMatches && options.onlyIf.etagMatches !== value.etag) return { body: undefined };
-      return { body: new Response(value.bytes).body, etag: value.etag, size: value.bytes.length, httpMetadata: value.httpMetadata };
+      if (options.onlyIf?.etagMatches && options.onlyIf.etagMatches !== value.etag)
+        return { body: undefined };
+      return {
+        body: new Response(value.bytes).body,
+        etag: value.etag,
+        size: value.bytes.length,
+        httpMetadata: value.httpMetadata,
+      };
     },
   };
 }
@@ -66,7 +79,10 @@ test("render reservation is atomic and one-time", async () => {
 });
 
 test("R2 assets are copied to an immutable render-specific prefix", async () => {
-  const bucket = makeBucket({ "assets/promo/intro.mp4": "video-bytes", "assets/promo/cover.png": "image-bytes" });
+  const bucket = makeBucket({
+    "assets/promo/intro.mp4": "video-bytes",
+    "assets/promo/cover.png": "image-bytes",
+  });
   const result = await snapshotCompositionAssets(bucket, "promo", "render-456");
   assert.equal(result.count, 2);
   assert.equal(result.bytes, 22);

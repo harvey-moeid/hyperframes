@@ -49,7 +49,8 @@ function validateAssetObjects(objects, sourcePrefix) {
   for (const item of objects) {
     const filename = item.key.slice(sourcePrefix.length);
     if (!ASSET_NAME_RE.test(filename)) throw new Error("invalid_render_asset_key");
-    if (!Number.isSafeInteger(item.size) || item.size <= 0) throw new Error("invalid_render_asset_size");
+    if (!Number.isSafeInteger(item.size) || item.size <= 0)
+      throw new Error("invalid_render_asset_size");
     totalBytes += item.size;
     if (totalBytes > MAX_SNAPSHOT_BYTES) throw new Error("render_assets_too_large");
   }
