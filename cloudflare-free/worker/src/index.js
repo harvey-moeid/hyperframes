@@ -33,6 +33,7 @@
 
 import { htmlPage } from "./page.js";
 import { safeEqual } from "./auth.js";
+import { reserveRender, releaseRender, snapshotCompositionAssets, removeRenderAssetSnapshot } from "./render-guard.js";
 
 // Aturan input yang sama dipakai ulang di workflow (validasi dua lapis).
 const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -450,7 +451,7 @@ async function handleLargeAsset(request, env, composition, filename) {
 
 /** POST /render  body: { id?, composition?, quality?, html?, sha? } → 202 */
 async function handleRender(request, env, origin) {
-  if (!env.API_KEY || !env.GITHUB_TOKEN || !REPO_RE.test(env.GITHUB_REPO ?? "")) {
+  if (!env.API_KEY || !env.GITHUB_TOKEN || !env.VIDEOS || !REPO_RE.test(env.GITHUB_REPO ?? "")) {
     return json({ error: "server_not_configured" }, 500);
   }
 
@@ -475,10 +476,9 @@ async function handleRender(request, env, origin) {
     return json({ error: "invalid_json" }, 400);
   }
 
-  // id otomatis berupa UUID (tak mudah ditebak) bila tidak diberikan.
+  // ID otomatis UUID acak. ID yang sudah pernah dipakai tidak dapat digunakan ulang.
   const id = body.id ?? crypto.randomUUID();
   const hasHtml = body.html !== undefined;
-  // Komposisi baru dari `html` tanpa nama -> web-<id> (maks 64 karakter).
   const composition =
     body.composition ??
     (hasHtml ? `web-${typeof id === "string" ? id.slice(0, 60) : ""}` : DEFAULT_COMPOSITION);
@@ -503,73 +503,80 @@ async function handleRender(request, env, origin) {
     }
   }
 
-  // Jangan menimpa hasil yang sudah ada.
-  if (await env.VIDEOS.head(objectKey(id))) {
-    return json({ error: "id_already_exists", id }, 409);
-  }
-
-  // Komposisi baru: commit dulu, supaya file sudah ada saat workflow checkout.
-  let commitSha;
-  if (hasHtml) {
-    const commit = await commitComposition(env, composition, body.html);
-    if (!commit.ok) {
-      if (commit.status === 422) {
-        return json({ error: "composition_already_exists", composition }, 409);
-      }
-      return json({ error: "commit_failed", github_status: commit.status }, 502);
-    }
-    commitSha = commit.sha;
-  }
-
-  // id yang pernah gagal boleh dipakai ulang: hapus penanda lama supaya /status
-  // tidak langsung membalas "gagal" untuk render yang baru. Kegagalan di sini
-  // tidak menghentikan render (penanda lama paling buruk menampilkan status usang).
-  try {
-    await env.VIDEOS.delete(failedKey(id));
-  } catch (err) {
-    console.error("clear_failed_marker", err instanceof Error ? err.message : String(err));
-  }
-
-  const clientPayload = { id, composition, quality };
-  // SHA hasil commit HTML selalu paling baru; bila tidak ada HTML, pakai SHA opsional dari klien.
-  if (commitSha) clientPayload.sha = commitSha;
-  else if (body.sha !== undefined) clientPayload.sha = body.sha;
-
-  const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
-    method: "POST",
-    headers: githubHeaders(env),
-    body: JSON.stringify({
-      event_type: "render-video",
-      client_payload: clientPayload,
-    }),
-  });
-
-  // GitHub membalas 204 No Content bila dispatch diterima.
-  if (res.status !== 204) {
-    const detail = (await res.text()).slice(0, 200);
-    console.error("dispatch_failed", res.status, detail);
-    const failure = { error: "dispatch_failed", github_status: res.status };
-    // Komposisi sudah ter-commit; beri tahu klien agar bisa mencoba lagi tanpa commit baru.
-    if (commitSha) {
-      failure.committed = true;
-      failure.composition = composition;
-    }
-    return json(failure, 502);
-  }
-
-  const result = {
-    id,
+  // Reservasi create-once di R2 bersifat atomik: dua request serentak untuk ID sama
+  // tidak dapat sama-sama mengirim GitHub repository_dispatch.
+  const reserved = await reserveRender(env.VIDEOS, id, {
     composition,
     quality,
-    status: "queued",
-    status_url: `${origin}/status/${id}`,
-    video_url: `${origin}/video/${id}`,
-  };
-  if (commitSha) {
-    result.committed = true;
-    result.commit_sha = commitSha;
+    created_at: new Date().toISOString(),
+  });
+  if (!reserved) return json({ error: "id_already_exists", id }, 409);
+
+  let snapshot = { count: 0, bytes: 0 };
+  try {
+    // Komposisi baru: commit dahulu, lalu workflow checkout SHA persis ini.
+    let commitSha;
+    if (hasHtml) {
+      const commit = await commitComposition(env, composition, body.html);
+      if (!commit.ok) {
+        await releaseRender(env.VIDEOS, id);
+        if (commit.status === 422) {
+          return json({ error: "composition_already_exists", composition }, 409);
+        }
+        return json({ error: "commit_failed", github_status: commit.status }, 502);
+      }
+      commitSha = commit.sha;
+    }
+
+    // Aset besar di R2 disalin ke prefix immutable khusus render sebelum dispatch.
+    // Aset kecil di GitHub dipatok lewat body.sha (atau SHA komposisi baru).
+    snapshot = await snapshotCompositionAssets(env.VIDEOS, composition, id);
+
+    const clientPayload = { id, composition, quality, asset_snapshot: true };
+    if (commitSha) clientPayload.sha = commitSha;
+    else if (body.sha !== undefined) clientPayload.sha = body.sha;
+
+    const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
+      method: "POST",
+      headers: githubHeaders(env),
+      body: JSON.stringify({
+        event_type: "render-video",
+        client_payload: clientPayload,
+      }),
+    });
+
+    if (res.status !== 204) {
+      const detail = (await res.text()).slice(0, 200);
+      console.error("dispatch_failed", res.status, detail);
+      await removeRenderAssetSnapshot(env.VIDEOS, id);
+      await releaseRender(env.VIDEOS, id);
+      const failure = { error: "dispatch_failed", github_status: res.status };
+      if (commitSha) {
+        failure.committed = true;
+        failure.composition = composition;
+      }
+      return json(failure, 502);
+    }
+
+    const result = {
+      id,
+      composition,
+      quality,
+      status: "queued",
+      status_url: `${origin}/status/${id}`,
+      video_url: `${origin}/video/${id}`,
+      asset_snapshot: { count: snapshot.count, bytes: snapshot.bytes },
+    };
+    if (commitSha) {
+      result.committed = true;
+      result.commit_sha = commitSha;
+    }
+    return json(result, 202);
+  } catch (err) {
+    await removeRenderAssetSnapshot(env.VIDEOS, id).catch(() => {});
+    await releaseRender(env.VIDEOS, id).catch(() => {});
+    throw err;
   }
-  return json(result, 202);
 }
 
 /**

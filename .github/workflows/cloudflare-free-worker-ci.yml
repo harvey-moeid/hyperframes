@@ -1,0 +1,36 @@
+name: Cloudflare Free Worker CI
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare-free/worker/**"
+      - ".github/workflows/cloudflare-free-worker-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare-free/worker/**"
+      - ".github/workflows/cloudflare-free-worker-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-free-worker-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Syntax check
+        run: |
+          node --check cloudflare-free/worker/src/index.js
+          node --check cloudflare-free/worker/src/render-guard.js
+          node --check cloudflare-free/worker/src/page.js
+      - name: Render guard regression tests
+        run: node --test cloudflare-free/worker/tests/*.test.mjs

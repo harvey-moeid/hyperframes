@@ -592,6 +592,13 @@ function initCreate() {
     if (comp) payload.composition = comp;
     if (isNew) payload.html = html;
     if (rid) payload.id = rid;
+    // Aset kecil tersimpan di GitHub. Kirim SHA commit terakhir untuk checkout snapshot
+    // yang memuat seluruh aset yang sudah diunggah pada komposisi ini.
+    if (!isNew && comp) {
+      var compAssets = loadAssets().filter(function (a) { return a.composition === comp && a.storage === 'github' && a.commit_sha; });
+      compAssets.sort(function (a, b) { return b.ts - a.ts; });
+      if (compAssets.length) payload.sha = compAssets[0].commit_sha;
+    }
 
     var btn = $('submit');
     btn.disabled = true;
