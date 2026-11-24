@@ -82,6 +82,16 @@ jobs:
           fetch-depth: 0
           lfs: false
           show-progress: false
+          persist-credentials: true
+          sparse-checkout: |
+            .editorconfig
+            .oxfmtrc.json
+            package.json
+            cloudflare-free/worker/src
+            cloudflare-free/worker/tests
+            .github/workflows/ci.yml
+            .github/workflows/render-video.yml
+            .github/workflows/cloudflare-free-worker-ci.yml
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: 1.4.4
@@ -109,6 +119,8 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "style: format unified render worker changes"
             git push --verbose origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "No formatting changes to commit."
           fi
 
   test-reachability:
