@@ -16,6 +16,7 @@ var ASSET_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 var QUALS = { draft: 1, standard: 1, high: 1 };
 var MAX_HTML_BYTES = 256 * 1024;        // sama dengan batas di Worker
 var MAX_ASSET_BYTES = 8 * 1024 * 1024;  // sama dengan batas di Worker
+var MAX_LARGE_ASSET_BYTES = 90 * 1024 * 1024; // aset besar dikirim sebagai stream langsung ke R2
 var MAX_WAIT_MS = 35 * 60 * 1000;       // workflow dibatasi 30 menit + antrean
 var STATUS_TIMEOUT_MS = 15000;
 var POST_TIMEOUT_MS = 25000;

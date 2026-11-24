@@ -109,6 +109,8 @@ function loadAssets() {
       src: 'assets/' + a.filename,
       bytes: isNum(a.bytes) ? a.bytes : 0,
       cat: (a.cat === 'avatar' || a.cat === 'video' || a.cat === 'image' || a.cat === 'audio') ? a.cat : 'other',
+      storage: a.storage === 'r2' ? 'r2' : 'github',
+      commit_sha: typeof a.commit_sha === 'string' && /^[0-9a-f]{40}$/.test(a.commit_sha) ? a.commit_sha : '',
       ts: isNum(a.ts) ? a.ts : Date.now()
     });
   }
