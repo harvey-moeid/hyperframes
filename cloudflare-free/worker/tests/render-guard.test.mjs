@@ -26,6 +26,10 @@ function makeBucket(initial = {}) {
     objects,
     async put(key, value, options = {}) {
       if (options.onlyIf?.etagDoesNotMatch === "*" && objects.has(key)) return null;
+      // Simulasikan atomic create-only R2: tandai key sebelum await pertama.
+      if (options.onlyIf?.etagDoesNotMatch === "*") {
+        objects.set(key, { bytes: new Uint8Array(), etag: "pending-" + key, httpMetadata: {} });
+      }
       const bytes = typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(await new Response(value).arrayBuffer());
       objects.set(key, { bytes, etag: "new-" + key, httpMetadata: options.httpMetadata || {} });
       return { key, size: bytes.length };
@@ -65,7 +69,7 @@ test("R2 assets are copied to an immutable render-specific prefix", async () => 
   const bucket = makeBucket({ "assets/promo/intro.mp4": "video-bytes", "assets/promo/cover.png": "image-bytes" });
   const result = await snapshotCompositionAssets(bucket, "promo", "render-456");
   assert.equal(result.count, 2);
-  assert.equal(result.bytes, 21);
+  assert.equal(result.bytes, 22);
   assert.ok(bucket.objects.has("render-assets/render-456/intro.mp4"));
   assert.ok(bucket.objects.has("render-assets/render-456/cover.png"));
   await removeRenderAssetSnapshot(bucket, "render-456");

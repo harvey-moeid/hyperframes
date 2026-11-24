@@ -513,6 +513,7 @@ async function handleRender(request, env, origin) {
   if (!reserved) return json({ error: "id_already_exists", id }, 409);
 
   let snapshot = { count: 0, bytes: 0 };
+  let dispatchAttempted = false;
   try {
     // Komposisi baru: commit dahulu, lalu workflow checkout SHA persis ini.
     let commitSha;
@@ -536,6 +537,9 @@ async function handleRender(request, env, origin) {
     if (commitSha) clientPayload.sha = commitSha;
     else if (body.sha !== undefined) clientPayload.sha = body.sha;
 
+    // Setelah request dispatch dikirim, kegagalan jaringan bersifat ambigu. Dalam keadaan
+    // itu reservation dan snapshot dipertahankan agar klien tidak memicu render ganda.
+    dispatchAttempted = true;
     const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
       method: "POST",
       headers: githubHeaders(env),
@@ -573,8 +577,10 @@ async function handleRender(request, env, origin) {
     }
     return json(result, 202);
   } catch (err) {
-    await removeRenderAssetSnapshot(env.VIDEOS, id).catch(() => {});
-    await releaseRender(env.VIDEOS, id).catch(() => {});
+    if (!dispatchAttempted) {
+      await removeRenderAssetSnapshot(env.VIDEOS, id).catch(() => {});
+      await releaseRender(env.VIDEOS, id).catch(() => {});
+    }
     throw err;
   }
 }
