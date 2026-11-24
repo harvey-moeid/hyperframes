@@ -67,6 +67,7 @@ jobs:
           ./node_modules/.bin/oxfmt --write cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           git checkout HEAD^ -- .github/workflows/ci.yml
           ./node_modules/.bin/oxfmt --write .github/workflows/ci.yml
+          cp .github/workflows/ci.yml /tmp/ci-formatted.yml
           git reset HEAD -- .github/workflows/ci.yml
           git add cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           if git diff --cached --quiet; then
@@ -77,6 +78,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "style: apply Oxfmt to reported files"
           git push origin "HEAD:$GITHUB_REF_NAME"
+      - name: Upload formatted CI workflow
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: formatted-ci-workflow
+          path: /tmp/ci-formatted.yml
+          if-no-files-found: error
+          retention-days: 1
   test-reachability:
     name: Test reachability
     runs-on: ubuntu-latest
