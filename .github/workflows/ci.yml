@@ -67,6 +67,7 @@ jobs:
           ./node_modules/.bin/oxfmt --write cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           git checkout HEAD^ -- .github/workflows/ci.yml
           ./node_modules/.bin/oxfmt --write .github/workflows/ci.yml
+          git reset HEAD -- .github/workflows/ci.yml
           git add cloudflare-free/worker/src/transcribe.js cloudflare-free/worker/src/ui/markup.js
           if git diff --cached --quiet; then
             echo "No formatting changes were produced."
