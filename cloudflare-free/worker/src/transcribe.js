@@ -23,7 +23,15 @@ const SHA_RE = /^[0-9a-f]{40}$/;
 const FILENAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const AUDIO_EXT_RE = /\.(wav|mp3|m4a|aac|ogg|flac|mp4|webm|mov)$/i;
 const LANGUAGE_RE = /^[a-z]{2,3}$/;
-const MODELS = new Set(["tiny.en", "base.en", "small.en", "medium.en", "small", "medium", "large-v3"]);
+const MODELS = new Set([
+  "tiny.en",
+  "base.en",
+  "small.en",
+  "medium.en",
+  "small",
+  "medium",
+  "large-v3",
+]);
 const DEFAULT_MODEL = "small";
 const DEFAULT_LANGUAGE = "id";
 const RUN_URL_RE =
@@ -176,7 +184,11 @@ export async function handleTranscript(request, env, id) {
     } catch {
       data = null;
     }
-    const out = { id, status: "failed", reason: data && data.reason === "cancelled" ? "cancelled" : "failed" };
+    const out = {
+      id,
+      status: "failed",
+      reason: data && data.reason === "cancelled" ? "cancelled" : "failed",
+    };
     if (data && typeof data.run_url === "string" && RUN_URL_RE.test(data.run_url)) {
       out.run_url = data.run_url;
     }
