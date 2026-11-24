@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080,height=1920,initial-scale=1">
+<title>JalurTarot — Mengapa Kamu Tertarik pada Orang yang Sulit Didapat?</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+:root{--bg:#100725;--bg2:#180b35;--violet:#5420a8;--electric:#923bff;--pink:#ff8bd8;--gold:#ffd36a;--white:#fff;--muted:#e8dcff;--safe:90px}
+*{box-sizing:border-box}html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--bg);color:var(--white);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,#32115d 0%,#1a0a37 42%,#090419 100%)}
+.clip{position:absolute;inset:0;overflow:hidden}.stage{position:absolute;inset:0;opacity:0;overflow:hidden}
+#bg{z-index:0;background:radial-gradient(ellipse at 50% 35%,rgba(146,59,255,.23),transparent 50%),radial-gradient(ellipse at 12% 78%,rgba(255,139,216,.12),transparent 40%),linear-gradient(160deg,#180b35,#090419 80%)}
+#bg:before,#bg:after{content:"";position:absolute;inset:-100px;background-image:radial-gradient(circle,#fff 1.5px,transparent 2px),radial-gradient(circle,#ffd36a 1px,transparent 2px),radial-gradient(circle,#c89cff 1px,transparent 2px);background-size:137px 173px,211px 197px,173px 229px;background-position:8px 19px,47px 72px,99px 31px;opacity:.32}
+#bg:after{opacity:.16;background-size:257px 223px,193px 271px,311px 251px;background-position:77px 91px,10px 130px,133px 40px}
+.orbit{position:absolute;left:190px;top:420px;width:700px;height:700px;border:2px solid rgba(255,211,106,.22);border-radius:50%;box-shadow:0 0 55px rgba(146,59,255,.18),inset 0 0 55px rgba(146,59,255,.1)}
+.orbit:before,.orbit:after{content:"";position:absolute;inset:44px;border:1px dashed rgba(255,139,216,.28);border-radius:50%}.orbit:after{inset:115px;border-color:rgba(255,211,106,.2)}
+.star{position:absolute;width:12px;height:12px;background:var(--gold);clip-path:polygon(50% 0,61% 38%,100% 50%,61% 62%,50% 100%,39% 62%,0 50%,39% 38%);opacity:.8}
+.star-a{left:145px;top:330px}.star-b{left:860px;top:420px}.star-c{left:225px;top:1510px}.star-d{left:890px;top:1480px}.star-e{left:520px;top:180px}.star-f{left:720px;top:1650px}
+.brand-chip{position:absolute;top:94px;left:0;right:0;text-align:center;font-size:24px;font-weight:800;letter-spacing:.32em;color:var(--gold);text-shadow:0 0 18px rgba(255,211,106,.45)}
+.kicker{font-size:27px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--pink);text-align:center;margin-bottom:28px;text-shadow:0 0 24px rgba(255,139,216,.4)}
+.headline{font-weight:900;font-size:76px;line-height:1.04;letter-spacing:-.045em;text-align:center;text-transform:uppercase;text-wrap:balance;text-shadow:0 5px 0 rgba(30,8,66,.65),0 0 28px rgba(146,59,255,.45)}
+.headline .gold{color:var(--gold)}.subline{font-size:36px;line-height:1.25;text-align:center;color:var(--muted);font-weight:600;max-width:850px;margin:26px auto 0}
+.tag{display:inline-flex;align-items:center;justify-content:center;padding:13px 24px;border:2px solid rgba(255,211,106,.75);border-radius:999px;color:var(--gold);font-size:25px;font-weight:800;letter-spacing:.08em;background:rgba(45,14,82,.72);box-shadow:0 0 26px rgba(255,211,106,.14)}
+.tag-spaced{margin-top:36px}.chat-left{left:105px;top:820px}.chat-right{right:105px;top:930px}.ring-low{top:1120px}.ring-outro{top:1110px}.headline-compact{font-size:62px}.headline-reflect{font-size:72px}.card-caption-left{top:1220px;left:80px;right:390px;font-size:31px}
+.mascot{position:absolute;width:470px;height:470px;object-fit:contain;filter:drop-shadow(0 18px 26px rgba(146,59,255,.4));image-rendering:auto}
+.magic-ring{position:absolute;width:680px;height:300px;left:200px;top:1100px;border-radius:50%;border:5px solid rgba(255,139,216,.9);box-shadow:0 0 24px #923bff, inset 0 0 32px rgba(255,139,216,.7);transform:scaleY(.38);opacity:.8}
+.magic-ring .ring-asset{position:absolute;inset:-38px;width:calc(100% + 76px);height:calc(100% + 76px);object-fit:fill;opacity:.92}.magic-ring:before,.magic-ring:after{content:"";position:absolute;inset:18px;border:2px dashed var(--gold);border-radius:50%}.magic-ring:after{inset:40px;border-color:rgba(255,255,255,.55)}
+.glow{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(255,139,216,.5),rgba(146,59,255,.15) 40%,transparent 70%);filter:blur(6px)}
+.stage-content{position:absolute;left:90px;right:90px;top:220px;display:flex;flex-direction:column;align-items:center}
+.mascot-slot{position:absolute;left:305px;top:970px;width:470px;height:470px}
+#s1 .stage-content{top:265px}#s1 .mascot-slot{top:1000px;left:305px}
+#s2 .stage-content{top:240px}#s2 .mascot-slot{top:1000px;left:305px}
+#s3 .stage-content{top:260px}#s3 .mascot-slot{top:1010px;left:305px}
+#s4 .stage-content{top:250px}#s4 .mascot-slot{top:1010px;left:305px}
+#s5 .stage-content{top:180px}.card-stage{position:absolute;left:0;right:0;top:560px;height:650px;display:flex;align-items:center;justify-content:center}
+.tarot-card{position:absolute;width:370px;height:600px;border-radius:30px;border:5px solid var(--gold);background:linear-gradient(160deg,#2c1254,#100725 68%,#40106d);box-shadow:0 0 40px rgba(146,59,255,.45),inset 0 0 28px rgba(255,139,216,.18);opacity:0;overflow:hidden;transform-style:preserve-3d}
+.tarot-card:before{content:"";position:absolute;inset:16px;border:2px solid rgba(255,211,106,.65);border-radius:18px}
+.card-no{position:absolute;top:32px;left:0;right:0;text-align:center;font-size:30px;letter-spacing:.3em;color:var(--gold);font-weight:800}
+.card-art{position:absolute;left:40px;right:40px;top:100px;height:340px;display:flex;align-items:center;justify-content:center}
+.card-title{position:absolute;left:18px;right:18px;bottom:48px;text-align:center;color:var(--gold);font-family:Georgia,serif;font-weight:800;font-size:40px;letter-spacing:.12em}
+.card-caption{position:absolute;left:110px;right:110px;top:1235px;text-align:center;font-size:36px;font-weight:700;color:var(--muted)}
+#s6 .stage-content{top:380px}#s6 .mascot-slot{top:1040px;left:305px}
+#s7 .stage-content{top:410px}#s7 .mascot-slot{top:940px;left:305px}
+#s7 .outro-brand{font-family:Georgia,serif;font-size:90px;line-height:1.02;letter-spacing:.08em;text-align:center;color:var(--gold);font-weight:900;text-shadow:0 0 24px rgba(255,211,106,.65),0 5px 0 #3a126a}
+#s7 .outro-tag{font-size:30px;line-height:1.55;letter-spacing:.18em;text-align:center;font-weight:800;margin-top:28px}
+.small-note{font-size:25px;color:#d8c5ff;text-align:center;letter-spacing:.06em;margin-top:22px}
+.chat-bubble{position:absolute;padding:20px 26px;border-radius:28px;background:linear-gradient(145deg,rgba(84,32,168,.95),rgba(35,12,75,.95));border:2px solid rgba(255,211,106,.75);box-shadow:0 0 30px rgba(146,59,255,.35);font-size:32px;font-weight:800;color:#fff}
+.heart{color:#ff8bd8;font-size:52px;text-shadow:0 0 22px #ff8bd8}
+.illusion{position:absolute;left:320px;top:720px;width:440px;height:210px;border-radius:50%;border:3px solid rgba(255,139,216,.8);background:radial-gradient(ellipse,rgba(255,139,216,.22),rgba(84,32,168,.1) 60%,transparent 75%);box-shadow:0 0 60px rgba(255,139,216,.25)}
+.illusion:before{content:"✧";position:absolute;left:185px;top:38px;font-size:115px;color:var(--gold);text-shadow:0 0 35px var(--pink)}
+.illusion:after{content:"IDEA DI DIRINYA";position:absolute;left:0;right:0;bottom:26px;text-align:center;font-size:23px;font-weight:800;letter-spacing:.2em;color:var(--pink)}
+#s5 .mascot-slot{top:1210px;left:675px;width:300px;height:300px}#s5 .mascot{width:300px;height:300px}
+#s5 .card-caption{top:1220px;left:80px;right:390px;font-size:31px}
+#s6 .question-mark{font-size:30px;color:var(--pink);font-weight:700;letter-spacing:.12em;margin-top:38px;text-align:center}
+.footer-mark{position:absolute;bottom:105px;left:0;right:0;text-align:center;font-size:20px;letter-spacing:.3em;color:rgba(255,255,255,.52);font-weight:700}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="60" data-width="1080" data-height="1920" data-fps="30">
+  <div id="bg" class="clip" data-start="0" data-duration="60" data-track-index="0">
+    <div class="orbit" id="orbit"></div>
+    <div class="brand-chip">✦ JALUR TAROT ✦</div>
+    <div class="star star-a"></div><div class="star star-b"></div><div class="star star-c"></div><div class="star star-d"></div><div class="star star-e"></div><div class="star star-f"></div>
+  </div>
+
+  <section id="s1" class="clip" data-start="0" data-duration="6" data-track-index="1">
+    <div class="stage" id="stage1">
+      <div class="stage-content">
+        <div class="kicker">Pernah merasakannya?</div>
+        <div class="headline"><span>MENGAPA KAMU</span><br><span class="gold">TERTARIK PADA</span><br><span>YANG SULIT DIDAPAT?</span></div>
+        <div class="subline">Ada alasan psikologis di baliknya.</div>
+      </div>
+      <div class="magic-ring" id="ring1"><img class="ring-asset" src="assets/magic_ring.webp" alt=""></div>
+      <div class="mascot-slot"><img id="mascot1" class="mascot" src="assets/float_00.webp" alt="Maskot Jalur Tarot"></div>
+      <div class="footer-mark">PSYCHOLOGY • TAROT • SELF REFLECTION</div>
+    </div>
+  </section>
+
+  <section id="s2" class="clip" data-start="6" data-duration="11" data-track-index="2">
+    <div class="stage" id="stage2">
+      <div class="stage-content">
+        <div class="kicker">Pola pertama</div>
+        <div class="headline"><span>PERHATIAN</span><br><span class="gold">YANG TAK KONSISTEN</span></div>
+        <div class="subline">Kadang dekat. Kadang menghilang.</div>
+        <div class="tag tag-spaced">INTERMITTENT REINFORCEMENT</div>
+      </div>
+      <div class="chat-bubble chat-left" id="chat1">Aku kangen <span class="heart">♥</span></div>
+      <div class="chat-bubble chat-right" id="chat2">Lalu menghilang…</div>
+      <div class="mascot-slot"><img id="mascot2" class="mascot" src="assets/idle_00.webp" alt="Maskot Jalur Tarot"></div>
+      <div class="footer-mark">PERHATIAN YANG DATANG DAN PERGI</div>
+    </div>
+  </section>
+
+  <section id="s3" class="clip" data-start="17" data-duration="10" data-track-index="3">
+    <div class="stage" id="stage3">
+      <div class="stage-content">
+        <div class="kicker">Pola kedua</div>
+        <div class="headline"><span>YANG SULIT DIDAPAT</span><br><span class="gold">TERASA LEBIH BERHARGA</span></div>
+        <div class="subline">Scarcity Effect</div>
+        <div class="small-note">Ketidakpastian memancing rasa ingin memiliki.</div>
+      </div>
+      <div class="magic-ring ring-low" id="ring3"><img class="ring-asset" src="assets/magic_ring.webp" alt=""></div>
+      <div class="mascot-slot"><img id="mascot3" class="mascot" src="assets/happy_00.webp" alt="Maskot Jalur Tarot"></div>
+      <div class="footer-mark">KELANGKAAN BUKAN BUKTI KECOCOKAN</div>
+    </div>
+  </section>
+
+  <section id="s4" class="clip" data-start="27" data-duration="11" data-track-index="4">
+    <div class="stage" id="stage4">
+      <div class="stage-content">
+        <div class="kicker">Pola ketiga</div>
+        <div class="headline"><span>APAKAH KAMU</span><br><span class="gold">MENCINTAI DIRINYA?</span></div>
+        <div class="subline">Atau sosok yang kamu bayangkan?</div>
+      </div>
+      <div class="illusion" id="illusion"></div>
+      <div class="mascot-slot"><img id="mascot4" class="mascot" src="assets/blink_00.webp" alt="Maskot Jalur Tarot"></div>
+      <div class="footer-mark">IDEALIZATION • MEMBEDAKAN FAKTA DAN HARAPAN</div>
+    </div>
+  </section>
+
+  <section id="s5" class="clip" data-start="38" data-duration="12" data-track-index="5">
+    <div class="stage" id="stage5">
+      <div class="stage-content">
+        <div class="kicker">Tarot sebagai cermin refleksi</div>
+        <div class="headline headline-compact">TIGA SIMBOL UNTUK DIRENUNGKAN</div>
+      </div>
+      <div class="card-stage">
+        <div class="tarot-card" id="devil">
+          <div class="card-no">XV</div>
+          <div class="card-art"><svg width="280" height="320" viewBox="0 0 280 320"><path d="M140 24 L185 95 L166 160 L140 212 L114 160 L95 95Z" fill="none" stroke="#ffd36a" stroke-width="5"/><circle cx="140" cy="112" r="42" fill="none" stroke="#ff8bd8" stroke-width="5"/><path d="M75 255 Q140 205 205 255 M95 280 Q140 240 185 280" fill="none" stroke="#ffd36a" stroke-width="5"/><path d="M140 12V50 M62 120H92 M188 120H218" stroke="#923bff" stroke-width="6"/></svg></div>
+          <div class="card-title">THE DEVIL</div>
+        </div>
+        <div class="tarot-card" id="moon">
+          <div class="card-no">XVIII</div>
+          <div class="card-art"><svg width="280" height="320" viewBox="0 0 280 320"><path d="M180 36 A90 90 0 1 0 180 196 A70 70 0 1 1 180 36" fill="#ffd36a"/><path d="M50 245 Q140 190 230 245 M70 275 Q140 225 210 275" fill="none" stroke="#ff8bd8" stroke-width="5"/><circle cx="90" cy="90" r="8" fill="#fff"/><circle cx="218" cy="75" r="7" fill="#fff"/><path d="M140 20V45 M35 160H60 M220 160H245" stroke="#ffd36a" stroke-width="5"/></svg></div>
+          <div class="card-title">THE MOON</div>
+        </div>
+        <div class="tarot-card" id="wands">
+          <div class="card-no">VI</div>
+          <div class="card-art"><svg width="280" height="320" viewBox="0 0 280 320"><path d="M70 260L115 55 M120 270L145 38 M170 265L175 72 M215 260L205 55" stroke="#ffd36a" stroke-width="12" stroke-linecap="round"/><path d="M60 245Q140 205 220 245" fill="none" stroke="#ff8bd8" stroke-width="5"/><path d="M145 12L160 38L145 64L130 38Z" fill="#923bff" stroke="#ffd36a" stroke-width="4"/></svg></div>
+          <div class="card-title">SIX OF WANDS</div>
+        </div>
+      </div>
+      <div class="card-caption card-caption-left" id="card-caption">Keterikatan dan obsesi</div>
+      <div class="mascot-slot"><img id="mascot5" class="mascot" src="assets/idle_00.webp" alt="Maskot Jalur Tarot"></div>
+      <div class="footer-mark">SIMBOL REFLEKSI • BUKAN DIAGNOSIS</div>
+    </div>
+  </section>
+
+  <section id="s6" class="clip" data-start="50" data-duration="7" data-track-index="6">
+    <div class="stage" id="stage6">
+      <div class="stage-content">
+        <div class="kicker">Berhenti sejenak</div>
+        <div class="headline headline-reflect"><span>BENARKAH KAMU</span><br><span class="gold">MENGINGINKANNYA?</span></div>
+        <div class="subline">Atau kamu hanya ingin dipilih olehnya?</div>
+        <div class="question-mark">JAWAB DENGAN JUJUR PADA DIRIMU.</div>
+      </div>
+      <div class="mascot-slot"><img id="mascot6" class="mascot" src="assets/idle_00.webp" alt="Maskot Jalur Tarot"></div>
+      <div class="footer-mark">REFLEKSI DIRI DIMULAI DARI KEJUJURAN</div>
+    </div>
+  </section>
+
+  <section id="s7" class="clip" data-start="57" data-duration="3" data-track-index="7">
+    <div class="stage" id="stage7">
+      <div class="stage-content">
+        <div class="kicker">Sebuah ruang untuk mengenal diri</div>
+        <div class="outro-brand">JALUR<br>TAROT</div>
+        <div class="outro-tag">KENALI DIRI.<br>PAHAMI PERASAANMU.<br>TEMUKAN ARAHMU.</div>
+      </div>
+      <div class="magic-ring ring-outro" id="ring7"><img class="ring-asset" src="assets/magic_ring.webp" alt=""></div>
+      <div class="mascot-slot"><img id="mascot7" class="mascot" src="assets/wave_00.webp" alt="Maskot Jalur Tarot"></div>
+    </div>
+  </section>
+</div>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const tl = gsap.timeline({paused:true, defaults:{ease:"power3.out"}});
+  const sequences = {
+    idle: ["idle_00.webp","idle_01.webp","idle_02.webp","idle_03.webp","idle_04.webp","idle_05.webp","idle_06.webp","idle_07.webp"],
+    blink: ["blink_00.webp","blink_01.webp","blink_02.webp","blink_03.webp","blink_04.webp","blink_05.webp","blink_06.webp","blink_07.webp"],
+    happy: ["happy_00.webp","happy_01.webp","happy_02.webp","happy_03.webp","happy_04.webp","happy_05.webp","happy_06.webp","happy_07.webp"],
+    wave: ["wave_00.webp","wave_01.webp","wave_02.webp","wave_03.webp","wave_04.webp","wave_05.webp","wave_06.webp","wave_07.webp"],
+    float: ["float_00.webp","float_01.webp","float_02.webp","float_03.webp","float_04.webp","float_05.webp","float_06.webp","float_07.webp"],
+    magic: ["magic_00.webp","magic_01.webp","magic_02.webp","magic_03.webp","magic_04.webp","magic_05.webp","magic_06.webp","magic_07.webp"]
+  };
+  function frameProxy(img, list){
+    let currentFrame=0;
+    const state={};
+    Object.defineProperty(state,"frame",{get(){return currentFrame;},set(v){currentFrame=v;const i=Math.max(0,Math.min(list.length-1,Math.round(v)));img.src="assets/"+list[i];}});
+    state.frame=0;
+    return state;
+  }
+  function enterScene(id,start,duration){
+    const stage=$("#"+id);
+    gsap.set(stage,{opacity:0,y:36});
+    tl.to(stage,{opacity:1,y:0,duration:.55},start);
+    tl.to(stage,{opacity:0,y:-24,duration:.38,ease:"power2.in"},start+duration-.38);
+  }
+  function animateMascot(imgId,kind,start,loopDuration=1.05,repeat=3){
+    const img=$("#"+imgId), seq=sequences[kind];
+    const proxy=frameProxy(img,seq);
+    tl.to(proxy,{frame:7,duration:loopDuration,ease:"steps(7)",repeat,yoyo:true},start);
+    tl.to(img,{y:-22,duration:1.25,ease:"sine.inOut",repeat:Math.max(1,repeat),yoyo:true},start);
+  }
+  const scenes=[["stage1",0,6],["stage2",6,11],["stage3",17,10],["stage4",27,11],["stage5",38,12],["stage6",50,7],["stage7",57,3]];
+  scenes.forEach(([id,start,duration])=>enterScene(id,start,duration));
+  animateMascot("mascot1","float",0,.72,3);
+  animateMascot("mascot2","idle",6,1.15,3);
+  animateMascot("mascot3","happy",17,.95,3);
+  animateMascot("mascot4","blink",27,.9,3);
+  animateMascot("mascot5","magic",38,1.1,3);
+  animateMascot("mascot6","idle",50,1.2,2);
+  animateMascot("mascot7","wave",57,.72,1);
+  tl.fromTo("#ring1",{scale:.45,opacity:0},{scale:1,opacity:.82,duration:1.1,ease:"back.out(1.6)"},.2);
+  tl.to("#ring1",{rotation:18,duration:4.8,ease:"none"},.2);
+  tl.fromTo("#chat1",{x:-100,opacity:0,scale:.7},{x:0,opacity:1,scale:1,duration:.5},7.4);
+  tl.fromTo("#chat2",{x:100,opacity:0,scale:.7},{x:0,opacity:1,scale:1,duration:.5},10.3);
+  tl.to("#chat1",{opacity:.25,scale:.92,duration:.4},12.4);
+  tl.to("#chat2",{opacity:1,scale:1.04,duration:.4},12.4);
+  tl.fromTo("#ring3",{scale:.6,opacity:0},{scale:1,opacity:.8,duration:.9,ease:"back.out(1.5)"},17.3);
+  tl.to("#ring3",{rotation:-16,duration:8,ease:"none"},17.3);
+  tl.fromTo("#illusion",{scale:.5,opacity:0},{scale:1.12,opacity:1,duration:1.2,ease:"power2.out"},29.8);
+  tl.to("#illusion",{scale:1.25,opacity:.28,duration:1.1},34.7);
+  tl.to("#illusion",{scale:.78,opacity:0,duration:.7},36.1);
+  const cards=["#devil","#moon","#wands"];
+  const captions=["Keterikatan dan obsesi","Ketidakpastian dan proyeksi","Kebutuhan pengakuan dan validasi"];
+  const cardCaption=$("#card-caption");
+  cards.forEach((sel,i)=>{
+    const at=38.45+i*3.65;
+    const card=$(sel);
+    tl.fromTo(card,{opacity:0,scale:.72,rotationY:-28,y:50,transformOrigin:"50% 50%"},{opacity:1,scale:1,rotationY:0,y:0,transformOrigin:"50% 50%",duration:.55,ease:"back.out(1.5)"},at);
+    tl.to(card,{rotationY:5,scale:1.025,duration:1.3,ease:"sine.inOut",yoyo:true,repeat:1},at+.6);
+    tl.to(card,{opacity:0,scale:.78,rotationY:24,duration:.38,ease:"power2.in"},at+3.1);
+    let captionValue=0;
+    const captionState={};
+    Object.defineProperty(captionState,"text",{get(){return captionValue;},set(v){captionValue=v;cardCaption.textContent=captions[Math.max(0,Math.min(2,Math.round(v)))];}});
+    tl.to(captionState,{text:i,duration:.01},at+.08);
+  });
+  tl.fromTo("#ring7",{scale:.5,opacity:0},{scale:1,opacity:.8,duration:.65},57.1);
+  tl.to("#ring7",{rotation:22,duration:2.6,ease:"none"},57.1);
+  tl.to("#orbit",{rotation:12,duration:60,ease:"none"},0);
+  // Timeline harus didaftarkan setelah semua tween; renderer melakukan seek frame demi frame.
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+  tl.seek(0);
+})();
+</script>
+</body>
+</html>
