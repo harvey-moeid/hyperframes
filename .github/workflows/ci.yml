@@ -109,18 +109,19 @@ jobs:
             .github/workflows/render-video.yml \
             .github/workflows/cloudflare-free-worker-ci.yml \
             .github/workflows/ci.yml
-      - name: Commit formatting changes to the feature branch
+      - name: Export formatter diff and commit source files
         run: |
+          git diff --unified=3
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json cloudflare-free/worker/src/index.js cloudflare-free/worker/src/render-guard.js cloudflare-free/worker/src/page.js cloudflare-free/worker/src/ui/client-core.js cloudflare-free/worker/src/ui/client-data.js cloudflare-free/worker/src/ui/client-create.js cloudflare-free/worker/tests/render-guard.test.mjs .github/workflows/render-video.yml .github/workflows/cloudflare-free-worker-ci.yml .github/workflows/ci.yml
+          git add package.json cloudflare-free/worker/src/index.js cloudflare-free/worker/src/render-guard.js cloudflare-free/worker/src/page.js cloudflare-free/worker/src/ui/client-core.js cloudflare-free/worker/src/ui/client-data.js cloudflare-free/worker/src/ui/client-create.js cloudflare-free/worker/tests/render-guard.test.mjs
           git status --short
           git diff --cached --stat
           if ! git diff --cached --quiet; then
-            git commit -m "style: format unified render worker changes"
+            git commit -m "style: format unified render worker source"
             git push --verbose origin "HEAD:${GITHUB_REF_NAME}"
           else
-            echo "No formatting changes to commit."
+            echo "No source formatting changes to commit."
           fi
 
   test-reachability:
