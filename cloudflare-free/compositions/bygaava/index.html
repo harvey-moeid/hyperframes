@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Byga Maskot</title>
+<style>
+  html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#050b1f;font-family:"Poppins",Arial,sans-serif}
+  #stage{position:relative;width:1080px;height:1920px;overflow:hidden;
+    background:radial-gradient(circle at 50% 62%,#0b3a8f 0%,#071a4d 45%,#050b1f 100%)}
+  .abs{position:absolute}
+  /* Aktor: 760x760 (sprite 512 x 1.484), tengah horizontal */
+  .actor{position:absolute;left:160px;top:700px;width:760px;height:760px}
+  .spr{position:absolute;inset:0;background-repeat:no-repeat;background-size:3040px 1520px;
+       filter:drop-shadow(0 0 40px rgba(60,160,255,.55))}
+  .shadow{position:absolute;left:190px;top:700px;width:380px;height:50px;border-radius:50%;
+          background:radial-gradient(ellipse,rgba(0,0,0,.55),rgba(0,0,0,0) 70%)}
+  .txt{position:absolute;left:60px;width:960px;text-align:center;color:#fff;font-weight:700;
+       text-shadow:0 0 30px rgba(80,180,255,.8)}
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="byga-intro" data-start="0" data-duration="18" data-width="1080" data-height="1920">
+
+  <!-- Judul -->
+  <div id="title" class="txt clip" data-start="0" data-duration="6" data-track-index="1"
+       style="top:260px;font-size:84px">Hai, aku Byga!</div>
+
+  <!-- 0-3s IDLE -->
+  <div id="a-idle" class="actor clip" data-start="0" data-duration="3" data-track-index="2">
+    <div class="shadow"></div>
+    <div class="spr" style="background-image:url(assets/byga-idle.png)"></div>
+  </div>
+
+  <!-- 3-6s MELAMBAI -->
+  <div id="a-wave" class="actor clip" data-start="3" data-duration="3" data-track-index="2">
+    <div class="shadow"></div>
+    <div class="spr" style="background-image:url(assets/byga-wave.png)"></div>
+  </div>
+
+  <!-- 6-14s BICARA -->
+  <div id="a-talk" class="actor clip" data-start="6" data-duration="8" data-track-index="2">
+    <div class="shadow"></div>
+    <div class="spr" style="background-image:url(assets/byga-talk.png)"></div>
+  </div>
+  <div id="cap1" class="txt clip" data-start="6.3" data-duration="3.5" data-track-index="3"
+       style="top:1560px;font-size:56px">Ganti teks ini dengan narasi pertama</div>
+  <div id="cap2" class="txt clip" data-start="10" data-duration="3.7" data-track-index="3"
+       style="top:1560px;font-size:56px">Ganti teks ini dengan narasi kedua</div>
+
+  <!-- 14-18s BERJALAN KELUAR LAYAR -->
+  <div id="a-walk" class="actor clip" data-start="14" data-duration="4" data-track-index="2">
+    <div class="shadow"></div>
+    <div class="spr" style="background-image:url(assets/byga-walk.png)"></div>
+  </div>
+
+  <!-- Audio (opsional): hapus komentar dan ganti file -->
+  <!-- <audio data-start="0" data-duration="18" data-track-index="5" data-volume="0.6" src="assets/musik.mp3"></audio> -->
+  <!-- <audio data-start="6" data-duration="8" data-track-index="6" src="assets/voiceover.wav"></audio> -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  const CELL = 760;               // ukuran tampil 1 frame (px)
+
+  function setFrame(el, f){
+    const c = f % 4, r = Math.floor(f / 4);
+    el.style.backgroundPosition = (-c * CELL) + "px " + (-r * CELL) + "px";
+  }
+
+  // Sprite digerakkan lewat timeline (bukan CSS animation) agar bisa di-seek per frame
+  function sprite(id, start, dur, fps){
+    const el = document.querySelector("#" + id + " .spr");
+    const st = { i: 0 };
+    setFrame(el, 0);
+    tl.to(st, { i: Math.round(dur * fps), duration: dur, ease: "none",
+      onUpdate(){ setFrame(el, Math.floor(st.i) % 8); } }, start);
+  }
+
+  sprite("a-idle", 0, 3, 8);
+  sprite("a-wave", 3, 3, 8);
+  sprite("a-talk", 6, 8, 8);
+  sprite("a-walk", 14, 4, 10);
+
+  // Gerak tambahan
+  tl.from("#title", { opacity: 0, y: -40, duration: 0.7, ease: "power3.out" }, 0.2);
+  tl.from("#cap1",  { opacity: 0, y: 30, duration: 0.5 }, 6.3);
+  tl.from("#cap2",  { opacity: 0, y: 30, duration: 0.5 }, 10);
+  tl.fromTo("#a-walk", { x: 0 }, { x: 1100, duration: 4, ease: "none" }, 14);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["byga-intro"] = tl;
+</script>
+</body>
+</html>
