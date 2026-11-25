@@ -1,7 +1,9 @@
 name: Fix composition lint
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [fix/composition-lint]
+    paths: [".github/workflows/fix-composition-lint.yml"]
 
 permissions:
   contents: write
