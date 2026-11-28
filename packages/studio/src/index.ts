@@ -5,6 +5,7 @@ export * from "./ui";
 export { EditorShell } from "./components/EditorShell";
 export type { EditorShellProps } from "./components/EditorShell";
 export { NLEPreview } from "./components/nle/NLEPreview";
+export { primeFrameToken } from "./player/lib/frameToken";
 export {
   DEFAULT_SHORTCUT_SECTIONS,
   DEFAULT_STUDIO_KEYS,
@@ -19,6 +20,9 @@ export type { Combo } from "@hyperframes/core/key-combo";
 export type { StudioKeyAction, StudioKeys } from "./player/components/studioShortcuts";
 export { ShortcutsButton } from "./player/components/ShortcutsPanel";
 export { dispatchLinkShortcut } from "./hooks/linkShortcuts";
+export { onSealedCanvasCancel } from "./components/editor/useSealedCanvasKeys";
+export { onPreviewRequestMiss } from "./player/lib/previewChannel";
+export type { PreviewRequestMiss } from "./player/lib/previewChannel";
 export type { LinkShortcutCallbacks } from "./hooks/linkShortcuts";
 export type { ShortcutsButtonProps } from "./player/components/ShortcutsPanel";
 export type { ShortcutHint, ShortcutSection } from "./player/components/studioShortcuts";
@@ -45,7 +49,15 @@ export {
   formatTime,
 } from "./player";
 export { usePreviewIframeStore } from "./player/store/previewIframeStore";
-export { previewEditingClient, previewFrameOpaque } from "./player/lib/previewChannel";
+export {
+  frameStyleValue,
+  previewAuthoredStyles,
+  previewComputedStylesOfEvery,
+  previewDocumentCopy,
+  previewEditingClient,
+  previewFontFaces,
+  previewFrameOpaque,
+} from "./player/lib/previewChannel";
 export {
   describePreviewElements,
   previewAncestors,
@@ -55,13 +67,43 @@ export {
   previewPointerTargets,
   queryPreviewElements,
   type PreviewElement,
+  type PreviewElementEdit,
   type PreviewElementHit,
 } from "./player/lib/previewElements";
 export {
+  MAX_STAGE_CLIP_KEYS,
+  MAX_STAGE_ITEMS,
+  measurePreviewStage,
+  type MeasurePreviewStageOptions,
+  type StageMeasuredItem,
+  type StageMeasureResult,
+  type StageTextStart,
+} from "./player/lib/previewStageMeasure";
+export {
+  capturePreviewGhosts,
+  holdPreviewStage,
+  onPreviewStageActReady,
+  onPreviewStageInput,
+  previewStageDrawer,
+  readyPreviewStage,
+  restorePreviewStage,
+  STAGE_ACT_TIMEOUT_MS,
+  type StageActDraw,
+  type StageActGhost,
+  type StageActHeld,
+  type StageActHold,
+  type StageActTarget,
+  type StageInputEvent,
+} from "./player/lib/previewStageAct";
+export {
+  editSealedSelection,
   findPreviewElementForSelection,
   findPreviewElementForTimelineElement,
   readable,
+  resolveFoundSelection,
   standInFor,
+  standInHandle,
+  type PreviewSelectionOptions,
 } from "./components/editor/previewSelection";
 export { PREVIEW_QUALITY_LEVELS, type PreviewQuality } from "@hyperframes/core/preview-quality";
 export type {
@@ -116,6 +158,7 @@ export { ImageThumbnail } from "./player/components/ImageThumbnail";
 export type { ImageThumbnailProps } from "./player/components/ImageThumbnail";
 export { useRenderClipContent } from "./hooks/useRenderClipContent";
 export { useThumbnailStill } from "./hooks/useThumbnailStill";
+export { fetchParsedAnimations, getAnimationsForElement } from "./hooks/useGsapTweenCache";
 export type { ThumbnailStill, UseThumbnailStillOptions } from "./hooks/useThumbnailStill";
 export type { UseRenderClipContentOptions } from "./hooks/useRenderClipContent";
 export type { ThumbnailPriority } from "./player/lib/thumbnailScheduler";
@@ -198,6 +241,8 @@ export type {
 export { flushStudioPendingEdits } from "./utils/studioPendingEdits";
 export { revertNewestStudioPendingEdit } from "./utils/studioPendingEdits";
 export { cancelNewestStudioWaitingPress } from "./utils/studioPendingEdits";
+export { setStudioTextEditAway } from "./hooks/textEditAway";
+export type { StudioTextEditAway } from "./hooks/textEditAway";
 export type { StudioPendingEditsDrainResult } from "./utils/studioPendingEdits";
 export type {
   CanEditTimelineElement,
@@ -239,6 +284,7 @@ export { useDomEditSession } from "./hooks/useDomEditSession";
 export type { UseDomEditSessionParams } from "./hooks/useDomEditSession";
 export { useLivePreviewIframe } from "./hooks/useLivePreviewIframe";
 export { announcePreviewDocumentLoaded } from "./player/sceneSwap";
+export { shownPreviewFrame } from "./player/lib/previewChannel";
 export type { PreviewPromotion } from "./player/sceneSwap";
 export { usePreviewPersistence } from "./hooks/usePreviewPersistence";
 export type { UsePreviewPersistenceParams } from "./hooks/usePreviewPersistence";

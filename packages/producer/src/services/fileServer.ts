@@ -8,9 +8,14 @@
  * all relative URLs (compositions, CSS, JS, assets) resolving correctly.
  */
 
+import { referencedFontResponse } from "@hyperframes/share/referencedFont.mjs";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { answerOwnLoopbackHostOnly, settleOnBrowserSafePort } from "@hyperframes/engine";
+import {
+  answerOwnLoopbackHostOnly,
+  boundedPageText,
+  settleOnBrowserSafePort,
+} from "@hyperframes/engine";
 import type { IncomingMessage } from "node:http";
 import {
   existsSync,
@@ -29,7 +34,10 @@ import { Readable } from "node:stream";
 import { join, extname, resolve, sep } from "node:path";
 import { injectScriptsAtHeadStart, injectScriptsIntoHtml } from "@hyperframes/core/compiler";
 import { injectTagsAtHeadStart } from "@hyperframes/core/compiler/html-document";
-import { PREVIEW_FOR_ANOTHER_SITE_META } from "@hyperframes/core/studio-preview-mark";
+import {
+  PREVIEW_FOR_ANOTHER_SITE_META,
+  serviceWorkerScriptFetch,
+} from "@hyperframes/core/studio-preview-mark";
 import { fpsToNumber, type Fps, terminalText } from "@hyperframes/core";
 import { isPrivateFileUnder, isStudioPrivatePath } from "@hyperframes/core/safe-path";
 import { stripSdrPngColourTags } from "@hyperframes/core/compiler/png-colour-tags";
@@ -724,6 +732,7 @@ export interface FileServerOptions {
   stripEmbeddedRuntime?: boolean;
   /** Serve project symlinks that lead outside projectDir, as local preview does. Default: false. */
   allowOutsideProjectAssets?: boolean;
+  includeOutsideScripts?: boolean;
 }
 
 export interface FileServerHandle {
@@ -767,17 +776,15 @@ export function closeFileServerSafely(
   }
 }
 
+const NO_FILE_AT_NAME = new Set(["ENOENT", "ENOTDIR", "ENAMETOOLONG"]);
+
 function openRegularFile(filePath: string) {
   let fd: number;
   try {
     // Reject FIFOs with fstat without waiting for a writer to connect.
     fd = openSync(filePath, constants.O_RDONLY | constants.O_NONBLOCK);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      (error.code === "ENOENT" || error.code === "ENOTDIR")
-    )
+    if (error instanceof Error && "code" in error && NO_FILE_AT_NAME.has(String(error.code)))
       return null;
     // A failed open of a directory/socket has platform-specific errors.
     // Classifying it here never authorizes a later pathname read.
@@ -802,6 +809,7 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
     port = 0,
     stripEmbeddedRuntime = true,
     allowOutsideProjectAssets = false,
+    includeOutsideScripts = false,
   } = options;
 
   // HF_EARLY_STUB must run before *any* page script so libraries that write
@@ -821,6 +829,7 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
 
   const app = new Hono();
   const warnLeftOut = (line: string) => console.warn(`[FileServer] ${terminalText(line)}`);
+  const outsidePolicy = { includeScripts: includeOutsideScripts };
   let listeningPort = -1;
 
   app.use(async function loadEachFileOnlyAsItsNamedType(c, next) {
@@ -828,6 +837,12 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
     c.res.headers.set("X-Content-Type-Options", "nosniff");
   });
   answerOwnLoopbackHostOnly(app, () => listeningPort);
+  app.use(async function refuseServiceWorkerScripts(c, next) {
+    const serviceWorker = c.req.header("service-worker");
+    if (!serviceWorkerScriptFetch({ serviceWorker, fetchDest: c.req.header("sec-fetch-dest") }))
+      return next();
+    return c.text("Forbidden", 403);
+  });
 
   app.get("/*", async (c) => {
     let requestPath = c.req.path;
@@ -845,14 +860,16 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
       if (!isPathInside(candidate, root, { resolveSymlinks })) continue;
       if (isPrivateFileUnder(root, candidate, isStudioPrivatePath)) continue;
       const checksLinks = allowOutsideProjectAssets && root !== compiledDir;
-      if (checksLinks && refusesOutsideLink(root, candidate, warnLeftOut)) continue;
+      if (checksLinks && refusesOutsideLink(root, candidate, warnLeftOut, outsidePolicy)) continue;
       file = openRegularFile(candidate);
       if (file) break;
     }
 
     if (!file) {
+      const font = await referencedFontResponse(projectDir, new URL(c.req.url), c.req.raw.method);
+      if (font) return font;
       if (!/favicon\.ico$/i.test(requestPath)) {
-        console.warn(`[FileServer] 404 Not Found: ${terminalText(requestPath)}`);
+        console.warn(`[FileServer] 404 Not Found: ${terminalText(boundedPageText(requestPath))}`);
       }
       return c.text("Not found", 404);
     }

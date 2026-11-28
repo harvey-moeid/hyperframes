@@ -39,11 +39,11 @@ describe("grid fixtures", () => {
 });
 
 describe("grid size", () => {
-  it("holds 747 cases, 271 of them in the pull request slice, each id once", () => {
+  it("holds 751 cases, 275 of them in the pull request slice, each id once", () => {
     const full = buildGrid("full");
-    expect(full).toHaveLength(747);
-    expect(new Set(full.map((c) => c.id)).size).toBe(747);
-    expect(buildGrid("pr")).toHaveLength(271);
+    expect(full).toHaveLength(751);
+    expect(new Set(full.map((c) => c.id)).size).toBe(751);
+    expect(buildGrid("pr")).toHaveLength(275);
   });
 });
 

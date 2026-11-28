@@ -2,13 +2,14 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, win32 } from "node:path";
-import { isHyperframesProject } from "@hyperframes/core";
+import { isHyperframesProject, terminalText } from "@hyperframes/core";
 import { addCatchUpNote, noteHandoff, seenPath } from "./appHistory.js";
 import { createProjectConfig } from "./projectConfig.js";
 import { isCI } from "./attendedTerminal.js";
 import { isAgentDriven } from "../telemetry/agent_runtime.js";
 import { readRecord, removeRecord, writeRecord } from "./projectRecords.js";
 import { shellArg } from "./shellArg.js";
+import { projectEnvDir } from "./dotEnv.js";
 
 // The HyperFrames desktop app, then builds named in HYPERFRAMES_DESKTOP_BUNDLE_IDS / _APP_NAMES (comma-separated).
 const list = (name: string): string[] =>
@@ -78,10 +79,19 @@ export type DesktopOpenResult =
 const openWithBundle = (bundleId: string, dir: string): boolean =>
   spawnSync("open", ["-b", bundleId, dir], { stdio: "ignore" }).status === 0;
 
-/** Single-instance app: a running copy is forwarded the folder. Only a refused spawn counts as failed. */
+const withoutProjectEnv = (): NodeJS.ProcessEnv =>
+  Object.fromEntries(Object.entries(process.env).filter(([name]) => !projectEnvDir(name)));
+
+/** Starts in home, not the caller's folder; a running copy gets the folder. Only a refused spawn counts as failed. */
 function launchApp(executable: string, dir: string): boolean {
   try {
-    const child = spawn(executable, [dir], { detached: true, stdio: "ignore", windowsHide: false });
+    const child = spawn(executable, [dir], {
+      cwd: homedir(),
+      env: withoutProjectEnv(),
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false,
+    });
     child.on("error", () => {});
     child.unref();
     return true;
@@ -151,7 +161,7 @@ function leaveHandoff(dir: string, session: AgentSession | null): AgentSession |
   if (!session || !writeRecord(dir, "agent-handoff.json", JSON.stringify(session))) return null;
   if (!noteHandoff(dir))
     console.warn(
-      `◇  Couldn't note the hand-off in ${seenPath(dir)}, so \`catch-up\` won't see it.`,
+      `◇  Couldn't note the hand-off in ${terminalText(seenPath(dir))}, so \`catch-up\` won't see it.`,
     );
   addCatchUpNote(dir);
   return session;
@@ -163,7 +173,7 @@ function markBareIndexAsProject(dir: string): void {
       createProjectConfig(dir);
   } catch (error) {
     console.warn(
-      `◇  Couldn't add hyperframes.json to ${dir}, so the app may not open it: ${error}`,
+      `◇  Couldn't add hyperframes.json to ${terminalText(dir)}, so the app may not open it: ${terminalText(String(error))}`,
     );
   }
 }

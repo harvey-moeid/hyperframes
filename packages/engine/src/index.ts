@@ -88,6 +88,7 @@ export {
   getSystemTotalMb,
   hostCpuCount,
   usableCpuCount,
+  cpuBudget,
   isLowMemorySystem,
   LOW_MEMORY_TOTAL_MB_THRESHOLD,
 } from "./services/systemMemory.js";
@@ -95,6 +96,7 @@ export {
 // ── Browser management ─────────────────────────────────────────────────────────
 export { chromeMajorCeiling } from "./services/chromeHostCeiling.js";
 export {
+  absorbBrowserPipeErrors,
   acquireBrowser,
   setHostHandlesSigint,
   releaseBrowser,
@@ -102,6 +104,7 @@ export {
   closeBrowserPool,
   resolveHeadlessShellPath,
   resolveBrowserGpuMode,
+  probedHardwareGpu,
   buildChromeArgs,
   compositionRequiresWebGpu,
   assertWebGpuAdapterAvailable,
@@ -198,10 +201,12 @@ export {
 } from "./services/screenshotService.js";
 
 // ── Encoding ───────────────────────────────────────────────────────────────────
+export { concatListInputArgs, concatListText } from "@hyperframes/parsers/ff-binaries";
 export {
   buildEncoderArgs,
   encodeFramesFromDir,
   buildConcatArgs,
+  writeVideoConcatList,
   concatVideoFiles,
   encodeFramesChunkedConcat,
   muxVideoWithAudio,
@@ -325,6 +330,7 @@ export {
 } from "./services/audioMixer.js";
 export { audioFailureDiagnostics } from "./services/audioFailureDiagnostic.js";
 export { cloneCaptureWarning, cloneCaptureWarnings } from "./services/captureWarning.js";
+export { boundedPageText, retainCapturePerf } from "./services/pageTextBounds.js";
 export type {
   AudioElement,
   AudioFailureReason,
@@ -394,6 +400,7 @@ export {
 } from "./utils/loopbackOnly.js";
 
 export { readWebGlVendorInfoFromCanvas } from "./utils/readWebGlVendorInfoFromCanvas.js";
+export { createConcurrencyLimit } from "./utils/concurrencyLimit.js";
 
 export {
   extractMediaMetadata,
@@ -406,6 +413,7 @@ export {
   PROBE_FACTS_VERSION,
   buildProbeFactsText,
   probeMediaProfile,
+  isStructurallyIncompletePngError,
   runFfprobe,
   analyzeKeyframeIntervals,
   type VideoMetadata,
@@ -413,6 +421,8 @@ export {
   type MediaProbeProfile,
   type KeyframeAnalysis,
 } from "./utils/ffprobe.js";
+
+export { urlInputArgs, withPublicOnlyProxy } from "./utils/urlInput.js";
 
 export { mediaIdPathSegment } from "./utils/mediaPathSegment.js";
 
@@ -422,6 +432,7 @@ export {
   assertMediaPayload,
   playlistLeavesItsFolder,
   fingerprintElementId,
+  isNotImagePayload,
   isNotMediaPayload,
 } from "./utils/notMediaPayload.js";
 
@@ -450,6 +461,7 @@ export { onRenderRefusal } from "./services/publicNetwork/captureProxy.js";
 export type { RefusedHostClass } from "./services/publicNetwork/publicNetwork.js";
 export {
   runFfmpeg,
+  withFfmpegProgress,
   formatFfmpegError,
   describeFfmpegFailure,
   isExternalFfmpegInterruption,
@@ -472,7 +484,11 @@ export {
   FFPROBE_PATH_ENV,
 } from "./utils/ffmpegBinaries.js";
 
-export { trackChildProcess, killTrackedProcesses } from "./utils/processTracker.js";
+export {
+  trackChildProcess,
+  killTrackedProcesses,
+  onTrackedChildProcess,
+} from "./utils/processTracker.js";
 export { renameWithRetry, renameWithRetryAsync } from "@hyperframes/core/rename-retry";
 export { removeScratch, collectScratchLeftovers } from "@hyperframes/core/remove-scratch";
 
@@ -587,7 +603,7 @@ export {
   chromeSandboxEnabled,
   launchWithChromeSandboxFallback,
   type ChromeSandboxHost,
-} from "./services/chromeSandbox.js";
+} from "@hyperframes/core/chrome-sandbox";
 export {
   VariablesInvalidError,
   type VariablesIssue,

@@ -92,11 +92,25 @@ function copyGsapVendorFiles() {
   }
   const vendorDir = join(DIST, "vendor", "npm");
   rmSync(vendorDir, { recursive: true, force: true });
-  const dest = join(vendorDir, `gsap@${version}`, "dist");
-  mkdirSync(dest, { recursive: true });
-  for (const file of GSAP_VENDOR_FILES) {
-    copyFileSync(join(gsapRoot, "dist", file), join(dest, file));
-    chmodSync(join(dest, file), 0o644);
+  // Older versions templates still name ship too, as the CDN's exact files: package.json's `gsap-<version>` aliases
+  // (src/server/gsapVendor.test.ts pins their bytes).
+  const cliManifest = join(REPO_ROOT, "packages", "cli", "package.json");
+  const cliRequire = createRequire(cliManifest);
+  const aliases = Object.keys(JSON.parse(readFileSync(cliManifest, "utf-8")).devDependencies ?? {});
+  const roots = [
+    gsapRoot,
+    ...aliases
+      .filter((name) => /^gsap-\d+\.\d+\.\d+$/.test(name))
+      .map((name) => dirname(cliRequire.resolve(`${name}/package.json`))),
+  ];
+  for (const root of roots) {
+    const { version: shipped } = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
+    const dest = join(vendorDir, `gsap@${shipped}`, "dist");
+    mkdirSync(dest, { recursive: true });
+    for (const file of GSAP_VENDOR_FILES) {
+      copyFileSync(join(root, "dist", file), join(dest, file));
+      chmodSync(join(dest, file), 0o644);
+    }
   }
 }
 
@@ -214,6 +228,9 @@ async function main() {
   // The bundled inspector reads its page runtime from beside its own chunk.
   const inspectorRuntime = join(REPO_ROOT, "packages", "inspector", "dist", "inspection.js");
   cpSync(inspectorRuntime, join(DIST, "inspection.js"));
+
+  // Windows process reads run this file with -File (utils/windowsProcesses.ts), found beside the bundled chunks.
+  cpSync(join(CLI_ROOT, "src", "utils", "processes.ps1"), join(DIST, "processes.ps1"));
 
   copyGsapVendorFiles();
 

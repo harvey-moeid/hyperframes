@@ -157,19 +157,26 @@ export async function paintShadow(getApi: () => TimelinePlayerApi, shadow: HTMLI
 export function serveEditingRequests(
   frame: Record<string, unknown>,
   answer: (kind: string, params: unknown) => unknown,
+  onPort?: (port: MessagePort) => void,
 ): () => void {
   const ports: MessagePort[] = [];
-  frame.postMessage = (message: { type?: string } | null) => {
-    if (message?.type !== "editing-connect") return;
-    const { port1, port2 } = new MessageChannel();
-    ports.push(port1);
-    port1.onmessage = (event: MessageEvent<{ id: number; kind: string; params: unknown }>) => {
+  frame.postMessage = (
+    message: { type?: string } | null,
+    _origin: string,
+    sent?: MessagePort[],
+  ) => {
+    const port = sent?.[0];
+    if (message?.type !== "editing-connect" || !port) return;
+    ports.push(port);
+    onPort?.(port);
+    let greeted = false;
+    port.onmessage = (event: MessageEvent<{ id: number; kind: string; params: unknown }>) => {
       const { id, kind, params } = event.data;
-      port1.postMessage({ v: 1, id, ok: true, result: answer(kind, params) });
+      const helloThatConnects = kind === "hello" && !greeted;
+      greeted = true;
+      const result = helloThatConnects ? {} : answer(kind, params);
+      port.postMessage({ v: 2, id, ok: true, result });
     };
-    const handoff = { source: "hf-preview", type: "editing-port", v: 1 };
-    const source = frame as unknown as Window;
-    window.dispatchEvent(new MessageEvent("message", { source, data: handoff, ports: [port2] }));
   };
   return () => ports.forEach((port) => port.close());
 }

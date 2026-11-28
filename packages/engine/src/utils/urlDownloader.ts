@@ -20,6 +20,7 @@ import { createHash, randomUUID } from "crypto";
 import dns from "node:dns";
 import { fetchGoesThroughEnvProxy } from "@hyperframes/core/env-proxy";
 import { type LookupFunction } from "node:net";
+import type { buildConnector } from "undici";
 import { isBlockedNetworkHost } from "./networkPolicy.js";
 import { resolveRestrictPageNetwork } from "../config.js";
 import {
@@ -27,6 +28,10 @@ import {
   NonPublicHostError,
   resolvePublicAddress,
 } from "../services/publicNetwork/publicNetwork.js";
+import {
+  captureUpstreamProxy,
+  type UpstreamProxy,
+} from "../services/publicNetwork/upstreamProxy.js";
 import { dirname, extname, join } from "path";
 import { Readable, Transform } from "stream";
 import { pipeline } from "stream/promises";
@@ -266,7 +271,7 @@ function getFilenameFromUrl(url: string, validationScope: string): string {
   const physicalIdentity = validationScope === "" ? url : `${url}\0${validationScope}`;
   const hash = createHash("md5").update(physicalIdentity).digest("hex").slice(0, 12);
   const urlObj = new URL(url);
-  const ext = extname(urlObj.pathname) || ".mp4";
+  const ext = /^\.[a-z0-9]{1,10}/i.exec(extname(urlObj.pathname))?.[0] ?? ".mp4";
   return `download_${hash}${ext}`;
 }
 
@@ -494,10 +499,12 @@ type DownloadFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 const undiciTransports = new Map<LookupFunction, Promise<DownloadFetch>>();
 
+const importUndiciPackageEvenUnderBun = () => import("undici/index.js");
+
 function undiciTransport(lookup: LookupFunction): Promise<DownloadFetch> {
   let transport = undiciTransports.get(lookup);
   if (!transport) {
-    transport = import("undici").then(({ Agent, fetch: undiciFetch }) => {
+    transport = importUndiciPackageEvenUnderBun().then(({ Agent, fetch: undiciFetch }) => {
       const dispatcher = new Agent({ connect: { lookup } });
       return (target, options) =>
         undiciFetch(target, { ...(options as object), dispatcher }) as unknown as Promise<Response>;
@@ -507,10 +514,83 @@ function undiciTransport(lookup: LookupFunction): Promise<DownloadFetch> {
   return transport;
 }
 
+const proxyTransports = new Map<string, Promise<DownloadFetch>>();
+
+/** undici 7 reopens a tunnel the proxy closed without a reply with no pause or limit; this fails the request. */
+function failRequestOnDroppedTunnel(connect: buildConnector.connector): buildConnector.connector {
+  return (options, callback) =>
+    connect(options, (...result) => {
+      const [error] = result;
+      if (error && "code" in error && error.code === "UND_ERR_SOCKET") {
+        const closed = new Error("The egress proxy closed the tunnel", { cause: error });
+        return callback(Object.assign(closed, { code: "ECONNRESET" }), null);
+      }
+      callback(...result);
+    });
+}
+
+function egressProxyTransport(proxy: UpstreamProxy): Promise<DownloadFetch> {
+  const uri = `http://${proxy.host.includes(":") ? `[${proxy.host}]` : proxy.host}:${proxy.port}`;
+  const key = `${uri} ${proxy.authorization ?? ""}`;
+  let transport = proxyTransports.get(key);
+  if (!transport) {
+    transport = importUndiciPackageEvenUnderBun().then(
+      ({ Pool, ProxyAgent, fetch: undiciFetch }) => {
+        const dispatcher = new ProxyAgent({
+          uri,
+          token: proxy.authorization,
+          factory: (origin, options) =>
+            new Pool(origin, {
+              ...options,
+              connect: failRequestOnDroppedTunnel(
+                (options as { connect: buildConnector.connector }).connect,
+              ),
+            }),
+        });
+        return (target, options) =>
+          undiciFetch(target, {
+            ...(options as object),
+            dispatcher,
+          }) as unknown as Promise<Response>;
+      },
+    );
+    proxyTransports.set(key, transport);
+  }
+  return transport;
+}
+
+const UNRESOLVED_HOST_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL"]);
+
+/** Behind an env proxy, refuses a host this machine resolves to a non-public address; the proxy resolves the rest. */
+function assertProxiedHostResolvesPublic(url: string, signal?: AbortSignal | null): Promise<void> {
+  const hostname = new URL(url).hostname.replace(/^\[|\]$/g, "");
+  return new Promise((resolvePromise, reject) => {
+    const abort = () => reject(signal?.reason);
+    if (signal?.aborted) return abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    dns.lookup(hostname, { all: true }, (error, answers) => {
+      signal?.removeEventListener("abort", abort);
+      if (error) {
+        return UNRESOLVED_HOST_CODES.has(error.code ?? "") ? resolvePromise() : reject(error);
+      }
+      if (answers.some((a) => isBlockedNetworkHost(a.address.split("%")[0]!))) {
+        return reject(nonPublicAddressError());
+      }
+      resolvePromise();
+    });
+  });
+}
+
 const fetchPublic: DownloadFetch = async (url, init) => {
-  if (resolveRestrictPageNetwork()) return (await undiciTransport(capturePolicyLookup))(url, init);
-  // Behind an env proxy the proxy resolves the name; the URL and redirect checks are the guard then.
-  if (fetchGoesThroughEnvProxy()) return fetch(url, init);
+  if (resolveRestrictPageNetwork()) {
+    const upstream = captureUpstreamProxy();
+    if (upstream) return (await egressProxyTransport(upstream))(url, init);
+    return (await undiciTransport(capturePolicyLookup))(url, init);
+  }
+  if (fetchGoesThroughEnvProxy()) {
+    await assertProxiedHostResolvesPublic(url, init.signal);
+    return fetch(url, init);
+  }
   return (await undiciTransport(publicOnlyLookup))(url, init);
 };
 

@@ -1,0 +1,119 @@
+import {
+  drawDraftGroupOutline,
+  drawDraftOverlayRect,
+  isDomEditGestureTap,
+  movesGesture,
+  resolveDomEditRotationGesture,
+  type GestureState,
+  type UseDomEditOverlayGesturesOptions,
+} from "./domEditOverlayGestures";
+import { resolveCenterResizeSize } from "./domEditResizeLocal";
+import { groupDragDelta } from "./groupDragMove";
+import { applyManualOffsetDragDraft } from "./manualOffsetDrag";
+import { applyStudioBoxSizeDraft } from "./manualEdits";
+import { resolveResizeDraftRect } from "./resizeDraft";
+import { applyRotationDraft } from "./rotationDraft";
+import { snappedDragDelta } from "./snappedDragDelta";
+import { armRawPointerSteps } from "./rawPointerSteps";
+import { previewFrameOpaque } from "../../player/lib/previewChannel";
+import { paintChromeInFrameWhile } from "./frameDragChrome";
+import * as readout from "./domEditGestureReadoutState";
+
+type PointerLike = Pick<PointerEvent, "clientX" | "clientY" | "shiftKey" | "altKey">;
+
+export const rotationAt = (g: GestureState, e: PointerLike) =>
+  resolveDomEditRotationGesture({
+    centerX: g.centerX,
+    centerY: g.centerY,
+    startX: g.startX,
+    startY: g.startY,
+    currentX: e.clientX,
+    currentY: e.clientY,
+    actualAngle: g.actualRotation,
+    snap: e.shiftKey,
+  }).angle;
+
+/** Corner resize scales proportionally about the center, without edge snapping. */
+export function resizeSizeAt(g: GestureState, e: PointerLike) {
+  const grab = g.resizePressFromCorner ?? { x: 0, y: 0 };
+  return resolveCenterResizeSize({
+    baseWidth: g.actualWidth,
+    baseHeight: g.actualHeight,
+    pointer: { x: e.clientX - grab.x, y: e.clientY - grab.y },
+    pointerStart: { x: g.startX - grab.x, y: g.startY - grab.y },
+    centerStart: { x: g.centerX, y: g.centerY },
+  });
+}
+
+function drawGestureStep(
+  g: GestureState,
+  element: HTMLElement,
+  e: PointerEvent,
+  opts: UseDomEditOverlayGesturesOptions,
+): () => void {
+  if (g.kind === "rotate") {
+    const angle = rotationAt(g, e);
+    applyRotationDraft(element, angle, g.plainRotation);
+    return () => readout.updateGestureReadoutAngle(g.readout, angle, g.actualRotation);
+  }
+  // The outline moves before the draft goes out, so the frame's copy of it is this step's.
+  const scale = { editScaleX: g.editScaleX, editScaleY: g.editScaleY, angle: g.actualRotation };
+  const outline = (rect: { left: number; top: number; width: number; height: number }) =>
+    drawDraftOverlayRect(opts, { ...scale, ...rect }, g.kind === "drag");
+  if (g.kind === "drag") {
+    const { dx, dy } = snappedDragDelta(g, e, opts.snapGuidesRef);
+    const { originWidth: width, originHeight: height } = g;
+    const rect = { ...scale, left: g.originLeft + dx, top: g.originTop + dy, width, height };
+    outline(rect);
+    if (g.pathOffsetMember) applyManualOffsetDragDraft(g.pathOffsetMember, dx, dy);
+    return () => readout.updateGestureReadout(g.readout, rect);
+  }
+  const wanted = resizeSizeAt(g, e);
+  const written = applyStudioBoxSizeDraft(element, wanted, g.startLayout);
+  const measure = () => null;
+  const rect = resolveResizeDraftRect(g, element, null, opts.iframeRef.current, measure, {
+    wanted,
+    written,
+  });
+  outline(rect);
+  return () => readout.updateGestureReadoutSize(g.readout, rect, written);
+}
+
+/** The sealed frame's drafts for this pointer, whatever gesture is held; false once none is. */
+// fallow-ignore-next-line complexity
+function drawSealedRawStep(opts: UseDomEditOverlayGesturesOptions, e: PointerEvent) {
+  const g = opts.gestureRef.current;
+  const groupG = opts.groupGestureRef.current;
+  const held = groupG ?? g;
+  if (!held) return false;
+  if (opts.waitingPressRef.current || !movesGesture(held, e)) return true;
+  if (!isDomEditGestureTap(held, e)) held.travelled = true;
+  if (groupG) {
+    const { dx, dy } = groupDragDelta(groupG, e, opts.snapGuidesRef);
+    const shifted = groupG.originItems.map((item) => ({
+      ...item,
+      rect: { ...item.rect, left: item.rect.left + dx, top: item.rect.top + dy },
+    }));
+    drawDraftGroupOutline(opts, shifted);
+    for (const member of groupG.members) applyManualOffsetDragDraft(member, dx, dy);
+    groupG.rawStep = { x: e.clientX, y: e.clientY, showReadout: () => {} };
+    return true;
+  }
+  const element = (g?.selection ?? opts.selectionRef.current)?.element;
+  if (g && element)
+    g.rawStep = { x: e.clientX, y: e.clientY, showReadout: drawGestureStep(g, element, e, opts) };
+  return true;
+}
+
+/** Armed at press, so a sealed gesture's first draft already goes out on the first raw update. */
+export function armSealedRawSteps(opts: UseDomEditOverlayGesturesOptions) {
+  const iframe = opts.iframeRef.current;
+  if (!iframe || !previewFrameOpaque(iframe)) return;
+  armRawPointerSteps(opts.gestureRef, (e) => drawSealedRawStep(opts, e));
+  const held = opts.groupGestureRef.current ?? opts.gestureRef.current;
+  paintChromeInFrameWhile(
+    iframe,
+    opts.overlayRef.current,
+    () => (opts.groupGestureRef.current ?? opts.gestureRef.current) === held,
+  );
+}

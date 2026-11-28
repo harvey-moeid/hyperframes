@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { LIMIT_PX, entry, writeReport } from "./report.mjs";
+import { CROP_LIMIT_PX, LIMIT_PX, entry, writeReport } from "./report.mjs";
 
 const GATED_PX = ["tracking", "pressJump", "drop", "reload", "render", "renderKey"];
 const LISTED = 30;
@@ -26,6 +26,7 @@ export const accurate = (e) =>
   e.keys !== false &&
   e.css !== false &&
   e.renderKey !== null &&
+  !(e.crop > CROP_LIMIT_PX) &&
   GATED_PX.every((m) => !(e[m] > LIMIT_PX));
 
 /** Cases whose verdict here differs from the base branch, either way: each is re-run twice before the gate. */
@@ -55,17 +56,7 @@ export function bankable(runs) {
  * Cases a real Studio race flips run to run, with the PR fixing it: measured and listed every run, never gated.
  * The fixing PR deletes its own ids here and re-banks them in the same PR.
  */
-export const QUARANTINED = {
-  // Undo or redo of a keyframed plain element restores the bytes but sometimes leaves the box 230-400px off.
-  "seqplainkeys-none-center-r0-nested-z100": "#6989",
-  "seqplainkeys-none-center-r0-root-z100": "#6989",
-  "seqplainkeys-none-center-r30-root-z100": "#6989",
-  "seqplainkeys-none-pct-r0-root-z100": "#6989",
-  "seqplainkeys-none-pct-r30-root-z100": "#6989",
-  "seqplainkeys-none-px-r0-nested-z100": "#6989",
-  "seqplainkeys-none-px-r30-nested-z100": "#6989",
-  "seqplainkeys-none-px-r30-root-z100": "#6989",
-};
+export const QUARANTINED = {};
 
 /**
  * Every run of every case: each shard's run plus the re-runs of the cases it flipped. `scope`, for a run of
@@ -207,18 +198,18 @@ function main(argv) {
   }
   const cases = runs.flatMap((r) => r.cases);
   const full = gridOf(runs) === "full";
+  // A shard that died uploads nothing, so the count of first runs is what shows it.
+  const firstRuns = runs.filter((r) => !r.meta.rerun).length;
+  const shortfall =
+    shards !== null && firstRuns !== shards && `${firstRuns} of ${shards} shards reported results`;
+  // A case that ran and fell is a drop; a shard that did not report is not one, so only the cases that ran count.
   const g = gate(
     base,
     readJson(headPath),
     cases,
     QUARANTINED,
-    full ? null : new Set(cases.map((c) => c.id)),
+    full && !shortfall ? null : new Set(cases.map((c) => c.id)),
   );
-  // A shard that died uploads nothing, so the count of first runs is what shows it.
-  const firstRuns = runs.filter((r) => !r.meta.rerun).length;
-  const shortfall =
-    shards !== null && firstRuns !== shards && `${firstRuns} of ${shards} shards reported results`;
-  // A case that ran and fell is a drop; a shard that did not report is not one.
   const code = g.ok ? (shortfall ? 2 : 0) : 1;
   if (shortfall) g.reasons.push(shortfall);
   g.ok = code === 0;

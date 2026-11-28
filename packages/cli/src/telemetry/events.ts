@@ -5,6 +5,7 @@ import { redactTelemetryString } from "@hyperframes/core/telemetry-redaction";
 import type { SubTimelineWaitOutcome } from "@hyperframes/engine";
 import { FEEDBACK_RATING_SCALE } from "../utils/feedbackRating.js";
 import type { CatalogUsage } from "../utils/catalogUsage.js";
+import type { CheckoutFailure } from "../heygen/plan.js";
 import { flush, shouldTrack, trackEvent } from "./client.js";
 import { readConfig } from "./config.js";
 import { getPowerState } from "./system.js";
@@ -14,6 +15,7 @@ import {
   renderMotionBlurEventProperties,
 } from "./renderMotionBlur.js";
 import { CliRuntimeError } from "../utils/commandResult.js";
+import type { MissingPathFacts } from "@hyperframes/producer";
 
 // Power state is volatile (a laptop docks/undocks mid-session), so it is
 // sampled per render event rather than cached with SystemMeta. Attached to
@@ -127,6 +129,7 @@ export interface RenderObservabilityTelemetryPayload {
   observabilityExtractVfrPreflightCount?: number;
   observabilityExtractCacheHits?: number;
   observabilityExtractCacheMisses?: number;
+  observabilityExtractCachePublishFailures?: number;
   observabilityInitDurationMs?: number;
   observabilityInitTweenCount?: number;
   observabilityInitElementCount?: number;
@@ -207,6 +210,7 @@ function renderObservabilityEventProperties(props: RenderObservabilityTelemetryP
     observability_extract_vfr_preflight_count: props.observabilityExtractVfrPreflightCount,
     observability_extract_cache_hits: props.observabilityExtractCacheHits,
     observability_extract_cache_misses: props.observabilityExtractCacheMisses,
+    observability_extract_cache_publish_failures: props.observabilityExtractCachePublishFailures,
     observability_init_duration_ms: props.observabilityInitDurationMs,
     observability_init_tween_count: props.observabilityInitTweenCount,
     observability_init_element_count: props.observabilityInitElementCount,
@@ -385,6 +389,7 @@ export function trackRenderComplete(
     staticDedupEnabled?: boolean;
     staticDedupArmed?: boolean;
     staticDedupSkipReason?: string;
+    staticDedupIneligibleCause?: string;
     staticDedupPredictedFrames?: number;
     staticDedupReusedFrames?: number;
     // BeginFrame no-damage reuse outcome (Linux/Docker lastFrameCache — the BF
@@ -543,6 +548,7 @@ export function trackRenderComplete(
       static_dedup_enabled: props.staticDedupEnabled,
       static_dedup_armed: props.staticDedupArmed,
       static_dedup_skip_reason: props.staticDedupSkipReason,
+      static_dedup_ineligible_cause: props.staticDedupIneligibleCause,
       static_dedup_predicted_frames: props.staticDedupPredictedFrames,
       static_dedup_reused_frames: props.staticDedupReusedFrames,
       begin_frame_no_damage_frames: props.beginFrameNoDamageFrames,
@@ -700,6 +706,7 @@ export function trackRenderError(
     /** failedStage normalized to a stable snake_case code. */
     failedStageCode?: string;
     missingPathKind?: string;
+    missingPath?: MissingPathFacts;
     errorMessage?: string;
     elapsedMs?: number;
     peakMemoryMb?: number;
@@ -729,6 +736,9 @@ export function trackRenderError(
       error_name: props.errorName,
       failed_stage_code: props.failedStageCode,
       missing_path_kind: props.missingPathKind,
+      missing_path_scope: props.missingPath?.scope,
+      missing_path_synced: props.missingPath?.synced,
+      missing_path_root: props.missingPath?.root,
       error_message: props.errorMessage ? redactTelemetryMessage(props.errorMessage) : undefined,
       elapsed_ms: props.elapsedMs,
       ...renderOutputShapeEventProperties(props),
@@ -924,7 +934,7 @@ export function trackCliError(props: {
   error_message: string;
   stack_trace?: string;
   command?: string;
-  kind: "uncaught_exception" | "unhandled_rejection" | "command_error";
+  kind: "uncaught_exception" | "unhandled_rejection" | "command_error" | "silent_exit";
   /** Low-cardinality figma REST call label (e.g. "images", "files_nodes") —
    *  which endpoint failed, for FigmaClientError-backed failures only. */
   endpoint?: string;
@@ -1023,8 +1033,14 @@ export type ReverseUnrecordedCause =
 export function trackReverseStartUnrecorded(props: {
   cause: ReverseUnrecordedCause;
   status?: number;
+  /** An error status only: whether HeyGen's API wrote the body, or something between (a proxy, a firewall). */
+  heygenBody?: boolean;
 }): void {
-  trackEvent("cli_reverse_start_unrecorded", { cause: props.cause, status: props.status });
+  trackEvent("cli_reverse_start_unrecorded", {
+    cause: props.cause,
+    status: props.status,
+    heygen_body: props.heygenBody,
+  });
 }
 
 export function trackSkillCommandRan(props: {
@@ -1042,9 +1058,7 @@ export function trackSkillCommandRan(props: {
 }
 
 // `billing` could not open a checkout. `reason` is the closed CheckoutFailure class, never the message.
-export function trackBillingCheckoutFailed(props: {
-  reason: "checkout_unavailable" | "checkout_network" | "checkout_rejected";
-}): void {
+export function trackBillingCheckoutFailed(props: { reason: CheckoutFailure }): void {
   trackEvent("cli_billing_checkout_failed", { reason: props.reason });
 }
 
@@ -1137,22 +1151,13 @@ export function trackRenderFeedback(props: {
 }
 
 /**
- * A catalog search that found nothing worth installing.
- *
- * This is the only path that ever sends a query anywhere, and it is a separate
- * deliberate command rather than something `catalog --query` does on its own:
- * plain search stays entirely local, which is what the CLI promises. The query
- * is the point of the report — it names a move the catalog does not have yet,
- * so the gaps can be read directly rather than guessed from install counts.
+ * A catalog search that found nothing worth installing, sent only by a deliberate
+ * `feedback --search-miss`. It names the move the catalog lacks, in the agent's words;
+ * the searched words stay on the machine.
  */
-export function trackCatalogSearchMiss(props: {
-  query: string;
-  wanted?: string;
-  tier?: string;
-}): void {
+export function trackCatalogSearchMiss(props: { wanted: string; tier?: string }): void {
   trackEvent("cli_catalog_search_miss", {
-    query: props.query,
-    ...(props.wanted ? { wanted: props.wanted } : {}),
+    wanted: props.wanted,
     ...(props.tier ? { tier: props.tier } : {}),
   });
 }

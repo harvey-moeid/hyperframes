@@ -20,6 +20,10 @@ import { createFilmBridge } from "./filmBridge";
 import { trackAcceleratedCanvases } from "./captureMotionBlur";
 import { parkFarScenesAtBoot } from "./sceneWindow";
 import { installPausedVideoCallbacks } from "./pausedVideoCallbacks";
+import { corsForSealedMedia } from "./sealedMediaCors";
+import { postStaticCompositionWhenParsed } from "./staticCompositionPost";
+import { installPreviewKeyShield } from "./editing/canvasKeys";
+import { announcePageLife, listenForEditingConnect } from "./editingAgent";
 
 type HyperframeWindow = Window & {
   __hyperframeRuntimeBootstrapped?: boolean;
@@ -41,11 +45,16 @@ type HyperframeWindow = Window & {
 // Ensure timeline registry exists at script evaluation time.
 (window as HyperframeWindow).__timelines = (window as HyperframeWindow).__timelines || {};
 
+announcePageLife();
+listenForEditingConnect();
+
 // Stamp color-graded elements with their authored inline opacity BEFORE the
 // composition's animation scripts (and the grading hide) mutate it — must run
 // at script evaluation time, while the document is still parsing.
 installAuthoredOpacityCapture();
 installAuthoredMediaCapture();
+corsForSealedMedia();
+installPreviewKeyShield();
 installPausedVideoCallbacks();
 installFlatGsapTransforms();
 trackAcceleratedCanvases();
@@ -98,6 +107,8 @@ function startAfterCompositionScripts(): void {
     throw err;
   }
 }
+
+postStaticCompositionWhenParsed();
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", startAfterCompositionScripts, { once: true });

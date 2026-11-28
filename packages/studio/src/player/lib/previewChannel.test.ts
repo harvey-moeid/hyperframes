@@ -2,12 +2,32 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  MAX_FONT_FACES,
+  MAX_QUERY_MATCHES,
+  PAGE_LEFT,
+  PAGE_SHOWN,
+} from "@hyperframes/core/runtime/editing-port";
+import { MAX_FRAME_CLIPS } from "./manifestClips";
+import {
   AGENT_PROBE_MS,
+  holdRefreshReadsWhile,
+  PREVIEW_REJECTED,
+  releaseEndedGestureHolds,
+  previewAnswer,
+  previewComputedStyles,
+  previewComputedStylesOfEvery,
+  previewConsoleErrors,
+  previewFontFaces,
   previewClipManifest,
+  previewClipParents,
   previewEditingClient,
   previewFrameOpaque,
+  previewRequest,
+  onPreviewRequestMiss,
+  type PreviewRequestMiss,
   previewSeekPainted,
   setFrameLoopStart,
+  watchStudioNavigations,
 } from "./previewChannel";
 import { bridgePlaybackAdapter, watchPreviewFrame } from "./bridgePlayback";
 import { runtimeProtocolMetadata } from "@hyperframes/core/runtime/protocol";
@@ -59,6 +79,89 @@ function servedFrame(answer: (kind: string, params: unknown) => unknown, opaque 
   return { iframe, frame, handed };
 }
 
+function refusingFrame() {
+  const frame: Record<string, unknown> = {};
+  const iframe = detachedFakeIframe(frame);
+  const refuse = (port: MessagePort) =>
+    queueMicrotask(() => {
+      port.onmessage = (event: MessageEvent<{ id: number; kind: string }>) => {
+        if (event.data.kind === "runtime-snapshot") return;
+        if (event.data.kind === "hello")
+          return port.postMessage({ v: 2, id: event.data.id, ok: true });
+        const error = { code: "invalid-params", message: "bad params" };
+        port.postMessage({ v: 2, id: event.data.id, ok: false, error });
+      };
+    });
+  closers.push(serveEditingRequests(frame, () => null, refuse));
+  return iframe;
+}
+
+function watchMisses() {
+  const misses: PreviewRequestMiss[] = [];
+  closers.push(onPreviewRequestMiss((miss) => misses.push(miss)));
+  return misses;
+}
+
+const kindsAndOutcomes = (misses: PreviewRequestMiss[]) =>
+  misses.map(({ kind, outcome }) => ({ kind, outcome }));
+
+describe("onPreviewRequestMiss", () => {
+  it("reports one timeout with its kind for a request the frame never answers", async () => {
+    const misses = watchMisses();
+    expect(await previewAnswer(refusingFrame(), "runtime-snapshot", {}, 50)).toBeNull();
+    expect(kindsAndOutcomes(misses)).toEqual([{ kind: "runtime-snapshot", outcome: "timeout" }]);
+    expect(misses[0]?.elapsedMs).toBeGreaterThanOrEqual(45);
+  });
+
+  it("reports a refused request as rejected and an answered one not at all", async () => {
+    const misses = watchMisses();
+    expect(await previewAnswer(refusingFrame(), "wait-for-seek", {})).toBe(PREVIEW_REJECTED);
+    const { iframe } = servedFrame(() => ({ waited: true }));
+    expect(await previewRequest(iframe, "wait-for-seek", {})).toEqual({ waited: true });
+    expect(kindsAndOutcomes(misses)).toEqual([{ kind: "wait-for-seek", outcome: "rejected" }]);
+  });
+
+  it("reports a request cut off by the frame's next load, and a frame with no runtime, as frame-gone", async () => {
+    const misses = watchMisses();
+    const iframe = refusingFrame();
+    const cutOff = previewEditingClient(iframe).request("runtime-snapshot", {});
+    iframe.dispatchEvent(new Event("load"));
+    await expect(cutOff).rejects.toMatchObject({ code: "disposed" });
+    expect(await previewRequest(opaqueFrame().iframe, "wait-for-seek", {})).toBeNull();
+    expect(kindsAndOutcomes(misses)).toEqual([
+      { kind: "runtime-snapshot", outcome: "frame-gone" },
+      { kind: "wait-for-seek", outcome: "frame-gone" },
+    ]);
+  });
+
+  it("keeps the request and later listeners whole when a listener throws", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    closers.push(() => quiet.mockRestore());
+    closers.push(
+      onPreviewRequestMiss(() => {
+        throw new Error("listener broke");
+      }),
+    );
+    const misses = watchMisses();
+    expect(await previewAnswer(refusingFrame(), "wait-for-seek", {})).toBe(PREVIEW_REJECTED);
+    expect(misses).toHaveLength(1);
+  });
+
+  it("tells a listener that re-registers while it is told about a miss only once", async () => {
+    let calls = 0;
+    let unsubscribe = () => {};
+    const listener = () => {
+      calls += 1;
+      unsubscribe();
+      if (calls < 5) unsubscribe = onPreviewRequestMiss(listener);
+    };
+    unsubscribe = onPreviewRequestMiss(listener);
+    closers.push(() => unsubscribe());
+    expect(await previewAnswer(refusingFrame(), "wait-for-seek", {})).toBe(PREVIEW_REJECTED);
+    expect(calls).toBe(1);
+  });
+});
+
 describe("previewFrameOpaque", () => {
   it("is true only for a frame whose window refuses a read", () => {
     expect(previewFrameOpaque(document.body.appendChild(document.createElement("iframe")))).toBe(
@@ -83,6 +186,81 @@ describe("previewEditingClient", () => {
     const second = previewEditingClient(iframe);
     expect(second).not.toBe(first);
     await expect(second.request("wait-for-seek", {})).resolves.toEqual({ waited: false });
+    expect(handed).toHaveBeenCalledOnce();
+  });
+
+  it("hands a load handler attached before the client the new load's client", async () => {
+    const { iframe, handed } = servedFrame(() => ({ waited: false }));
+    let asked: Promise<unknown> | undefined;
+    iframe.addEventListener("load", () => {
+      asked = previewEditingClient(iframe).request("wait-for-seek", {});
+    });
+    const first = previewEditingClient(iframe);
+    iframe.dispatchEvent(new Event("load"));
+    expect(previewEditingClient(iframe)).not.toBe(first);
+    await expect(asked).resolves.toEqual({ waited: false });
+    expect(handed).toHaveBeenCalledOnce();
+  });
+
+  it("opens a channel only for the load that follows Studio's first write to the frame", async () => {
+    const { iframe, frame, handed } = servedFrame(() => ({ waited: false }));
+    closers.push(watchStudioNavigations(iframe));
+    iframe.setAttribute("src", "/api/projects/demo/preview");
+    await Promise.resolve();
+    fromFrame(frame, { type: PAGE_SHOWN, page: "studios" });
+    iframe.dispatchEvent(new Event("load"));
+    await expect(previewEditingClient(iframe).request("wait-for-seek", {})).resolves.toEqual({
+      waited: false,
+    });
+    const posted = vi.spyOn(iframe.contentWindow!, "postMessage");
+
+    iframe.setAttribute("src", "/api/projects/demo/preview?again=1");
+    await Promise.resolve();
+    fromFrame(frame, { type: PAGE_LEFT, page: "studios" });
+    iframe.dispatchEvent(new Event("load"));
+    await expect(previewEditingClient(iframe).request("wait-for-seek", {})).rejects.toMatchObject({
+      code: "disposed",
+    });
+
+    iframe.dispatchEvent(new Event("load"));
+    await expect(previewEditingClient(iframe).request("wait-for-seek", {})).rejects.toMatchObject({
+      code: "disposed",
+    });
+    expect(posted).not.toHaveBeenCalled();
+    expect(handed).toHaveBeenCalledOnce();
+  });
+
+  it("opens no channel to a page that replaced Studio's before its own load", async () => {
+    const { iframe, frame, handed } = servedFrame(() => ({ waited: false }));
+    const stop = watchStudioNavigations(iframe);
+    closers.push(stop);
+    const posted = vi.spyOn(iframe.contentWindow!, "postMessage");
+    fromFrame(frame, { type: PAGE_SHOWN, page: "before" });
+    iframe.setAttribute("src", "/api/projects/demo/preview");
+    await Promise.resolve();
+    fromFrame(frame, { type: PAGE_LEFT, page: "before" });
+    fromFrame(frame, { type: PAGE_SHOWN, page: "studios" });
+    fromFrame(frame, { type: PAGE_LEFT, page: "studios" });
+    fromFrame(frame, { type: PAGE_SHOWN, page: "posted by the page that came next" });
+    iframe.dispatchEvent(new Event("load"));
+    const client = previewEditingClient(iframe);
+    await expect(client.request("wait-for-seek", {})).rejects.toMatchObject({ code: "disposed" });
+    expect(posted).not.toHaveBeenCalled();
+    expect(handed).not.toHaveBeenCalled();
+  });
+
+  it("keeps the channel when the page Studio navigated away from says it left", async () => {
+    const { iframe, frame, handed } = servedFrame(() => ({ waited: false }));
+    closers.push(watchStudioNavigations(iframe));
+    fromFrame(frame, { type: PAGE_SHOWN, page: "before" });
+    iframe.setAttribute("src", "/api/projects/demo/preview");
+    await Promise.resolve();
+    fromFrame(frame, { type: PAGE_LEFT, page: "before" });
+    fromFrame(frame, { type: PAGE_SHOWN, page: "studios" });
+    iframe.dispatchEvent(new Event("load"));
+    await expect(previewEditingClient(iframe).request("wait-for-seek", {})).resolves.toEqual({
+      waited: false,
+    });
     expect(handed).toHaveBeenCalledOnce();
   });
 
@@ -120,6 +298,92 @@ describe("previewEditingClient", () => {
     expect(Date.now() - started).toBeLessThan(AGENT_PROBE_MS + 500);
   });
 
+  it("answers a frame whose runtime never came at once, rather than after another probe", async () => {
+    const { iframe } = opaqueFrame();
+    const started = Date.now();
+    await previewSeekPainted(iframe, 15_000);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(AGENT_PROBE_MS - 50);
+    const again = Date.now();
+    await previewSeekPainted(iframe, 15_000);
+    expect(Date.now() - again).toBeLessThan(100);
+  });
+
+  // fails without the fix: the request waited on the known agent first, and a re-render queued in that
+  // step ran before it went out (a sealed Delete's removal left 80 ms late at 4x CPU).
+  it("posts a request to a frame whose agent it knows in the caller's own step", async () => {
+    const { iframe, handed } = servedFrame((_kind, params) => params);
+    await previewRequest(iframe, "set-loop-start", { seconds: 0 });
+    handed.mockClear();
+    // The client's own request waits on nothing, so it leaves first unless previewRequest's went out at once.
+    const asked = previewRequest(iframe, "set-loop-start", { seconds: 1 });
+    const direct = previewEditingClient(iframe).request("set-loop-start", { seconds: 2 });
+    await Promise.all([asked, direct]);
+    expect(handed.mock.calls.map(([, params]) => params)).toEqual([{ seconds: 1 }, { seconds: 2 }]);
+  });
+
+  it("sends requests in call order when one is asked in the step the frame's agent connects", async () => {
+    const { iframe, handed } = servedFrame((_kind, params) => params);
+    const first = previewRequest(iframe, "set-loop-start", { seconds: 1 });
+    const second = previewEditingClient(iframe).ready.then(() =>
+      previewRequest(iframe, "set-loop-start", { seconds: 2 }),
+    );
+    await Promise.all([first, second]);
+    expect(handed.mock.calls.map(([, params]) => params)).toEqual([{ seconds: 1 }, { seconds: 2 }]);
+  });
+
+  it("keeps call order for requests asked in each microtask while the agent's probe settles", async () => {
+    const { iframe, handed } = servedFrame((_kind, params) => params);
+    const asked = [previewRequest(iframe, "set-loop-start", { seconds: 0 })];
+    await new Promise<void>((done) => {
+      void previewEditingClient(iframe).ready.then(async () => {
+        for (let seconds = 1; seconds <= 12; seconds++) {
+          asked.push(previewRequest(iframe, "set-loop-start", { seconds }));
+          await Promise.resolve();
+        }
+        done();
+      });
+    });
+    await Promise.all(asked);
+    const order = handed.mock.calls.map(([, params]) => (params as { seconds: number }).seconds);
+    expect(order).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+
+  it("sends a request asked while a reply is handled after that handling, with each answer its own", async () => {
+    const log: string[] = [];
+    const { iframe } = servedFrame((_kind, params) => {
+      log.push(`frame ${(params as { seconds: number }).seconds}`);
+      return params;
+    });
+    await previewRequest(iframe, "set-loop-start", { seconds: 0 });
+    log.length = 0;
+    const answers = await previewRequest(iframe, "set-loop-start", { seconds: 1 }).then((first) => {
+      const second = previewRequest(iframe, "set-loop-start", { seconds: 2 });
+      log.push("first handled");
+      return Promise.all([first, second]);
+    });
+    expect(log).toEqual(["frame 1", "first handled", "frame 2"]);
+    expect(answers).toEqual([{ seconds: 1 }, { seconds: 2 }]);
+  });
+
+  it("keeps a frame's error answer apart from no answer; previewRequest answers null for both", async () => {
+    const frame: Record<string, unknown> = {};
+    const iframe = detachedFakeIframe(frame);
+    const answerWithError = (port: MessagePort) =>
+      queueMicrotask(() => {
+        port.onmessage = (event: MessageEvent<{ id: number; kind: string }>) => {
+          if (event.data.kind === "runtime-snapshot") return;
+          if (event.data.kind === "hello")
+            return port.postMessage({ v: 2, id: event.data.id, ok: true });
+          const error = { code: "invalid-params", message: "timing value too long" };
+          port.postMessage({ v: 2, id: event.data.id, ok: false, error });
+        };
+      });
+    closers.push(serveEditingRequests(frame, () => null, answerWithError));
+    expect(await previewAnswer(iframe, "wait-for-seek", {})).toBe(PREVIEW_REJECTED);
+    expect(await previewRequest(iframe, "wait-for-seek", {})).toBeNull();
+    expect(await previewAnswer(iframe, "runtime-snapshot", {}, 50)).toBeNull();
+  });
+
   it("returns the runtime's manifest only when its reply has the manifest's shape", async () => {
     const manifest = { clips: [], durationInFrames: 30, scenes: [] };
     let reply: unknown = { clipManifest: manifest };
@@ -137,6 +401,167 @@ describe("previewEditingClient", () => {
     reply = { clipManifest: { clips: [], durationInFrames: Infinity } };
     expect(await previewClipManifest(iframe)).toBeNull();
   });
+});
+
+describe("the clip lists in a runtime snapshot", () => {
+  const pair = ["child", "parent"];
+  const manifest = (clips: unknown[]) => ({ clipManifest: { clips, durationInFrames: 30 } });
+
+  it("are read up to the clip cap", async () => {
+    const { iframe } = servedFrame(() => ({ clipParents: Array(MAX_FRAME_CLIPS).fill(pair) }));
+    expect(await previewClipParents(iframe)).toEqual(new Map([["child", "parent"]]));
+  });
+
+  it("are refused past the clip cap or with a gap", async () => {
+    let clipParents: unknown[] = Array(MAX_FRAME_CLIPS + 1).fill(pair);
+    let clips: unknown[] = [];
+    const { iframe } = servedFrame(() => ({ ...manifest(clips), clipParents }));
+    expect(await previewClipParents(iframe)).toEqual(new Map());
+    clipParents = [pair, pair, pair];
+    delete clipParents[1];
+    clips = [{}, {}];
+    delete clips[0];
+    expect(await previewClipParents(iframe)).toEqual(new Map());
+    expect(await previewClipManifest(iframe)).toBeNull();
+  });
+
+  it("hand on a manifest's scenes only when they are a list Studio can bound", async () => {
+    const scene = { id: "s", label: "S", start: 0, duration: 1 };
+    let scenes: unknown[] = [scene];
+    const { iframe } = servedFrame(() => ({
+      clipManifest: { clips: [], durationInFrames: 30, scenes },
+    }));
+    expect((await previewClipManifest(iframe))?.scenes).toEqual([scene]);
+    scenes = [scene, scene, scene];
+    delete scenes[1];
+    expect((await previewClipManifest(iframe))?.scenes).toEqual([]);
+    scenes = new Array(2 ** 32 - 1);
+    const started = performance.now();
+    expect((await previewClipManifest(iframe))?.scenes).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("are refused at once when their length has no entries", async () => {
+    const empty = new Array(2 ** 32 - 1);
+    const { iframe } = servedFrame(() => ({ ...manifest(empty), clipParents: empty }));
+    const started = performance.now();
+    expect(await previewClipParents(iframe)).toEqual(new Map());
+    expect(await previewClipManifest(iframe)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe("style values in a frame's computed-styles reply", () => {
+  const reported: Record<string, string> = {
+    color: "var(--none, url(https://probe.invalid/a))",
+    "background-color": "rgb(1, 2, 3)",
+    "box-shadow": "0 0 4px var(--none, url(https://probe.invalid/b))",
+    filter: "url(https://probe.invalid/c#f)",
+    "clip-path": "url(https://probe.invalid/d)",
+    "border-top-style": "u\\72l(https://probe.invalid/e)",
+    "font-family": "Inter, sans-serif",
+    "background-image": 'url("https://cdn.example/a.png")',
+    "backdrop-filter": "-webkit-image-set(url(https://probe.invalid/f) 1x)",
+  };
+
+  it("reach Studio only when they cannot load anything in Studio's page", async () => {
+    const { iframe } = servedFrame((kind) =>
+      kind === "computed-styles" ? { styles: reported } : null,
+    );
+    const read = await previewComputedStyles(
+      iframe,
+      { handle: "0123456789abcdef:1" },
+      Object.keys(reported),
+    );
+    expect(read).toEqual({
+      "background-color": "rgb(1, 2, 3)",
+      "font-family": "Inter, sans-serif",
+      "background-image": 'url("https://cdn.example/a.png")',
+    });
+  });
+
+  it("keep long values a browser computes and names that only look like a call", async () => {
+    const real: Record<string, string> = {
+      "background-image": `url("data:image/png;base64,${"iVBORw0KGgo".repeat(600)}")`,
+      "clip-path": `polygon(${Array.from({ length: 400 }, (_, i) => `${i % 100}% ${(i * 7) % 100}%`).join(", ")})`,
+      "font-family": '"Stock image (bold)", sans-serif',
+    };
+    const { iframe } = servedFrame((kind) =>
+      kind === "computed-styles" ? { styles: real } : null,
+    );
+    const read = await previewComputedStyles(
+      iframe,
+      { handle: "0123456789abcdef:1" },
+      Object.keys(real),
+    );
+    expect(read).toEqual(real);
+  });
+});
+
+describe("a list in a frame's runtime reply", () => {
+  const face = { family: "A", src: "url(a.woff2)" };
+  const readers = [
+    {
+      name: "console errors",
+      cap: MAX_QUERY_MATCHES,
+      entry: "boom",
+      reply: (list: unknown[]) => ({ errors: list, truncated: false }),
+      read: (iframe: HTMLIFrameElement) => previewConsoleErrors(iframe, 0),
+    },
+    {
+      name: "every match's styles",
+      cap: MAX_QUERY_MATCHES,
+      entry: { color: "red" },
+      reply: (list: unknown[]) => ({ styles: null, matches: list, truncated: false }),
+      read: (iframe: HTMLIFrameElement) => previewComputedStylesOfEvery(iframe, "p", ["color"]),
+    },
+    {
+      name: "font families",
+      cap: MAX_FONT_FACES,
+      entry: "A",
+      reply: (list: unknown[]) => ({ families: list, ownFaces: [face] }),
+      read: (iframe: HTMLIFrameElement) => previewFontFaces(iframe),
+    },
+    {
+      name: "the frame's own faces",
+      cap: MAX_FONT_FACES,
+      entry: face,
+      reply: (list: unknown[]) => ({ families: ["A"], ownFaces: list }),
+      read: (iframe: HTMLIFrameElement) => previewFontFaces(iframe),
+    },
+  ];
+
+  it.each(readers)("for $name is read up to the frame's own cap", async (r) => {
+    const { iframe } = servedFrame(() => r.reply(Array(r.cap).fill(r.entry)));
+    expect(await r.read(iframe)).not.toBeNull();
+  });
+
+  it.each(readers)("for $name is refused past the frame's cap or with a gap", async (r) => {
+    let list: unknown[] = Array(r.cap + 1).fill(r.entry);
+    const { iframe } = servedFrame(() => r.reply(list));
+    expect(await r.read(iframe)).toBeNull();
+    list = Array(r.cap).fill(r.entry);
+    delete list[1];
+    expect(await r.read(iframe)).toBeNull();
+  });
+
+  it.each(readers)("for $name is refused at once when its length has no entries", async (r) => {
+    const { iframe } = servedFrame(() => r.reply(new Array(2 ** 32 - 1)));
+    const started = performance.now();
+    expect(await r.read(iframe)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
+
+// fails without the fix: the reader turned each entry into a string, walking a nested list's every slot.
+it("refuses a frame's console errors at once when an entry is not a string", async () => {
+  const { iframe } = servedFrame(() => ({
+    errors: ["boom", new Array(2 ** 32 - 1)],
+    truncated: false,
+  }));
+  const started = performance.now();
+  expect(await previewConsoleErrors(iframe, 0)).toBeNull();
+  expect(performance.now() - started).toBeLessThan(1000);
 });
 
 describe("bridge playback for a frame Studio cannot script", () => {
@@ -269,5 +694,83 @@ describe("bridge playback for a frame Studio cannot script", () => {
     expect(adapter.getDuration()).toBe(12);
     expect(adapter.getTime()).toBe(3.5);
     expect(adapter.isPlaying()).toBe(true);
+  });
+});
+
+describe("a display read asked while a gesture is held", () => {
+  /** A frame whose agent is known, so each request leaves in its caller's step; returns the kinds in arrival order. */
+  async function connectedFrame() {
+    const { iframe, handed } = servedFrame((kind) =>
+      kind === "draft" ? { drafts: {} } : { errors: [], truncated: false },
+    );
+    await previewRequest(iframe, "set-loop-start", { seconds: 0 });
+    handed.mockClear();
+    const arrived = () =>
+      handed.mock.calls.map(([kind, params]) =>
+        kind === "draft" ? "draft" : `read ${(params as { from: number }).from}`,
+      );
+    return { iframe, arrived };
+  }
+  const gestures: Array<{ held: boolean }> = [];
+  afterEach(() => gestures.splice(0).forEach((gesture) => (gesture.held = false)));
+  const holdFor = (gesture: { held: boolean }) => {
+    gestures.push(gesture);
+    holdRefreshReadsWhile(() => gesture.held);
+  };
+  const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+  // fails without the fix: the refresh read went out first and the frame answered it before the draft.
+  it("leaves just after the gesture's next draft", async () => {
+    const { iframe, arrived } = await connectedFrame();
+    holdFor({ held: true });
+    const read = previewRequest(iframe, "console-errors", { from: 0 }, undefined, "behind-drafts");
+    const draft = previewRequest(iframe, "draft", { drafts: [] });
+    await Promise.all([read, draft]);
+    expect(arrived()).toEqual(["draft", "read 0"]);
+  });
+
+  it("does not hold a read its caller did not mark: it leaves at once, ahead of a held one", async () => {
+    const { iframe, arrived } = await connectedFrame();
+    holdFor({ held: true });
+    const held = previewRequest(iframe, "console-errors", { from: 1 }, undefined, "behind-drafts");
+    const now = previewRequest(iframe, "console-errors", { from: 2 });
+    await Promise.all([held, now]);
+    expect(arrived()).toEqual(["read 2", "read 1"]);
+  });
+
+  it("still leaves on the next frame when no draft comes, so a panel never freezes", async () => {
+    const { iframe, arrived } = await connectedFrame();
+    holdFor({ held: true });
+    const read = previewRequest(iframe, "console-errors", { from: 0 }, undefined, "behind-drafts");
+    await nextFrame();
+    await read;
+    expect(arrived()).toEqual(["read 0"]);
+  });
+
+  it("leaves when its gesture ends, without waiting for a frame that a hidden tab never runs", async () => {
+    const { iframe, arrived } = await connectedFrame();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+    const gesture = { held: true };
+    holdFor(gesture);
+    let sent = false;
+    void previewRequest(iframe, "console-errors", { from: 0 }, undefined, "behind-drafts").then(
+      () => (sent = true),
+    );
+    gesture.held = false;
+    releaseEndedGestureHolds();
+    await vi.waitFor(() => expect(sent).toBe(true), { timeout: 1000 });
+    expect(arrived()).toEqual(["read 0"]);
+    vi.mocked(window.requestAnimationFrame).mockRestore();
+  });
+
+  it("is not held once the gesture ends", async () => {
+    const { iframe, arrived } = await connectedFrame();
+    const gesture = { held: true };
+    holdFor(gesture);
+    gesture.held = false;
+    const read = previewRequest(iframe, "console-errors", { from: 0 }, undefined, "behind-drafts");
+    const draft = previewRequest(iframe, "draft", { drafts: [] });
+    await Promise.all([read, draft]);
+    expect(arrived()).toEqual(["read 0", "draft"]);
   });
 });

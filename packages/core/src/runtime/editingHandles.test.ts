@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installEditingAgent } from "./editingAgent";
+import { connectFrom, installMarkedEditingAgent } from "./editingAgent.test-helpers";
 import { trackedHandleCount } from "./editingHandles";
 import {
   EDITING_ELEMENT_HANDLE,
@@ -11,8 +11,6 @@ import {
   type EditingElementHit,
 } from "./editingPort";
 
-const CONNECT = { source: "hf-parent", type: "editing-connect", v: 1 };
-
 type Reply<T> = { ok: boolean; result?: { elements: T[] }; error?: { code: string } };
 
 describe("element handles over the editing port", () => {
@@ -23,7 +21,7 @@ describe("element handles over the editing port", () => {
   const ask = <T>(kind: string, params: unknown): Promise<Reply<T>> =>
     new Promise((resolve) => {
       port.onmessage = (event) => resolve(event.data);
-      port.postMessage({ v: 1, id: ++lastId, kind, params });
+      port.postMessage({ v: 2, id: ++lastId, kind, params });
     });
   const describeHandles = async (handles: string[]) =>
     (await ask<EditingElementDescription | null>("describe", { handles })).result!.elements;
@@ -44,11 +42,8 @@ describe("element handles over the editing port", () => {
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
     const parent = iframe.contentWindow!;
-    const handoff = vi.fn();
-    parent.postMessage = handoff as unknown as Window["postMessage"];
-    agent = installEditingAgent(parent);
-    window.dispatchEvent(new MessageEvent("message", { source: parent, data: CONNECT }));
-    port = (handoff.mock.calls[0]![2] as MessagePort[])[0]!;
+    agent = installMarkedEditingAgent(parent);
+    port = connectFrom(parent);
   });
   afterEach(() => {
     agent.dispose();
@@ -77,6 +72,7 @@ describe("element handles over the editing port", () => {
       handle: top!.handle,
       parent: below!.handle,
       tag: "p",
+      label: "Hi there",
       id: null,
       selector: ".title",
       matchesBefore: [],
@@ -92,10 +88,18 @@ describe("element handles over the editing port", () => {
       children: [{ text: "Hi " }, { handle: expect.stringMatching(EDITING_ELEMENT_HANDLE) }],
       rect: { x: 0, y: 0, width: 0, height: 0 },
       truncated: false,
+      textMarkup: true,
     });
     expect(root).toMatchObject({ tag: "div", selector: '[data-composition-id="card__hf1"]' });
+    expect(root!.textMarkup).toBe(false);
     expect(root!.matchesBefore).toBeNull();
     expect(JSON.parse(JSON.stringify(described))).toEqual(described);
+  });
+
+  it("names an element by its rendered text, never its script or style source", async () => {
+    document.body.innerHTML = `<div><style>.card{color:red}</style><script>window.x=1</script>Card title</div>`;
+    const described = await describeOne(document.querySelector("div")!);
+    expect(described).toMatchObject({ label: "Card title", text: "Card title" });
   });
 
   it("keeps an element's handle for the page load, answering null only while it is detached", async () => {
@@ -157,6 +161,14 @@ describe("element handles over the editing port", () => {
     }
   });
 
+  it("leaves out an id, selector or attribute name it would have to cut, and says so", async () => {
+    const long = "x".repeat(MAX_ELEMENT_VALUE + 1);
+    document.body.innerHTML = `<div id="${long}" data-${long}="1" data-kept="2"></div>`;
+    const described = await describeOne(document.querySelector("div")!);
+    expect(described).toMatchObject({ id: null, selector: null, truncated: true });
+    expect(described.attributes.map(([name]) => name)).toEqual(["id", "data-kept"]);
+  });
+
   it("cuts long values, keeps only a long data: value's header, and leaves script and style text out", async () => {
     const long = "x".repeat(MAX_ELEMENT_VALUE + 50);
     document.body.innerHTML = `<div class="card" title="${long}" style="--note: ${long}">
@@ -201,7 +213,7 @@ describe("element handles over the editing port", () => {
     document.body.innerHTML = `
       <div class="tile"></div>
       <div data-composition-file="cards.html"><div class="tile"></div><div class="tile"></div></div>
-      <div data-composition-src="cards.html"><div class="tile" id="t"></div></div>
+      <div data-composition-src="cards.html" data-composition-file="cards.html"><div class="tile" id="t"></div></div>
       <div data-composition-file="cards.html"><div class="tile"></div></div>`;
     const last = await describeOne(document.querySelectorAll(".tile")[4]!);
     expect(last.source.file).toBe("cards.html");
@@ -239,6 +251,28 @@ describe("element handles over the editing port", () => {
     expect(top!.parent).not.toBeNull();
   });
 
+  it("describes no element whose inherited source it would have to cut, and leaves out a style name it would", async () => {
+    const long = "x".repeat(MAX_ELEMENT_VALUE + 1);
+    document.body.innerHTML = `<div data-composition-file="${long}.html"><p class="t"></p></div>
+      <div data-composition-id="${long}"><p class="t"></p></div>
+      <div data-hf-original-composition-id="${long}" data-composition-id="c"><p class="t"></p></div>`;
+    for (const p of document.querySelectorAll("p")) expect(await describeOne(p)).toBeNull();
+    const { result } = await ask<never>("query", { selector: ".t" });
+    expect(result).toEqual({ matches: [], truncated: true });
+
+    document.body.innerHTML = `<div data-composition-file="${long}.html"><i class="u"></i></div><i class="u"></i>`;
+    const later = document.querySelectorAll("i")[1]!;
+    later.style.setProperty(`--${long}`, "1");
+    later.style.setProperty("left", "4px");
+    const described = await describeOne(later);
+    expect(described).toMatchObject({
+      selector: ".u",
+      matchesBefore: null,
+      inlineStyles: { left: "4px" },
+      truncated: true,
+    });
+  });
+
   it("answers a query with each match's handle and source, in document order", async () => {
     document.body.innerHTML = `<p class="t" id="a"></p>
       <div data-composition-file="cards.html"><p class="t" id="b"></p></div>`;
@@ -252,6 +286,25 @@ describe("element handles over the editing port", () => {
     const described = await describeHandles(matches.map((match) => match.handle));
     expect(described.map((entry) => entry?.id)).toEqual(["a", "b"]);
     expect((await ask<never>("query", { selector: "p[" })).error).toMatchObject({ code: "failed" });
+  });
+
+  it("answers every match's display in step with the page, null where a query leaves it out, capped", async () => {
+    const long = "x".repeat(MAX_ELEMENT_VALUE + 1);
+    document.body.innerHTML = `<b class="t"></b><div data-composition-id="${long}"><p class="t"></p></div><i class="t"></i>`;
+    const every = (selector: string) =>
+      ask<never>("computed-styles", { selector, every: true, properties: ["display"] });
+    expect((await every(".t")).result).toEqual({
+      styles: null,
+      matches: [{ display: "inline" }, null, { display: "inline" }],
+      truncated: false,
+    });
+    document.body.innerHTML = "<i></i>".repeat(MAX_QUERY_MATCHES + 1);
+    const { matches, truncated } = (await every("i")).result as unknown as {
+      matches: unknown[];
+      truncated: boolean;
+    };
+    expect(matches).toHaveLength(MAX_QUERY_MATCHES);
+    expect(truncated).toBe(true);
   });
 
   it("caps a query's matches and says so", async () => {

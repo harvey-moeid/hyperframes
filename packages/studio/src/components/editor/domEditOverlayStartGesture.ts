@@ -23,9 +23,7 @@ import {
 } from "./manualEdits";
 import {
   type OverlayRect,
-  elementCornerOverlayPoints,
   filterNestedDomEditGroupItems,
-  overlayCornersCentroid,
   selectionCacheKey,
 } from "./domEditOverlayGeometry";
 import {
@@ -35,8 +33,10 @@ import {
   type UseDomEditOverlayGesturesOptions,
 } from "./domEditOverlayGestures";
 import { collectSnapContext, buildExcludeElements, type SnapContext } from "./snapTargetCollection";
-import { MOVING_LAYER_UNREADABLE } from "./plainTranslate";
-import type { PreviewGestureStart } from "./previewGestureStartRead";
+import { measureLiveGrow, type PreviewGestureStart } from "./previewGestureStartRead";
+import { endPreviewDraft } from "./previewDrafts";
+import { armSealedRawSteps } from "./gestureSteps";
+import { holdRefreshReadsWhile, previewFrameOpaque } from "../../player/lib/previewChannel";
 import { editsPlainCss } from "../../hooks/gsapRuntimeKeyframes";
 import { logResize, resetResizeMoveLog } from "../../utils/resizeDebug";
 import { logDrag, readDragPositions, resetDragMoveLog } from "../../utils/dragDebug";
@@ -68,14 +68,6 @@ export function startGroupDrag(
     notifyBlockedPress(e, opts, blockedSelection);
     return false;
   }
-  const moving = items.find((item) => item.start?.gsap?.moving)?.selection;
-  if (moving) {
-    e.preventDefault();
-    e.stopPropagation();
-    opts.onBlockedMoveRef.current(moving, MOVING_LAYER_UNREADABLE);
-    return false;
-  }
-
   opts.onManualDragStartRef.current?.();
   const dragItems = filterNestedDomEditGroupItems(items);
   const members: ManualOffsetDragMember[] = [];
@@ -143,6 +135,9 @@ export function startGroupDrag(
       members,
       snapContext,
     };
+    const group = opts.groupGestureRef.current;
+    holdRefreshReadsWhile(() => opts.groupGestureRef.current === group);
+    armSealedRawSteps(opts);
   } catch (error) {
     opts.groupGestureRef.current = null;
     restoreManualOffsetDragMembers(members);
@@ -183,6 +178,12 @@ export function startGesture(
   if (kind === "resize" && (!Number.isFinite(rect.width) || !Number.isFinite(rect.height)))
     return false;
 
+  // A frame Studio scripts measures its own box here, with the same probe the sealed frame runs.
+  const liveFrame = opts.iframeRef.current;
+  const liveGrow =
+    kind === "resize" && !start && overlayEl && liveFrame && !previewFrameOpaque(liveFrame)
+      ? measureLiveGrow(overlayEl, liveFrame, sel.element)
+      : null;
   const size = readStudioBoxSize(sel.element);
   // The draft writes CSS width/height, so the resize base must be the CSS
   // layout size. offsetWidth/Height are transform-free; the overlay-rect
@@ -212,11 +213,6 @@ export function startGesture(
   let pathOffsetMember: ManualOffsetDragMember | undefined;
 
   if (kind === "drag") {
-    if (start?.gsap?.moving) {
-      opts.onBlockedMoveRef.current(sel, MOVING_LAYER_UNREADABLE);
-      e.preventDefault();
-      return false;
-    }
     opts.onManualDragStartRef.current?.();
     const result = createManualOffsetDragMember({
       key: selectionCacheKey(sel),
@@ -265,6 +261,7 @@ export function startGesture(
         kind === "rotate" ? "rotate" : "resize",
         at,
       );
+      endPreviewDraft(sel.element, "keep");
     }
   }
 
@@ -272,22 +269,22 @@ export function startGesture(
   try {
     // Rotation base: the angle the element shows. An element GSAP does not turn, or a plain-translate
     // move, never asks GSAP: reading a property makes it bake the CSS into its transform.
-    const plain = !!pathOffsetMember?.plainTranslate || editsPlainCss(sel.element, "rotate");
-    const plainRotation = plain && kind === "rotate" ? readCssRotationTarget(sel.element) : null;
-    const rotation = { angle: readRotationBase(sel.element, plain) };
+    const frameRotation = start?.gsapRotation;
+    const plain =
+      !!pathOffsetMember?.plainTranslate ||
+      (frameRotation !== undefined ? frameRotation === null : editsPlainCss(sel.element, "rotate"));
+    const frameCss = plain ? start?.cssRotation : undefined;
+    const plainRotation =
+      plain && kind === "rotate" ? (frameCss?.target ?? readCssRotationTarget(sel.element)) : null;
+    const rotation = {
+      angle: frameCss?.angle ?? readRotationBase(sel.element, plain, frameRotation ?? undefined),
+    };
     const overlayBounds = overlayEl?.getBoundingClientRect();
     const centerX = (overlayBounds?.left ?? 0) + rect.left + rect.width / 2;
     const centerY = (overlayBounds?.top ?? 0) + rect.top + rect.height / 2;
 
     const iframe = opts.iframeRef.current;
 
-    // A corner resize pins the centroid of the four rotation-aware corners: an axis-aligned
-    // size delta only holds the centre still for a symmetric, unrotated growth.
-    let resizeFixedCenterStart: { x: number; y: number } | undefined;
-    if (kind === "resize" && pathOffsetMember && overlayEl && iframe) {
-      const corners = elementCornerOverlayPoints(overlayEl, iframe, sel.element);
-      if (corners) resizeFixedCenterStart = overlayCornersCentroid(corners);
-    }
     const snapContext =
       (kind === "drag" || kind === "resize") && overlayEl && iframe
         ? (options?.snap ??
@@ -322,6 +319,7 @@ export function startGesture(
       originHeight: rect.height,
       actualWidth,
       actualHeight,
+      startLayout: start ? start.layout : null,
       actualRotation: rotation.angle,
       plainRotation,
       editScaleX: rect.editScaleX,
@@ -335,8 +333,11 @@ export function startGesture(
         kind === "resize" && options?.resizeCorner
           ? { x: e.clientX - options.resizeCorner.x, y: e.clientY - options.resizeCorner.y }
           : undefined,
-      resizeFixedCenterStart,
+      resizeGrow: kind === "resize" ? ((start ? start.grow : liveGrow) ?? undefined) : undefined,
     };
+    const gesture = opts.gestureRef.current;
+    holdRefreshReadsWhile(() => opts.gestureRef.current === gesture);
+    armSealedRawSteps(opts);
     if (kind === "resize") {
       resetResizeMoveLog();
       logResize("start", {
@@ -348,8 +349,9 @@ export function startGesture(
         editScale: { x: rect.editScaleX, y: rect.editScaleY },
         contentScale: { x: contentScaleX, y: contentScaleY },
         rotation: rotation.angle,
+        grow: opts.gestureRef.current?.resizeGrow ?? null,
+        pressFromCorner: opts.gestureRef.current?.resizePressFromCorner ?? null,
         hasOffsetMember: !!pathOffsetMember,
-        fixedCenterStart: resizeFixedCenterStart ?? null,
         initialBoxSize: opts.gestureRef.current?.initialBoxSize ?? null,
         initialInlineStyle: sel.element.getAttribute("style"),
       });

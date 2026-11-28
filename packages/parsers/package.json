@@ -1,6 +1,6 @@
 {
   "name": "@hyperframes/parsers",
-  "version": "0.9.57",
+  "version": "0.9.105",
   "repository": {
     "type": "git",
     "url": "https://github.com/heygen-com/hyperframes",
@@ -57,6 +57,18 @@
       "node": "./dist/hfIds.js",
       "import": "./src/hfIds.ts",
       "types": "./src/hfIds.ts"
+    },
+    "./linkedom": {
+      "bun": "./src/linkedom.ts",
+      "node": "./dist/linkedom.js",
+      "import": "./src/linkedom.ts",
+      "types": "./src/linkedom.ts"
+    },
+    "./postcss": {
+      "bun": "./src/postcss.ts",
+      "node": "./dist/postcss.js",
+      "import": "./src/postcss.ts",
+      "types": "./src/postcss.ts"
     },
     "./gsap-parser-recast": {
       "bun": "./src/gsapParser.ts",
@@ -130,6 +142,12 @@
       "import": "./src/ffBinaries.ts",
       "types": "./src/ffBinaries.ts"
     },
+    "./literal-media-input": {
+      "bun": "./src/literalMediaInput.ts",
+      "node": "./dist/literalMediaInput.js",
+      "import": "./src/literalMediaInput.ts",
+      "types": "./src/literalMediaInput.ts"
+    },
     "./media-alpha": {
       "bun": "./src/mediaAlpha.ts",
       "node": "./dist/mediaAlpha.js",
@@ -147,6 +165,12 @@
       "node": "./dist/assetResolution.js",
       "import": "./src/assetResolution.ts",
       "types": "./src/assetResolution.ts"
+    },
+    "./private-path": {
+      "bun": "./src/privatePath.ts",
+      "node": "./dist/privatePath.js",
+      "import": "./src/privatePath.ts",
+      "types": "./src/privatePath.ts"
     },
     "./html-attribute-spans": {
       "bun": "./src/htmlAttributeSpans.ts",
@@ -211,6 +235,14 @@
         "import": "./dist/hfIds.js",
         "types": "./dist/hfIds.d.ts"
       },
+      "./linkedom": {
+        "import": "./dist/linkedom.js",
+        "types": "./dist/linkedom.d.ts"
+      },
+      "./postcss": {
+        "import": "./dist/postcss.js",
+        "types": "./dist/postcss.d.ts"
+      },
       "./gsap-parser-recast": {
         "import": "./dist/gsapParser.js",
         "types": "./dist/gsapParser.d.ts"
@@ -259,6 +291,10 @@
         "import": "./dist/ffBinaries.js",
         "types": "./dist/ffBinaries.d.ts"
       },
+      "./literal-media-input": {
+        "import": "./dist/literalMediaInput.js",
+        "types": "./dist/literalMediaInput.d.ts"
+      },
       "./media-alpha": {
         "import": "./dist/mediaAlpha.js",
         "types": "./dist/mediaAlpha.d.ts"
@@ -270,6 +306,10 @@
       "./asset-resolution": {
         "import": "./dist/assetResolution.js",
         "types": "./dist/assetResolution.d.ts"
+      },
+      "./private-path": {
+        "import": "./dist/privatePath.js",
+        "types": "./dist/privatePath.d.ts"
       },
       "./html-attribute-spans": {
         "import": "./dist/htmlAttributeSpans.js",
@@ -309,6 +349,7 @@
     "entities": "^7.0.1",
     "linkedom": "^0.18.12",
     "magic-string": "^0.30.21",
+    "postcss": "^8.5.8",
     "recast": "^0.23.11"
   },
   "devDependencies": {

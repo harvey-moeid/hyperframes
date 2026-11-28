@@ -13,6 +13,8 @@ function createMockDeps() {
     onSetMediaOutputMuted: vi.fn(),
     onSetNativeMediaSyncDisabled: vi.fn(),
     onSetWebAudioMediaDisabled: vi.fn(),
+    onSetParentAudio: vi.fn(),
+    onAudioClock: vi.fn(),
     onSetPlaybackRate: vi.fn(),
     onSetIdleHeartbeat: vi.fn(),
     onSetColorGrading: vi.fn(),
@@ -23,6 +25,7 @@ function createMockDeps() {
     onDisablePickMode: vi.fn(),
     onSetRuntimeData: vi.fn(),
     onClearRuntimeData: vi.fn(),
+    onScrubAudio: vi.fn(),
     getCanonicalFps: vi.fn(() => 30),
   };
 }
@@ -103,6 +106,13 @@ describe("installRuntimeControlBridge", () => {
     const handler = installRuntimeControlBridge(deps);
     handler(makeControlMessage("play"));
     expect(deps.onPlay).toHaveBeenCalledOnce();
+    expect(deps.onPlay).toHaveBeenCalledWith();
+    handler(makeControlMessage("play", { playSeq: 3 }));
+    expect(deps.onPlay).toHaveBeenLastCalledWith(3);
+    for (const bad of [0, -1, 1.5, "2", Number.NaN]) {
+      handler(makeControlMessage("play", { playSeq: bad }));
+    }
+    expect(deps.onPlay).toHaveBeenCalledTimes(2);
   });
 
   it("dispatches pause command", () => {
@@ -138,6 +148,30 @@ describe("installRuntimeControlBridge", () => {
     const handler = installRuntimeControlBridge(deps);
     handler(makeControlMessage("stop-media"));
     expect(deps.onStopMedia).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches scrub-audio with the music row, the time and a volume held to 0..1", () => {
+    const deps = createMockDeps();
+    const handler = installRuntimeControlBridge(deps);
+    const target = { id: "music", hfId: "a1", sourceFile: "index.html" };
+
+    handler(makeControlMessage("scrub-audio", { target, time: 0.5, volume: 3 }));
+    handler(makeControlMessage("scrub-audio", { time: null }));
+
+    expect(deps.onScrubAudio.mock.calls).toEqual([
+      [target, 0.5, 1],
+      [null, null, 0],
+    ]);
+  });
+
+  it.each([
+    ["a target without an id", { target: { hfId: "a1" }, time: 0.5, volume: 1 }],
+    ["a time that is not a number", { target: null, time: "0.5", volume: 1 }],
+    ["no volume", { target: null, time: 0.5 }],
+  ])("drops scrub-audio with %s", (_name, extra) => {
+    const deps = createMockDeps();
+    installRuntimeControlBridge(deps)(makeControlMessage("scrub-audio", extra));
+    expect(deps.onScrubAudio).not.toHaveBeenCalled();
   });
 
   it("dispatches seek command with frame and mode", () => {
@@ -229,6 +263,29 @@ describe("installRuntimeControlBridge", () => {
     const handler = installRuntimeControlBridge(deps);
     handler(makeControlMessage("set-native-media-sync-disabled"));
     expect(deps.onSetNativeMediaSyncDisabled).toHaveBeenCalledWith(false);
+  });
+
+  // fails without the fix: the film had no way to hear the parent's audio clock or which clips it plays.
+  it("passes the parent's audio clock and its clips on, and drops a malformed one", () => {
+    const deps = createMockDeps();
+    const handler = installRuntimeControlBridge(deps);
+    try {
+      handler(makeControlMessage("audio-clock", { time: 4.5, rate: 1, at: 1000 }));
+      expect(deps.onAudioClock).toHaveBeenLastCalledWith({ time: 4.5, rate: 1, at: 1000 });
+      handler(makeControlMessage("audio-clock", { time: null }));
+      expect(deps.onAudioClock).toHaveBeenLastCalledWith(null);
+      for (const bad of [{ time: "4" }, { time: 4, rate: 0, at: 1 }, { time: 4, rate: 1 }])
+        handler(makeControlMessage("audio-clock", bad));
+      expect(deps.onAudioClock).toHaveBeenCalledTimes(2);
+
+      handler(makeControlMessage("set-parent-audio", { clips: ["a", "b"] }));
+      expect(deps.onSetParentAudio).toHaveBeenLastCalledWith(["a", "b"]);
+      handler(makeControlMessage("set-parent-audio", { clips: [1] }));
+      handler(makeControlMessage("set-parent-audio", { clips: "a" }));
+      expect(deps.onSetParentAudio).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("message", handler);
+    }
   });
 
   it("dispatches set-web-audio-media-disabled command", () => {
@@ -548,5 +605,35 @@ describe("flash-elements", () => {
     document.body.innerHTML = '<div class="target"></div>';
     flash({ selectors: [".target"] });
     expect(document.querySelector(".target")?.classList.contains("__hf-flash")).toBe(true);
+  });
+});
+
+describe("the runtime's document id", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // fails without the fix: a render seeds crypto.getRandomValues, so an id drawn there shifted the film's random draws.
+  it("draws nothing from the page's random sources when the runtime loads", async () => {
+    const values = vi.spyOn(crypto, "getRandomValues");
+    const random = vi.spyOn(Math, "random");
+    vi.resetModules();
+    await import("./bridge");
+    expect({ values: values.mock.calls.length, random: random.mock.calls.length }).toEqual({
+      values: 0,
+      random: 0,
+    });
+  });
+
+  // fails without the fix: a coarsened timeOrigin gave two quick documents one id, so the second was dropped.
+  it("gives two documents loaded at the same coarsened time different ids", async () => {
+    vi.spyOn(performance, "timeOrigin", "get").mockReturnValue(1_000);
+    const post = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+    const idOfNewDocument = async () => {
+      vi.resetModules();
+      const bridge = await import("./bridge");
+      bridge.postRuntimeMessage({ source: "hf-preview", type: "timeline" } as never);
+      return (post.mock.calls.at(-1)![0] as { documentId: string }).documentId;
+    };
+    const [first, second] = [await idOfNewDocument(), await idOfNewDocument()];
+    expect(first).not.toBe(second);
   });
 });

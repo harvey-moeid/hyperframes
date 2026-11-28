@@ -1,4 +1,5 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
+import { fromEmptyFolder } from "@hyperframes/parsers/ff-binaries";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   HF_AUDIO_AUTOMATION_ATTR,
@@ -28,6 +29,7 @@ import {
   trackKindOf,
   type TrackKind,
 } from "@hyperframes/parsers";
+import { firstTemplateContent } from "@hyperframes/parsers/sub-composition-validity";
 import { toDomNode, type DomNode } from "./domStructure.js";
 import {
   compositionOriginSeconds,
@@ -365,8 +367,7 @@ async function readSubComposition(
   const relativeFile = relative(parent.projectDir, authored).split(sep).join("/");
   const source = parent.sourceOverrides.get(relativeFile) ?? readFileSync(file, "utf-8");
   const doc = new DOMParser().parseFromString(source, "text/html");
-  const template = doc.querySelector("template");
-  const root = (template?.content ?? doc).querySelector("[data-composition-id]");
+  const root = (firstTemplateContent(doc) ?? doc).querySelector("[data-composition-id]");
   if (!root) return [];
   const scope: DocScope = {
     doc,
@@ -488,10 +489,18 @@ function projectFps(source: string): number {
 }
 
 /** Needs a global DOMParser (`ensureDOMParser`). Reads `index.html` and one level of sub-compositions. */
-export async function describeProject(
+export function describeProject(
   indexPath: string,
   measure: MeasureMedia = measureWithFfprobe,
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
+): Promise<ProjectTimeline> {
+  return fromEmptyFolder(() => describeProjectAt(resolve(indexPath), measure, sourceOverrides));
+}
+
+async function describeProjectAt(
+  indexPath: string,
+  measure: MeasureMedia,
+  sourceOverrides: ReadonlyMap<string, string>,
 ): Promise<ProjectTimeline> {
   const projectDir = dirname(indexPath);
   const source = sourceOverrides.get(basename(indexPath)) ?? readFileSync(indexPath, "utf-8");

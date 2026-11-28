@@ -5,7 +5,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import { Duplex } from "node:stream";
+import { Duplex, Writable } from "node:stream";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { stripSdrPngColourTags } from "@hyperframes/core/compiler/png-colour-tags";
 import { injectTagsAtHeadStart } from "@hyperframes/core/compiler/html-document";
@@ -18,8 +18,15 @@ import {
   type PreviewProxyBox,
 } from "@hyperframes/core";
 import { getMimeType } from "@hyperframes/core/studio-api";
-import { decodeWellFormedEscapes, openRangeEnd } from "@hyperframes/studio-server";
-import { requestFromAnotherSite } from "@hyperframes/studio-server/request-identity";
+import {
+  decodeWellFormedEscapes,
+  openRangeEnd,
+  serviceWorkerScriptFetch,
+} from "@hyperframes/studio-server";
+import {
+  documentFromAnotherSite,
+  proxyWorkFromAnotherSite,
+} from "@hyperframes/studio-server/request-identity";
 import { findStageProxyBox } from "./compositionViewport.js";
 import { resolveAutoProxy } from "./projectConfig.js";
 import { injectMediaCodecMap } from "./compositionServer.js";
@@ -295,12 +302,22 @@ function markForAnotherSite(html: string): string {
 }
 
 /** A load by another site is sandboxed, and the documents it gets are marked so their runtime offers it no editing port. */
-function loadedByAnotherSite(req: IncomingMessage, res: ServerResponse): boolean {
-  const anotherSite = requestFromAnotherSite({
+/** A `?hf-proxy=` copy runs ffmpeg on this machine, so another site may not ask for one. */
+function proxyRequestedByAnotherSite(req: IncomingMessage): boolean {
+  return proxyWorkFromAnotherSite({
     fetchSite: req.headers["sec-fetch-site"] as string | undefined,
     host: req.headers.host,
     referer: req.headers.referer,
   });
+}
+
+function loadedByAnotherSite(req: IncomingMessage, res: ServerResponse): boolean {
+  const anotherSite = documentFromAnotherSite({
+    fetchSite: req.headers["sec-fetch-site"] as string | undefined,
+    host: req.headers.host,
+    referer: req.headers.referer,
+  });
+  res.setHeader("Vary", "Sec-Fetch-Site, Referer");
   if (anotherSite) {
     const policies = [res.getHeader("Content-Security-Policy"), "sandbox allow-scripts"];
     res.setHeader("Content-Security-Policy", policies.filter((p) => p !== undefined).map(String));
@@ -352,9 +369,13 @@ export async function serveStaticProjectHtml(
     (inProcessHost !== undefined && host === inProcessHost);
 
   // fallow-ignore-next-line complexity
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
-    if (!answersHost(req.headers.host)) {
+    const workerScript = serviceWorkerScriptFetch({
+      serviceWorker: req.headers["service-worker"] as string | undefined,
+      fetchDest: req.headers["sec-fetch-dest"] as string | undefined,
+    });
+    if (!answersHost(req.headers.host) || workerScript) {
       res.writeHead(403, { "Content-Type": "text/plain" });
       res.end("Forbidden");
       return;
@@ -383,6 +404,11 @@ export async function serveStaticProjectHtml(
       res.end();
       return;
     }
+    if (proxyParam !== null && proxyRequestedByAnotherSite(req)) {
+      res.writeHead(403);
+      res.end("Forbidden: media proxy requested by another site");
+      return;
+    }
 
     const requestPath = decodeWellFormedEscapes(pathOnly).replace(/^\//, "");
     for (const root of roots) {
@@ -409,6 +435,16 @@ export async function serveStaticProjectHtml(
           if (!serveUntaggedPng(filePath, res))
             serveFileWithRange(filePath, req.headers.range, res);
         }
+        return;
+      }
+    }
+    if (proxyParam === null) {
+      const { referencedFontResponse } = await import("@hyperframes/share/referencedFont.mjs");
+      const font = await referencedFontResponse(projectDir, requestPath, req.method ?? "GET");
+      if (font) {
+        res.writeHead(font.status, Object.fromEntries(font.headers));
+        if (!font.body) res.end();
+        else await font.body.pipeTo(Writable.toWeb(res)).catch(() => res.destroy());
         return;
       }
     }

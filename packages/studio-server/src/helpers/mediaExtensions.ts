@@ -1,3 +1,5 @@
+import { assertLiteralMediaInput } from "@hyperframes/parsers/literal-media-input";
+
 export const VIDEO_EXTS = new Set([
   ".mp4",
   ".m4v",
@@ -34,9 +36,16 @@ export const CONVERTIBLE_IMAGE_EXTS = new Set([".gif", ".avif", ".bmp", ".tif", 
 export const NOT_MEDIA = "not a media file";
 
 export const MEDIA_INPUT_ARGS: readonly string[] = [
+  "-protocol_whitelist",
+  "file",
   "-format_whitelist",
   "mov,matroska,mxf,avi,mpeg,mpegts,mpegvideo,flv,asf,ogg,wav,mp3,aac,flac,aiff,gif,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,tiff_pipe",
 ];
+
+export function mediaInputArgs(input: string): readonly string[] {
+  assertLiteralMediaInput(input);
+  return MEDIA_INPUT_ARGS;
+}
 
 const PLAYLIST_START = /^(?:\xEF\xBB\xBF)?\s*(?:#EXTM3U|ffconcat)/;
 const MARKUP_START = /^(?:\xEF\xBB\xBF)?\s*</;

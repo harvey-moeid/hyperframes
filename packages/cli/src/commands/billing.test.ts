@@ -10,6 +10,14 @@ const terminal = vi.hoisted(() => ({
   checkoutError: null as unknown,
   args: [] as unknown[][],
   enter: false,
+  headless: false,
+  errorOnce: false,
+  switches: 0,
+  lands: true,
+  asked: 0,
+  inOwn: false,
+  signInWaits: false,
+  signInStopped: false,
 }));
 const events = vi.hoisted(() => ({ failed: [] as unknown[], timeout: [] as unknown[] }));
 const never = vi.hoisted(() => ({ paid: true }));
@@ -21,6 +29,8 @@ const held = vi.hoisted(() => ({
   holdHeadersAfter: undefined as number | undefined,
   stallPoll: false,
   reads: undefined as Array<{ plan: string; credits: number } | null> | undefined,
+  team: undefined as { plan: string; credits: number } | undefined,
+  own: undefined as { plan: string; credits: number } | undefined,
 }));
 
 vi.mock("../telemetry/events.js", () => ({
@@ -28,17 +38,22 @@ vi.mock("../telemetry/events.js", () => ({
   trackBillingWaitTimeout: (p: unknown) => void events.timeout.push(p),
 }));
 
-vi.mock("../utils/attendedTerminal.js", () => ({ isUnattended: () => !terminal.attended }));
+vi.mock("../utils/attendedTerminal.js", () => ({
+  isUnattended: () => !terminal.attended,
+  isRemoteOrHeadless: () => terminal.headless,
+}));
 vi.mock("node:readline/promises", () => ({
   createInterface: () => ({
-    question: (_q: string, opts: { signal: AbortSignal }) =>
-      new Promise((resolve, reject) =>
+    question: (_q: string, opts: { signal: AbortSignal }) => {
+      terminal.asked++;
+      return new Promise((resolve, reject) =>
         terminal.enter
           ? resolve("")
           : opts.signal.addEventListener("abort", () =>
               reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
             ),
-      ),
+      );
+    },
     close: () => undefined,
   }),
 }));
@@ -53,14 +68,35 @@ vi.mock("../cloud/auth.js", () => ({
       : Promise.resolve({ "x-api-key": "k" }),
   resolveCloudBaseUrl: () => "https://api.example.test",
 }));
+const scriptedRead = (calls: number) =>
+  held.team
+    ? terminal.inOwn
+      ? held.own
+      : held.team
+    : held.reads?.[Math.min(calls, held.reads.length) - 1];
+
 vi.mock("../heygen/plan.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../heygen/plan.js")>();
   return {
     ...real,
     readOffer: async (stop?: AbortSignal) =>
       held.realOffer ? real.readOffer(stop) : (held.offer ?? {}),
+    signInToOwnSpace: async (_ms: number, stop?: AbortSignal, switching?: () => void) => {
+      terminal.switches++;
+      if (terminal.signInWaits)
+        await new Promise((_, reject) =>
+          stop?.addEventListener("abort", () => reject((terminal.signInStopped = true)), {
+            once: true,
+          }),
+        );
+      switching?.();
+      terminal.inOwn = true;
+      return terminal.lands;
+    },
     createCheckout: async (...args: unknown[]) => {
-      if (terminal.checkoutError) throw terminal.checkoutError;
+      const error = terminal.checkoutError;
+      if (terminal.errorOnce) terminal.checkoutError = null;
+      if (error) throw error;
       terminal.checkouts++;
       terminal.args.push(args);
       return held.checkout ?? "https://checkout.stripe.com/c/pay/cs_test_1";
@@ -68,7 +104,8 @@ vi.mock("../heygen/plan.js", async (importOriginal) => {
     readPlan: async (stop?: AbortSignal) => {
       if (++plan.calls > 1 && held.stallPoll)
         return new Promise((resolve) => stop?.addEventListener("abort", () => resolve(null)));
-      if (held.reads) return held.reads[Math.min(plan.calls, held.reads.length) - 1];
+      const scripted = scriptedRead(plan.calls);
+      if (scripted !== undefined) return scripted;
       return {
         plan: plan.calls === 1 || !never.paid ? "none" : "pro",
         credits: plan.calls === 1 || !never.paid ? 0 : 500,
@@ -95,6 +132,16 @@ afterEach(() => {
   terminal.args.length = 0;
   terminal.checkoutError = null;
   terminal.enter = false;
+  Object.assign(terminal, {
+    headless: false,
+    errorOnce: false,
+    switches: 0,
+    lands: true,
+    asked: 0,
+    inOwn: false,
+    signInWaits: false,
+    signInStopped: false,
+  });
   events.failed.length = 0;
   events.timeout.length = 0;
   never.paid = true;
@@ -106,6 +153,8 @@ afterEach(() => {
     holdHeadersAfter: undefined,
     stallPoll: false,
     reads: undefined,
+    team: undefined,
+    own: undefined,
   });
   vi.restoreAllMocks();
   consumeCommandResult();
@@ -167,6 +216,33 @@ describe("billing add-credits", () => {
     expect(log.mock.calls.flat().join("\n")).not.toMatch(/deprecat|renamed|top-up/i);
   });
 
+  // The server answers a Free account's add-on checkout 400 "An active HyperFrames plan is required".
+  it("offers a Free account no add-on from the terminal; the open page shows it the plans", async () => {
+    terminal.attended = true;
+    terminal.enter = true;
+    never.paid = false;
+    held.offer = Promise.resolve({
+      addon: {
+        unitsPerBlock: 100,
+        unitAmount: 100,
+        currency: "usd",
+        min: 1,
+        max: 100,
+        recommended: 10,
+      },
+    });
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, { rawArgs: ["add-credits", "--timeout", "4"] });
+    await vi.advanceTimersByTimeAsync(6000);
+    await done;
+    vi.useRealTimers();
+    expect(terminal.checkouts).toBe(0);
+    expect(log.mock.calls.flat().join("\n")).not.toContain("add-on credits:");
+    expect(events.failed).toEqual([]);
+  });
+
   it("refuses the old name `top-up` like any unknown action, naming the valid ones", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await expect(runCommand(billing, { rawArgs: ["top-up"] })).rejects.toThrow();
@@ -177,7 +253,97 @@ describe("billing add-credits", () => {
   });
 });
 
+describe("billing with no action", () => {
+  const printed = async (rawArgs: string[], read: { plan: string; credits: number } | null) => {
+    held.reads = [read];
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    await runCommand(billing, { rawArgs });
+    return log.mock.calls.flat().join("\n");
+  };
+  const MANAGE =
+    /^Manage or cancel your plan: https:\/\/hyperframes\.studio\/billing\?from=cli&utm_source=cli&workspace_hint=sp-1$/m;
+
+  it("shows a paid plan and the page that manages or cancels it, opening nothing", async () => {
+    const out = await printed([], { plan: "pro", credits: 500 });
+    expect(out).toContain("HyperFrames: pro plan, 500 credits");
+    expect(out).toMatch(MANAGE);
+    expect(opened).toEqual([]);
+  });
+
+  // fails without the fix: the plan name reached the terminal with its control characters live.
+  it("shows a plan name's control characters as visible escapes", async () => {
+    const esc = String.fromCharCode(27);
+    const out = await printed([], { plan: `pro${esc}[2J`, credits: 500 });
+    expect(out).toContain("HyperFrames: pro\\x1b[2J");
+    expect(out).not.toContain(esc);
+  });
+
+  it("shows Free with no manage line", async () => {
+    const out = await printed([], { plan: "none", credits: 0 });
+    expect(out).toContain("HyperFrames: Free");
+    expect(out).not.toContain("Manage or cancel");
+  });
+
+  it("--manage opens that page at a terminal", async () => {
+    terminal.attended = true;
+    expect(await printed(["--manage"], { plan: "pro", credits: 500 })).toMatch(MANAGE);
+    expect(new URL(opened[0] ?? "").pathname).toBe("/billing");
+  });
+
+  it("--manage only prints the link when no one is at the terminal", async () => {
+    expect(await printed(["--manage"], null)).toMatch(MANAGE);
+    expect(opened).toEqual([]);
+  });
+});
+
+describe("billing numeric flags", () => {
+  it.each([
+    ["--timeout", "abc"],
+    ["--timeout", "-5"],
+    ["--timeout", "0"],
+    ["--timeout", "2.5"],
+    ["--needed", "abc"],
+    ["--needed", "-1"],
+    ["--needed", "0"],
+  ])("rejects %s %s as a usage error before opening any page", async (flag, value) => {
+    await expect(
+      runCommand(billing, { rawArgs: ["add-credits", flag, value] }),
+    ).rejects.toMatchObject({ result: { exitCode: 2, kind: "usage_error" } });
+    expect(opened).toEqual([]);
+    expect(plan.calls).toBe(0);
+  });
+
+  it("still waits for a valid --needed and --timeout", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, {
+      rawArgs: ["add-credits", "--needed", "100", "--timeout", "30"],
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+    vi.useRealTimers();
+    expect(opened).toHaveLength(1);
+    expect(new URL(opened[0] ?? "").searchParams.get("needed_credits")).toBe("100");
+  });
+});
+
 describe("billing without a terminal", () => {
+  // fails without the fix: the checkout link reached the terminal with its control characters live.
+  it("prints a checkout link's control characters as visible escapes", async () => {
+    const esc = String.fromCharCode(27);
+    held.checkout = Promise.resolve(`https://checkout.example.test/c${esc}[2J`);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, { rawArgs: ["subscribe"] });
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+    vi.useRealTimers();
+    const printed = log.mock.calls.flat().join("\n");
+    expect(printed).toContain("Checkout link: https://checkout.example.test/c\\x1b[2J");
+    expect(printed).not.toContain(esc);
+  });
+
   it("prints Stripe's checkout link instead of waiting for Enter, and opens only the pricing page", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.useFakeTimers();
@@ -273,6 +439,161 @@ describe("billing when the page may already have been paid", () => {
   });
 });
 
+describe("billing from a team space", () => {
+  const teamRefusal = async () => {
+    const { CheckoutError } = await import("../heygen/plan.js");
+    return new CheckoutError("checkout_team_role", "Only this team's admin can buy its plan.");
+  };
+  const subscribe = async () => {
+    terminal.attended = true;
+    terminal.enter = true;
+    never.paid = false;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, { rawArgs: ["subscribe", "--timeout", "4"] }).catch(
+      () => undefined,
+    );
+    await vi.advanceTimersByTimeAsync(6000);
+    await done;
+    vi.useRealTimers();
+    return log.mock.calls.flat().join("\n");
+  };
+
+  // fails without the fix: a team member's checkout ended at the refusal, with nothing to buy from.
+  it("signs in to the person's own space and opens the checkout there", async () => {
+    terminal.checkoutError = await teamRefusal();
+    terminal.errorOnce = true;
+    const printed = await subscribe();
+    expect(terminal.switches).toBe(1);
+    expect(opened).toContain("https://checkout.stripe.com/c/pay/cs_test_1");
+    expect(printed).toContain("your own workspace");
+    expect(events.failed).toEqual([]);
+  });
+
+  it("opens no checkout when the sign-in did not land in the person's own space", async () => {
+    terminal.checkoutError = await teamRefusal();
+    terminal.errorOnce = true;
+    terminal.lands = false;
+    await subscribe();
+    expect(terminal.checkouts).toBe(0);
+    expect(opened).not.toContain("https://checkout.stripe.com/c/pay/cs_test_1");
+    expect(events.failed).toEqual([{ reason: "checkout_team_role" }]);
+  });
+
+  // fails without the fix: the wait saw the other workspace's paid plan and reported success.
+  it.each([
+    [["subscribe"], { plan: "none", credits: 0 }],
+    [["add-credits", "--needed", "400"], { plan: "pro", credits: 100 }],
+  ])(
+    "fails, never Done, when %j signs in to another workspace already paid",
+    async (rawArgs, team) => {
+      terminal.attended = true;
+      terminal.enter = true;
+      terminal.checkoutError = await teamRefusal();
+      terminal.errorOnce = true;
+      terminal.lands = false;
+      held.team = team;
+      held.own = { plan: "pro", credits: 500 };
+      const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      const done = runCommand(billing, { rawArgs: [...rawArgs, "--timeout", "4"] });
+      const settled = expect(done).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(6000);
+      await settled;
+      vi.useRealTimers();
+      expect(terminal.checkouts).toBe(0);
+      expect(log.mock.calls.flat().join("\n")).not.toContain("Done");
+      expect(events.timeout).toEqual([]);
+    },
+  );
+
+  const addCredits = async (...extra: string[]) => {
+    terminal.attended = true;
+    terminal.enter = true;
+    terminal.checkoutError = await teamRefusal();
+    terminal.errorOnce = true;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, {
+      rawArgs: ["add-credits", ...extra, "--timeout", "4"],
+    }).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(6000);
+    await done;
+    vi.useRealTimers();
+    return log.mock.calls.flat().join("\n");
+  };
+
+  // fails without the fix: the checkout in the person's own space still bought the team's shortfall.
+  it("sizes the purchase from the person's own balance and asks again before buying it", async () => {
+    held.team = { plan: "pro", credits: 100 };
+    held.own = { plan: "pro", credits: 250 };
+    const printed = await addCredits("--needed", "400");
+    expect(terminal.args.map((a) => a[2])).toEqual([150]);
+    expect(terminal.asked).toBe(2);
+    expect(printed).toContain("Signed in to your own workspace: pro plan, 250 credits.");
+  });
+
+  it("opens no checkout when the person's own space already covers the run", async () => {
+    held.team = { plan: "pro", credits: 100 };
+    held.own = { plan: "pro", credits: 500 };
+    const printed = await addCredits("--needed", "400");
+    expect(terminal.checkouts).toBe(0);
+    expect(printed).toContain("Your own workspace already covers this");
+    expect(printed).toContain("✓ Done: pro plan, 500 credits.");
+  });
+
+  it("waits for the person's own balance to grow, not past the team's", async () => {
+    held.team = { plan: "pro", credits: 100 };
+    held.own = { plan: "pro", credits: 500 };
+    const printed = await addCredits();
+    expect(printed).not.toContain("✓ Done");
+    expect(terminal.args.map((a) => (a[3] as { baseline?: number }).baseline)).toEqual([500]);
+  });
+
+  // fails without the fix: the sign-in kept waiting after the open page had taken the payment.
+  it("stops the sign-in when the open page takes the payment while it waits", async () => {
+    terminal.checkoutError = await teamRefusal();
+    terminal.errorOnce = true;
+    terminal.signInWaits = true;
+    held.reads = [
+      { plan: "none", credits: 0 },
+      { plan: "none", credits: 0 },
+      { plan: "pro", credits: 500 },
+    ];
+    const printed = await subscribe();
+    expect(terminal.signInStopped).toBe(true);
+    expect(terminal.inOwn).toBe(false);
+    expect(terminal.checkouts).toBe(0);
+    expect(printed).toContain("✓ Done: pro plan, 500 credits.");
+  });
+
+  it("opens no sign-in when no one is at the terminal", async () => {
+    terminal.checkoutError = await teamRefusal();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, { rawArgs: ["subscribe", "--timeout", "4"] }).catch(
+      () => undefined,
+    );
+    await vi.advanceTimersByTimeAsync(6000);
+    await done;
+    vi.useRealTimers();
+    expect(terminal.switches).toBe(0);
+    expect(events.failed).toEqual([{ reason: "checkout_team_role" }]);
+  });
+
+  it("opens no sign-in where no browser can open one", async () => {
+    terminal.checkoutError = await teamRefusal();
+    terminal.headless = true;
+    await subscribe();
+    expect(terminal.switches).toBe(0);
+    expect(events.failed).toEqual([{ reason: "checkout_team_role" }]);
+  });
+});
+
 describe("billing outcomes", () => {
   it("keeps waiting after a failed checkout, because the open pricing page can still take the payment", async () => {
     const { CheckoutError } = await import("../heygen/plan.js");
@@ -302,6 +623,25 @@ describe("billing outcomes", () => {
     vi.useRealTimers();
     expect(events.failed).toEqual([{ reason: "checkout_rejected" }]);
     expect(events.timeout).toEqual([]);
+  });
+
+  // fails without the fix: the checkout failure reached the terminal with its control characters live.
+  it("prints a checkout failure's control characters as visible escapes", async () => {
+    const { CheckoutError } = await import("../heygen/plan.js");
+    const esc = String.fromCharCode(27);
+    terminal.checkoutError = new CheckoutError("checkout_rejected", `No${esc}[2J checkout`);
+    never.paid = false;
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    const done = runCommand(billing, { rawArgs: ["subscribe", "--timeout", "4"] });
+    const settled = expect(done).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(6000);
+    await settled;
+    vi.useRealTimers();
+    const printed = error.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(printed).toContain("No\\x1b[2J checkout");
+    expect(printed).not.toContain(`${esc}[2J`);
   });
 
   it("stops at once when credits are not on sale, since the credits page cannot sell them either", async () => {

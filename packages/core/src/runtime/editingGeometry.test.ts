@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installEditingAgent } from "./editingAgent";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { connectFrom, installMarkedEditingAgent } from "./editingAgent.test-helpers";
 import {
   MAX_ELEMENT_VALUE,
   MAX_GEOMETRY_CHILDREN,
@@ -8,11 +8,14 @@ import {
   type EditingElementHit,
 } from "./editingPort";
 
-const CONNECT = { source: "hf-parent", type: "editing-connect", v: 1 };
-
 // jsdom has neither; the 2D slice of each is all the geometry reads.
 class FakeDOMMatrix {
   a = 1;
+  m13 = 0;
+  m23 = 0;
+  m14 = 0;
+  m24 = 0;
+  m44 = 1;
   b = 0;
   c = 0;
   d = 1;
@@ -60,7 +63,7 @@ describe("overlay geometry over the editing port", () => {
   const ask = (kind: string, params: unknown): Promise<{ ok: boolean; result?: unknown }> =>
     new Promise((resolve) => {
       port.onmessage = (event) => resolve(event.data);
-      port.postMessage({ v: 1, id: ++lastId, kind, params });
+      port.postMessage({ v: 2, id: ++lastId, kind, params });
     });
   const handleOf = async (element: Element) => {
     Object.defineProperty(document, "elementsFromPoint", {
@@ -84,11 +87,8 @@ describe("overlay geometry over the editing port", () => {
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
     const parent = iframe.contentWindow!;
-    const handoff = vi.fn();
-    parent.postMessage = handoff as unknown as Window["postMessage"];
-    agent = installEditingAgent(parent);
-    window.dispatchEvent(new MessageEvent("message", { source: parent, data: CONNECT }));
-    port = (handoff.mock.calls[0]![2] as MessagePort[])[0]!;
+    agent = installMarkedEditingAgent(parent);
+    port = connectFrom(parent);
   });
   afterEach(() => {
     agent.dispose();

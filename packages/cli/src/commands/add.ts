@@ -13,12 +13,15 @@ export const examples: Example[] = [
 ];
 
 import { existsSync, readFileSync } from "node:fs";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@hyperframes/parsers/linkedom";
+import { firstTemplateContent } from "@hyperframes/parsers/sub-composition-validity";
 import { join, resolve, relative, sep } from "node:path";
 import {
   isProjectRootMissing,
   ITEM_TYPE_DIRS,
   realpath,
+  terminalLines,
+  terminalText,
   type RegistryItem,
 } from "@hyperframes/core";
 import { c } from "../ui/colors.js";
@@ -82,6 +85,8 @@ export function remapTarget(
   return originalTarget;
 }
 
+const registryError = (message: string): string => c.error(terminalLines(message));
+
 // ── Include-snippet builders ────────────────────────────────────────────────
 // Shown to the user after install so they know how to wire the item into
 // their host composition. Copied to clipboard by default.
@@ -123,7 +128,7 @@ export function primaryInstalledTarget(item: RegistryItem): string {
 /** The id a composition file's root declares (inside its `<template>` when templated); a host must carry the same one. */
 export function compositionRootId(html: string): string | undefined {
   const { document } = parseHTML(html);
-  const content = document.querySelector("template")?.content ?? document;
+  const content = firstTemplateContent(document) ?? document;
   return (
     content.querySelector("[data-composition-id]")?.getAttribute("data-composition-id") ?? undefined
   );
@@ -201,13 +206,15 @@ async function installOne(name: string, context: InstallContext): Promise<Instal
       vars: context.vars,
     });
     if (!context.json) {
-      for (const warning of result.warnings) console.log(`  ${c.warn("Warning:")} ${warning}`);
-      console.log(`  ${c.success("✓")} ${result.name}`);
+      for (const warning of result.warnings)
+        console.log(`  ${c.warn("Warning:")} ${terminalText(warning)}`);
+      console.log(`  ${c.success("✓")} ${terminalText(result.name)}`);
     }
     return { result };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    if (!context.json) console.log(`  ${c.error("✗")} ${name} (skipped: ${reason})`);
+    if (!context.json)
+      console.log(`  ${c.error("✗")} ${terminalText(name)} (skipped: ${terminalText(reason)})`);
     return { name, error: reason };
   }
 }
@@ -305,7 +312,7 @@ function assertCompatibleOrThrow(items: RegistryItem[], cliVersion?: string): st
 
 // A registry that a received hyperframes.json names serves files that came from its sender; a config that cannot be
 // read is not proven to be the person's own.
-function fromReceivedRegistry(projectDir: string, registry: string): boolean {
+export function fromReceivedRegistry(projectDir: string, registry: string): boolean {
   if (readProjectConfigWithStatus(projectDir).status === "unreadable") return true;
   return !isPublicRegistry(registry) && receivedFiles(projectDir)(PROJECT_CONFIG_FILENAME);
 }
@@ -361,6 +368,7 @@ async function installAll(
         await prepareItem(planItem, {
           destDir,
           baseUrl,
+          publicOnly: received,
           force,
           // Only the item the user named. A dependency dragged in behind it never
           // declared these variables and must not be rewritten by them.
@@ -420,6 +428,22 @@ export function describeInstallFailure(err: unknown, registry?: string): string 
   );
 }
 
+export function printInstalledHeader(result: RunAddResult, verb: "Added" | "Installed"): void {
+  for (const warning of result.warnings) {
+    console.warn(c.warn(`Warning: ${terminalText(warning)}`));
+  }
+  console.log("");
+  console.log(
+    `${c.success("✓")} ${terminalText(verb)} ${c.accent(terminalText(result.name))} (${terminalText(result.type)})`,
+  );
+}
+
+export function printSnippet(snippet: string): void {
+  console.log("");
+  console.log(c.dim("Include snippet:"));
+  console.log(`  ${terminalText(snippet)}`);
+}
+
 export async function runAdd(opts: RunAddArgs): Promise<RunAddResult> {
   return (await addToProject(opts)).result;
 }
@@ -441,9 +465,13 @@ export async function addToProject(
   // 2. Resolve the requested item and its transitive registryDependencies.
   //    The list comes back topologically sorted: dependencies first, the
   //    requested item last.
+  const received = fromReceivedRegistry(projectDir, config.registry);
   let resolved: RegistryItem[];
   try {
-    resolved = await resolveItemWithDependencies(opts.name, { baseUrl: config.registry });
+    resolved = await resolveItemWithDependencies(opts.name, {
+      baseUrl: config.registry,
+      publicOnly: received,
+    });
   } catch (err) {
     throw new AddError(err instanceof Error ? err.message : String(err), "unknown-item");
   }
@@ -489,7 +517,7 @@ export async function addToProject(
     item.name,
     variableValues,
     [config.paths.blocks, config.paths.components, config.paths.assets],
-    fromReceivedRegistry(projectDir, config.registry),
+    received,
   );
 
   // Report what landed, not what was asked for: a failed install throws above,
@@ -656,33 +684,29 @@ export default defineCommand({
       }
 
       if (wroteConfig) {
-        console.log(c.dim(`Wrote default ${projectConfigPath(projectDir)}`));
+        console.log(c.dim(`Wrote default ${terminalText(projectConfigPath(projectDir))}`));
       }
-      for (const warning of result.warnings) {
-        console.warn(c.warn(`Warning: ${warning}`));
-      }
-      console.log("");
-      console.log(`${c.success("✓")} Added ${c.accent(result.name)} (${result.type})`);
+      printInstalledHeader(result, "Added");
       const root = realpath(projectDir);
       for (const file of result.preserved) {
         console.log(
-          `  ${c.warn("kept")} ${relative(root, file) || file} — you have edited this; --force to overwrite`,
+          `  ${c.warn("kept")} ${terminalText(relative(root, file) || file)} — you have edited this; --force to overwrite`,
         );
       }
 
       for (const file of result.written) {
-        console.log(`  ${c.dim(relative(root, file))}`);
+        console.log(`  ${c.dim(terminalText(relative(root, file)))}`);
       }
       if (result.variablesApplied.length > 0) {
         // Say it out loud. A component's values are baked into the file rather
         // than shown in the snippet, so without this the command looks
         // identical whether --vars worked or was thrown away.
-        console.log(`  ${c.dim(`variables applied: ${result.variablesApplied.join(", ")}`)}`);
+        console.log(
+          `  ${c.dim(`variables applied: ${terminalText(result.variablesApplied.join(", "))}`)}`,
+        );
       }
       if (result.snippet) {
-        console.log("");
-        console.log(c.dim("Include snippet:"));
-        console.log(`  ${result.snippet}`);
+        printSnippet(result.snippet);
         console.log("");
         console.log(
           result.clipboardCopied
@@ -693,7 +717,7 @@ export default defineCommand({
     } catch (singleErr) {
       // Not a single item — try as a tag for bulk install
       if (!(singleErr instanceof AddError) || singleErr.code !== "unknown-item") {
-        failCaught(singleErr, json, c.error);
+        failCaught(singleErr, json, registryError);
       }
 
       let config = loadProjectConfig(projectDir);
@@ -707,19 +731,23 @@ export default defineCommand({
 
       let items: Awaited<ReturnType<typeof resolveItemsByTag>>;
       try {
-        items = await resolveItemsByTag(args.name, { baseUrl: config.registry, skipCache: true });
+        items = await resolveItemsByTag(args.name, {
+          baseUrl: config.registry,
+          skipCache: true,
+          publicOnly: fromReceivedRegistry(projectDir, config.registry),
+        });
       } catch {
         items = [];
       }
 
       if (items.length === 0) {
-        failCaught(singleErr, json, c.error);
+        failCaught(singleErr, json, registryError);
       }
 
       if (!json) {
         console.log("");
         console.log(
-          `${c.accent("◆")} Installing ${c.accent(String(items.length))} blocks tagged ${c.accent(args.name)}`,
+          `${c.accent("◆")} Installing ${c.accent(String(items.length))} blocks tagged ${c.accent(terminalText(args.name))}`,
         );
       }
 

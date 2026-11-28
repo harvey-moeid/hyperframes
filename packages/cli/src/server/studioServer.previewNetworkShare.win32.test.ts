@@ -35,6 +35,8 @@ vi.mock("node:fs", async () => {
   return { ...fs, ...overrides, default: { ...fs, ...overrides } };
 });
 
+vi.mock("../utils/receivedRender.js", () => ({ outsideAssetsAllowed: () => true }));
+
 const { createStudioServer } = await import("./studioServer.js");
 const { cleanupStudioServerRoot, makeStudioServerRoot } =
   await import("./studioServerTestFixture.js");
@@ -50,11 +52,11 @@ const SHARES = [
 ];
 const onAShare = (path: string) => /^[\\/]{2}[^\\/]/.test(path);
 
-let cleanup: (() => void) | undefined;
-afterEach(() => {
+let cleanup: (() => Promise<void>) | undefined;
+afterEach(async () => {
   host.windows = false;
   host.touched.length = 0;
-  cleanup?.();
+  await cleanup?.();
   cleanup = undefined;
 });
 

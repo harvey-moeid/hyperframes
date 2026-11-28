@@ -6,8 +6,6 @@ import {
   STUDIO_ROTATION_PROP,
   STUDIO_PATH_OFFSET_ATTR,
   STUDIO_MANUAL_EDIT_GESTURE_ATTR,
-  STUDIO_EDIT_MOMENT_ATTR,
-  type EditMoment,
   STUDIO_BOX_SIZE_ATTR,
   STUDIO_ROTATION_ATTR,
   STUDIO_ORIGINAL_TRANSLATE_ATTR,
@@ -37,93 +35,8 @@ import {
 import { gsapWritesChannels } from "../../hooks/gsapRuntimeKeyframes";
 import { splitTopLevelWhitespace } from "./manualEditsStyleHelpers";
 import { roundTo3, roundToLayoutSize } from "../../utils/rounding";
-import { BOX_SIZE_STYLE_PROPS } from "./manualEditsDomPatches";
-
-/* ── Gesture tracking ─────────────────────────────────────────────── */
-let studioManualEditGestureId = 0;
-
-export type StudioGestureDraws = "move" | "resize" | "rotate" | "edit";
-const MOVE_DRAWS = ["translate", STUDIO_OFFSET_X_PROP, STUDIO_OFFSET_Y_PROP];
-const GESTURE_DRAWS: Record<StudioGestureDraws, readonly string[]> = {
-  move: MOVE_DRAWS,
-  resize: [...MOVE_DRAWS, STUDIO_WIDTH_PROP, STUDIO_HEIGHT_PROP, ...BOX_SIZE_STYLE_PROPS],
-  rotate: ["rotate", "transform", "transform-origin", "display", STUDIO_ROTATION_PROP],
-  edit: [],
-};
-
-export function beginStudioManualEditGesture(
-  element: HTMLElement,
-  draws: StudioGestureDraws,
-  at?: EditMoment,
-): string {
-  studioManualEditGestureId += 1;
-  const token = `gesture-${studioManualEditGestureId}:${draws}`;
-  element.setAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR, token);
-  if (at) element.setAttribute(STUDIO_EDIT_MOMENT_ATTR, JSON.stringify(at));
-  else element.removeAttribute(STUDIO_EDIT_MOMENT_ATTR);
-  return token;
-}
-
-const GESTURE_ENDED = "hf-manual-edit-gesture-ended";
-
-export function endStudioManualEditGesture(element: HTMLElement, token?: string): void {
-  if (token && element.getAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR) !== token) return;
-  if (!element.hasAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR)) return;
-  element.removeAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR);
-  element.removeAttribute(STUDIO_EDIT_MOMENT_ATTR);
-  const doc = element.ownerDocument;
-  doc.dispatchEvent(new (doc.defaultView?.Event ?? Event)(GESTURE_ENDED));
-}
-
-export function isStudioManualEditGestureLiveIn(doc: Document): boolean {
-  return doc.querySelector(`[${STUDIO_MANUAL_EDIT_GESTURE_ATTR}]`) !== null;
-}
-
-/** Runs `run` once the last gesture in `doc` ends; the returned function stops waiting. */
-export function afterStudioManualEditGestures(doc: Document, run: () => void): () => void {
-  const onEnded = () => {
-    if (isStudioManualEditGestureLiveIn(doc)) return;
-    stop();
-    run();
-  };
-  const stop = () => doc.removeEventListener(GESTURE_ENDED, onEnded);
-  doc.addEventListener(GESTURE_ENDED, onEnded);
-  return stop;
-}
-
-const gestureSaves = new WeakMap<Document, number>();
-
-export function studioManualEditSavesIn(doc: Document): number {
-  return gestureSaves.get(doc) ?? 0;
-}
-
-export function countStudioPreviewChange(doc: Document): void {
-  gestureSaves.set(doc, studioManualEditSavesIn(doc) + 1);
-}
-
-/** Runs a gesture's save, counted as it starts and as it settles: a reload requested before shows the old file. */
-export function countStudioManualEditSave<R>(element: HTMLElement, save: () => R): R {
-  const doc = element.ownerDocument;
-  const count = () => countStudioPreviewChange(doc);
-  count();
-  const result = save();
-  void Promise.resolve(result).then(count, count);
-  return result;
-}
-
-export function studioGestureDraws(element: Element): readonly string[] | null {
-  const token = element.getAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR);
-  if (token === null) return null;
-  return GESTURE_DRAWS[token.split(":")[1] as StudioGestureDraws] ?? [];
-}
-
-function isStudioManualEditGestureActive(element: HTMLElement): boolean {
-  return element.hasAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR);
-}
-
-export function isStudioManualEditGestureCurrent(element: HTMLElement, token: string): boolean {
-  return element.getAttribute(STUDIO_MANUAL_EDIT_GESTURE_ATTR) === token;
-}
+import { isStudioManualEditGestureActive } from "./manualEditGesture";
+import { previewStandInHandle } from "./previewDrafts";
 
 /* ── CSS custom-property readers ──────────────────────────────────── */
 function readPxCustomProperty(element: HTMLElement, property: string): number {
@@ -417,9 +330,17 @@ function restoreStaleStudioScaleResize(element: HTMLElement): void {
   element.removeAttribute(STUDIO_ORIGINAL_TRANSFORM_ORIGIN_ATTR);
 }
 
+export type LayoutBox = { width: number; height: number };
+
+export function layoutBox(element: HTMLElement, frameBox?: LayoutBox | null): LayoutBox {
+  if (frameBox && previewStandInHandle(element)) return frameBox;
+  return { width: element.offsetWidth, height: element.offsetHeight };
+}
+
 function writeStudioBoxSizeVars(
   element: HTMLElement,
   size: { width: number; height: number },
+  frameBox?: LayoutBox | null,
 ): void {
   // Keep the measurement on its own migration-safe guard. Elements drafted by
   // an older Studio can already carry the box-size marker without these newer
@@ -427,11 +348,12 @@ function writeStudioBoxSizeVars(
   // and height are overwritten, so this is the last honest layout box to save.
   // Offset sizes are layout values, so a running scale animation does not
   // distort them.
+  const box = layoutBox(element, frameBox);
   if (!element.hasAttribute(STUDIO_ORIGINAL_BOX_WIDTH_ATTR)) {
-    element.setAttribute(STUDIO_ORIGINAL_BOX_WIDTH_ATTR, String(element.offsetWidth));
+    element.setAttribute(STUDIO_ORIGINAL_BOX_WIDTH_ATTR, String(box.width));
   }
   if (!element.hasAttribute(STUDIO_ORIGINAL_BOX_HEIGHT_ATTR)) {
-    element.setAttribute(STUDIO_ORIGINAL_BOX_HEIGHT_ATTR, String(element.offsetHeight));
+    element.setAttribute(STUDIO_ORIGINAL_BOX_HEIGHT_ATTR, String(box.height));
   }
   if (!element.hasAttribute(STUDIO_BOX_SIZE_ATTR)) {
     element.setAttribute(STUDIO_ORIGINAL_WIDTH_ATTR, element.style.getPropertyValue("width"));
@@ -484,9 +406,10 @@ function writeStudioBoxSizeVars(
 function applyStudioBoxSizeDimensions(
   element: HTMLElement,
   wantedSize: { width: number; height: number },
+  frameBox?: LayoutBox | null,
 ): { width: number; height: number } {
   const size = roundToLayoutSize(wantedSize);
-  writeStudioBoxSizeVars(element, size);
+  writeStudioBoxSizeVars(element, size, frameBox);
   restoreStaleStudioScaleResize(element);
 
   element.style.setProperty("box-sizing", "border-box");
@@ -512,9 +435,10 @@ function applyStudioBoxSizeDimensions(
 export function applyStudioBoxSize(
   element: HTMLElement,
   size: { width: number; height: number },
+  frameBox?: LayoutBox | null,
 ): void {
   promoteInlineForTransform(element);
-  applyStudioBoxSizeDimensions(element, size);
+  applyStudioBoxSizeDimensions(element, size, frameBox);
 }
 
 // The element's box before a resize draft first changed it; gone once the resize saves or is restored.
@@ -533,12 +457,13 @@ export function forgetStudioBoxSizeDraftBase(element: HTMLElement): void {
 export function applyStudioBoxSizeDraft(
   element: HTMLElement,
   size: { width: number; height: number },
+  frameBox?: LayoutBox | null,
 ): { width: number; height: number } {
   if (!boxSizeDraftBases.has(element)) {
-    boxSizeDraftBases.set(element, { width: element.offsetWidth, height: element.offsetHeight });
+    boxSizeDraftBases.set(element, layoutBox(element, frameBox));
   }
   promoteInlineForTransform(element);
-  return applyStudioBoxSizeDimensions(element, size);
+  return applyStudioBoxSizeDimensions(element, size, frameBox);
 }
 
 /* ── Rotation apply ───────────────────────────────────────────────── */

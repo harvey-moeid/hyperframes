@@ -3,9 +3,9 @@ import { useDomEditActionsContext, useDomEditSelectionContext } from "../context
 import { useStudioShellContext } from "../contexts/StudioContext";
 import { usePlayerStore } from "../player";
 import { useStudioAgentTools, type StudioAgentToolsDeps } from "./useStudioAgentTools";
-import { collectStudioLookScene, type StudioLookSnapshot } from "./tools/lookTools";
+import type { StudioLookSnapshot } from "./tools/lookTools";
+import { agentPreview } from "./agentPreview";
 import { studioEditLifecycle } from "./writeCoordinator";
-import { findElementForSelection } from "../components/editor/domEditingElement";
 import type { DomEditSelection } from "../components/editor/domEditingTypes";
 import {
   applyStudioBoxSizeDraft,
@@ -13,19 +13,8 @@ import {
   restoreStudioBoxSize,
 } from "../components/editor/manualEdits";
 import { studioApiFetch } from "../utils/studioApiFetch";
-
-export function readLiveSelectionBox(
-  doc: Document | null | undefined,
-  selection: DomEditSelection,
-  activeCompositionPath: string | null,
-) {
-  const liveElement = doc
-    ? findElementForSelection(doc, selection, activeCompositionPath)
-    : selection.element;
-  if (!liveElement) throw new Error("the target is missing from the current Studio preview");
-  const rect = liveElement.getBoundingClientRect();
-  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-}
+import { sealedResizeStartBox } from "../components/editor/resizeStartBox";
+import { drawPreviewDraft, endPreviewDraft } from "../components/editor/previewDrafts";
 
 type ResizeCommit = (
   selection: DomEditSelection,
@@ -34,16 +23,21 @@ type ResizeCommit = (
   restore?: () => void,
 ) => Promise<void | import("../utils/previewFeatureUsage").GeometryCommitResult>;
 
-export function resizeSelectionFromAgent(
+export async function resizeSelectionFromAgent(
   selection: DomEditSelection,
   next: { width: number; height: number },
   commit: ResizeCommit,
 ): Promise<void | import("../utils/previewFeatureUsage").GeometryCommitResult> {
-  const previous = captureStudioBoxSize(selection.element);
-  applyStudioBoxSizeDraft(selection.element, next);
-  return commit(selection, next, undefined, () => {
-    restoreStudioBoxSize(selection.element, previous);
+  const element = selection.element;
+  const pending = sealedResizeStartBox(element);
+  const startBox = pending && (await pending);
+  const previous = captureStudioBoxSize(element);
+  drawPreviewDraft(element, { size: applyStudioBoxSizeDraft(element, next, startBox) });
+  const result = await commit(selection, next, undefined, () => {
+    restoreStudioBoxSize(element, previous);
   });
+  endPreviewDraft(element, "keep");
+  return result;
 }
 
 /**
@@ -87,7 +81,12 @@ export function StudioAgentTools() {
     return () => studioEditLifecycle.reset();
   }, [projectId]);
 
-  const getSnapshot = useCallback((): StudioLookSnapshot => {
+  const preview = useMemo(
+    () => agentPreview(() => previewIframeRef.current, activeCompPath),
+    [previewIframeRef, activeCompPath],
+  );
+
+  const getSnapshot = useCallback(async (): Promise<StudioLookSnapshot> => {
     const player = usePlayerStore.getState();
     return {
       projectId,
@@ -96,11 +95,7 @@ export function StudioAgentTools() {
       duration: player.duration,
       isPlaying: player.isPlaying,
       elements: player.elements,
-      scene: collectStudioLookScene(
-        previewIframeRef.current?.contentDocument ?? null,
-        activeCompPath,
-        activeGroupElement,
-      ),
+      scene: await preview.scene(activeGroupElement),
       selection: domEditSelection,
       selectionAnimationCount: selectedGsapAnimations.length,
       history: {
@@ -117,13 +112,13 @@ export function StudioAgentTools() {
     activeGroupElement,
     selectedGsapAnimations,
     editHistory,
-    previewIframeRef,
+    preview,
   ]);
 
   const deps = useMemo<StudioAgentToolsDeps>(
     () => ({
       getSnapshot,
-      getPreviewDocument: () => previewIframeRef.current?.contentDocument ?? null,
+      preview,
       buildSelection: (element) => buildDomSelectionFromTarget(element, { exactTarget: true }),
       applySelection: (selection) => applyDomSelection(selection, { revealPanel: true }),
       requestSeek: (time) => usePlayerStore.getState().requestSeek(time),
@@ -156,11 +151,8 @@ export function StudioAgentTools() {
       setStyle: (selection, property, value) =>
         handleDomStyleCommitForSelection(selection, property, value),
       // Measured, not authored: the tool compares this before and after to
-      // tell a real change from a handler that did nothing and resolved. A
-      // successful commit may replace the preview document, so re-resolve the
-      // source-safe selection instead of measuring its detached old node.
-      readBox: (selection) =>
-        readLiveSelectionBox(previewIframeRef.current?.contentDocument, selection, activeCompPath),
+      // tell a real change from a handler that did nothing and resolved.
+      readNow: preview.readNow,
       moveTo: (selection, next) => handleDomPathOffsetCommit(selection, next),
       resizeTo: (selection, next) =>
         resizeSelectionFromAgent(selection, next, handleDomBoxSizeCommit),
@@ -182,7 +174,7 @@ export function StudioAgentTools() {
     }),
     [
       getSnapshot,
-      previewIframeRef,
+      preview,
       buildDomSelectionFromTarget,
       applyDomSelection,
       projectId,
