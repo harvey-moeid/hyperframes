@@ -1,10 +1,15 @@
 import { Hono, type Context, type Next } from "hono";
+import { routePath } from "hono/route";
 import { injectTagsAtHeadStart } from "@hyperframes/core/compiler/html-document";
 import { PREVIEW_FOR_ANOTHER_SITE_META } from "@hyperframes/core/studio-preview-mark";
-import type { StudioApiAdapter } from "./types.js";
+import type { StudioApiAdapter, StudioRefusal, StudioRefusalWhy } from "./types.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerFileRoutes } from "./routes/files.js";
-import { PREVIEW_CAPTURE_PARAM, registerPreviewRoutes } from "./routes/preview.js";
+import {
+  PREVIEW_CAPTURE_PARAM,
+  PREVIEW_PROXY_PARAM,
+  registerPreviewRoutes,
+} from "./routes/preview.js";
 import { registerLintRoutes } from "./routes/lint.js";
 import { registerRenderRoutes } from "./routes/render.js";
 import { registerImageThumbnailRoutes } from "./routes/imageThumbnail.js";
@@ -21,35 +26,46 @@ import { registerMediaRoutes } from "./routes/media.js";
 import { registerGlobalAssetRoutes } from "./routes/globalAssets.js";
 import { registerHistoryRoutes } from "./routes/history.js";
 import { replaceWithProjectDirMissing } from "./helpers/projectDirMissing.js";
-import { folderGone, isProjectRootMissing } from "./helpers/safePath.js";
+import { isProjectRootMissing } from "./helpers/safePath.js";
+import { folderGoneOff } from "./helpers/projectDisk.js";
 import {
   PREVIEW_ALLOWED_HOSTS_ENV,
+  documentFromAnotherSite,
   requestFromAnotherSite,
+  proxyWorkFromAnotherSite,
   requestHost,
   sameOriginPost,
 } from "./helpers/requestIdentity.js";
-import { previewErrorPage } from "./helpers/previewErrorPage.js";
+import { refuseServiceWorkerScripts } from "./helpers/serviceWorkerScripts.js";
+import { previewErrorPage, retryAfterSeconds } from "./helpers/previewErrorPage.js";
 import type { CaptureSandboxOption } from "./helpers/captureLoads.js";
-import { createFrameTokens, serveTokenPreviewPaths } from "./helpers/opaqueFrameLoads.js";
+import {
+  createFrameTokens,
+  loadedThroughFrameToken,
+  serveTokenPreviewPaths,
+} from "./helpers/opaqueFrameLoads.js";
+import { isFetchedAgain } from "./helpers/fetchAgain.js";
 
-async function answerRefusedFrameWithPage(c: Context, next: Next) {
+const answerRefusedFrameWithPage = (runtimeUrl: string) => async (c: Context, next: Next) => {
   await next();
   if (c.req.header("sec-fetch-dest") !== "iframe" || c.res.status < 400) return;
   const headers = new Headers(c.res.headers);
   headers.set("content-type", "text/html; charset=utf-8");
   headers.delete("content-length");
-  c.res = new Response(previewErrorPage(c.res.status), {
+  const retryAfterS = retryAfterSeconds(c.res.headers.get("retry-after"));
+  c.res = new Response(previewErrorPage(c.res.status, runtimeUrl, retryAfterS), {
     status: c.res.status,
     headers,
   });
-}
+};
 
-const fromAnotherSite = (c: Context) =>
-  requestFromAnotherSite({
-    fetchSite: c.req.header("sec-fetch-site"),
-    host: c.req.header("host") ?? urlHost(c.req.url),
-    referer: c.req.header("referer"),
-  });
+const siteHeaders = (c: Context) => ({
+  fetchSite: c.req.header("sec-fetch-site"),
+  host: c.req.header("host") ?? urlHost(c.req.url),
+  referer: c.req.header("referer"),
+});
+const fromAnotherSite = (c: Context) => requestFromAnotherSite(siteHeaders(c));
+const documentForAnotherSite = (c: Context) => documentFromAnotherSite(siteHeaders(c));
 
 const isThumbnailCapture = (c: Context) => c.req.query(PREVIEW_CAPTURE_PARAM) !== undefined;
 
@@ -67,11 +83,6 @@ async function markPreviewForAnotherSite(c: Context) {
 }
 
 const FRAMED_DESTS = new Set(["document", "iframe", "frame", "embed", "object", "fencedframe"]);
-const framedByAnotherSite = (c: Context) => {
-  if (!fromAnotherSite(c)) return false;
-  const dest = c.req.header("sec-fetch-dest");
-  return dest === undefined || FRAMED_DESTS.has(dest);
-};
 
 function withoutValidators(request: Request): Request {
   const headers = new Headers(request.headers);
@@ -80,20 +91,47 @@ function withoutValidators(request: Request): Request {
   return new Request(request, { headers });
 }
 
+interface PreviewSandboxing {
+  captures: boolean;
+  directOpens: boolean;
+}
+
+function previewAsker(c: Context, { captures, directOpens }: PreviewSandboxing) {
+  const capture = captures && isThumbnailCapture(c);
+  const openedDirectly = directOpens && !capture && c.req.header("sec-fetch-site") === "none";
+  return { capture, openedDirectly, anotherSite: documentForAnotherSite(c) || openedDirectly };
+}
+
+const loadsAsPage = (c: Context) => {
+  const dest = c.req.header("sec-fetch-dest");
+  return dest === undefined || FRAMED_DESTS.has(dest);
+};
+
 const sandboxPreviewForAnotherSiteOrCapture =
-  (sandboxCaptures: boolean) => async (c: Context, next: Next) => {
-    if (framedByAnotherSite(c)) c.req.raw = withoutValidators(c.req.raw);
+  (sandboxing: PreviewSandboxing) => async (c: Context, next: Next) => {
+    const asker = previewAsker(c, sandboxing);
+    if (asker.anotherSite && loadsAsPage(c)) c.req.raw = withoutValidators(c.req.raw);
     await next();
-    c.header("Vary", "Sec-Fetch-Site", { append: true });
-    const anotherSite = fromAnotherSite(c);
-    if (anotherSite || (sandboxCaptures && isThumbnailCapture(c)))
+    c.header("Vary", "Sec-Fetch-Site, Referer", { append: true });
+    if (asker.anotherSite || asker.capture)
       c.header("Content-Security-Policy", "sandbox allow-scripts");
-    if (anotherSite) await markPreviewForAnotherSite(c);
+    if (asker.openedDirectly) c.header("X-Content-Type-Options", "nosniff");
+    if (asker.anotherSite) await markPreviewForAnotherSite(c);
   };
+
+async function refuseProxyWorkForAnotherSite(c: Context, next: Next) {
+  const proxyWork = c.req.query(PREVIEW_PROXY_PARAM) !== undefined;
+  if (proxyWork && proxyWorkFromAnotherSite(siteHeaders(c)) && !loadedThroughFrameToken(c.req.raw))
+    return c.text("forbidden: media proxy requested by another site", 403);
+  return next();
+}
 
 const refuseForAnotherSite = (what: string) => async (c: Context, next: Next) => {
   if (fromAnotherSite(c))
-    return c.json({ error: `forbidden: ${what} requested by another site` }, 403);
+    return c.json(
+      { error: `forbidden: ${what} requested by another site`, why: "another_site" },
+      403,
+    );
   return next();
 };
 
@@ -113,13 +151,48 @@ function urlScheme(url: string): string | undefined {
   }
 }
 
+const REFUSAL_WHYS: ReadonlySet<string> = new Set<StudioRefusalWhy>([
+  "nul",
+  "outside_project",
+  "protected_path",
+  "another_site",
+  "cross_origin_write",
+]);
+
+const ENDPOINT_ASKED_FOR = -1;
+
+const reportRefusals =
+  (onRefusal: (refusal: StudioRefusal) => void) => async (c: Context, next: Next) => {
+    const fetchedAgain = isFetchedAgain(c.req.raw);
+    await next();
+    if (c.res.status !== 403 || fetchedAgain) return;
+    const body: unknown = await c.res
+      .clone()
+      .json()
+      .catch(() => null);
+    const why = body && typeof body === "object" ? (body as { why?: unknown }).why : undefined;
+    try {
+      onRefusal({
+        route: routePath(c, ENDPOINT_ASKED_FOR),
+        why: typeof why === "string" && REFUSAL_WHYS.has(why) ? (why as StudioRefusalWhy) : "other",
+      });
+    } catch {
+      return;
+    }
+  };
+
 export interface StudioApiOptions extends CaptureSandboxOption {
   allowedHosts?: readonly string[];
+  subCompositionDeadlineMs?: number;
+  sandboxDirectOpens?: boolean;
 }
 
 export function createStudioApi(adapter: StudioApiAdapter, options: StudioApiOptions = {}): Hono {
   const api = new Hono();
+  if (adapter.onRefusal) api.use(reportRefusals(adapter.onRefusal));
+  api.use(refuseServiceWorkerScripts);
   const sandboxThumbnailCaptures = options.sandboxThumbnailCaptures ?? false;
+  const sandboxDirectOpens = options.sandboxDirectOpens ?? false;
   const frameTokens = createFrameTokens();
   const resolveProjectId = (id: string) =>
     Promise.resolve()
@@ -129,12 +202,17 @@ export function createStudioApi(adapter: StudioApiAdapter, options: StudioApiOpt
         () => undefined,
       );
   api.use("/projects/:id/preview/*", serveTokenPreviewPaths(api, frameTokens, resolveProjectId));
+  api.use("/projects/:id/preview/*", refuseProxyWorkForAnotherSite);
   api.use(
     "/projects/:id/preview/*",
-    sandboxPreviewForAnotherSiteOrCapture(sandboxThumbnailCaptures),
+    sandboxPreviewForAnotherSiteOrCapture({
+      captures: sandboxThumbnailCaptures,
+      directOpens: sandboxDirectOpens,
+    }),
   );
   api.get("/projects/:id/frame-token", async (c) => {
-    if (fromAnotherSite(c)) return c.json({ error: "forbidden: requested by another site" }, 403);
+    if (fromAnotherSite(c))
+      return c.json({ error: "forbidden: requested by another site", why: "another_site" }, 403);
     const projectId = await resolveProjectId(c.req.param("id"));
     if (!projectId) return c.json({ error: "not found" }, 404);
     return c.json({ token: frameTokens.tokenFor(projectId) }, 200, { "Cache-Control": "no-store" });
@@ -142,6 +220,7 @@ export function createStudioApi(adapter: StudioApiAdapter, options: StudioApiOpt
   api.use("/projects/:id/thumbnail/*", refuseForAnotherSite("thumbnail"));
   api.use("/projects/:id/waveform/*", refuseForAnotherSite("waveform"));
   api.use("/projects/:id/peaks/*", refuseForAnotherSite("peaks"));
+  api.use("/projects/:id/pcm/*", refuseForAnotherSite("pcm"));
   api.use("/projects/:id/image-thumbnail/*", refuseForAnotherSite("image thumbnail"));
   api.use("/projects/:id/media/metadata", refuseForAnotherSite("media metadata"));
   api.use("/projects/:id/lint", refuseForAnotherSite("lint"));
@@ -172,14 +251,15 @@ export function createStudioApi(adapter: StudioApiAdapter, options: StudioApiOpt
             `forbidden: writes from host "${refusedHost}" are not allowed. ` +
             `Set ${PREVIEW_ALLOWED_HOSTS_ENV}=${refusedHost} to allow it ` +
             `(comma separated for several hosts).`,
+          why: "cross_origin_write",
         },
         403,
       );
     }
     return next();
   });
-  api.use("/projects/:id/preview/*", answerRefusedFrameWithPage);
-  api.use("/projects/:id/preview", answerRefusedFrameWithPage);
+  api.use("/projects/:id/preview/*", answerRefusedFrameWithPage(adapter.runtimeUrl));
+  api.use("/projects/:id/preview", answerRefusedFrameWithPage(adapter.runtimeUrl));
   api.use(async function answerProjectDirMissingAfterErrorHandlers(c, next) {
     const hostHeaders = new Headers(c.res.headers);
     await next();
@@ -194,7 +274,7 @@ export function createStudioApi(adapter: StudioApiAdapter, options: StudioApiOpt
         () => undefined,
       );
     await next();
-    if (c.res.status >= 403 && dirBeforeRoute && folderGone(dirBeforeRoute))
+    if (c.res.status >= 403 && dirBeforeRoute && (await folderGoneOff(dirBeforeRoute)))
       replaceWithProjectDirMissing(c, hostHeaders);
   });
   api.use("/projects/:id/*", async function forgetSignatureAfterWrite(c, next) {
@@ -217,10 +297,17 @@ export function createStudioApi(adapter: StudioApiAdapter, options: StudioApiOpt
 
   registerProjectRoutes(api, adapter);
   registerFileRoutes(api, adapter);
-  registerPreviewRoutes(api, adapter, { sandboxThumbnailCaptures });
+  registerPreviewRoutes(api, adapter, {
+    sandboxThumbnailCaptures,
+    subCompositionDeadlineMs: options.subCompositionDeadlineMs,
+  });
   registerLintRoutes(api, adapter);
   registerRenderRoutes(api, adapter);
-  registerThumbnailRoutes(api, adapter);
+  registerThumbnailRoutes(
+    api,
+    adapter,
+    sandboxThumbnailCaptures ? frameTokens.tokenFor : undefined,
+  );
   registerImageThumbnailRoutes(api, adapter);
   registerSelectionRoutes(api, adapter);
   registerRecoveryDraftRoutes(api, adapter);

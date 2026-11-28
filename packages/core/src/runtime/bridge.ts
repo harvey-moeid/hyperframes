@@ -1,17 +1,19 @@
 import { wallSetTimeout } from "./wallClock";
 import { swallow } from "./diagnostics";
 import { isStylableElement } from "./domRealm";
+import { servedToAnotherSite, type PreviewTarget } from "../studioPreviewMark";
 import type { HfColorGradingTarget } from "../colorGrading";
 import type { RuntimeBridgeControlMessage, RuntimeOutboundMessage } from "./types";
 import {
   inspectRuntimeProtocol,
+  isMessageList,
   runtimeProtocolFpsToNumber,
   runtimeProtocolMetadata,
   type RuntimeProtocolV1,
 } from "./protocol";
 
 type BridgeDeps = {
-  onPlay: () => void;
+  onPlay: (playSeq?: number) => void;
   onPause: () => void;
   onStopMedia: () => void;
   onSeek: (timeSeconds: number, seekMode: "drag" | "commit") => void;
@@ -21,6 +23,8 @@ type BridgeDeps = {
   onSetMediaOutputMuted: (muted: boolean) => void;
   onSetNativeMediaSyncDisabled: (disabled: boolean) => void;
   onSetWebAudioMediaDisabled: (disabled: boolean) => void;
+  onSetParentAudio?: (clips: string[]) => void;
+  onAudioClock?: (sample: { time: number; rate: number; at: number } | null) => void;
   onSetPlaybackRate: (rate: number) => void;
   onSetIdleHeartbeat: (slow: boolean) => void;
   onSetRootDuration: (durationSeconds: number) => void;
@@ -39,6 +43,8 @@ type BridgeDeps = {
   onSetCopiesAhead?: (on: boolean) => void;
   onRetryPreviewCopies?: () => void;
   onRequestPreviewFacts?: () => void;
+  onAnnounceTimeline?: () => void;
+  onScrubAudio?: (target: PreviewTarget | null, time: number | null, volume: number) => void;
   getCanonicalFps: () => number;
 };
 
@@ -48,9 +54,35 @@ export function setRuntimeProtocolFps(fps: number): void {
   runtimeProtocolFps = Number.isFinite(fps) && fps > 0 ? fps : 30;
 }
 
+// Another site framing the page learns only how playback stands: the timeline and the picker describe the composition.
+const ANOTHER_SITE_SEES = new Set<string>(["ready", "state", "stage-size"]);
+const ANOTHER_SITE_DRIVES = new Set<string>([
+  "play",
+  "pause",
+  "stop-media",
+  "seek",
+  "tick",
+  "set-muted",
+  "set-volume",
+  "set-media-output-muted",
+  "set-playback-rate",
+  "set-idle-heartbeat",
+  "set-display-scale",
+  "set-parent-audio",
+  "audio-clock",
+]);
+
+let markedForAnotherSite = false;
+const forAnotherSite = (): boolean =>
+  (markedForAnotherSite ||= typeof document !== "undefined" && servedToAnotherSite(document));
+
+const UNSEEDED_DOCUMENT_ID = crypto.randomUUID?.() ?? String(performance.timeOrigin);
+
 export function postRuntimeMessage(payload: RuntimeOutboundMessage): void {
+  if (forAnotherSite() && !ANOTHER_SITE_SEES.has(payload.type)) return;
   try {
-    window.parent.postMessage({ ...payload, ...runtimeProtocolMetadata(runtimeProtocolFps) }, "*");
+    const metadata = runtimeProtocolMetadata(runtimeProtocolFps);
+    window.parent.postMessage({ ...payload, ...metadata, documentId: UNSEEDED_DOCUMENT_ID }, "*");
   } catch (err) {
     // Cross-frame posting can throw if the parent is gone or origin-isolated.
     swallow("bridge.postMessage", err);
@@ -64,6 +96,7 @@ const FLASH_DEFAULT_DURATION_MS = 800;
 const FLASH_MAX_DURATION_MS = 5000;
 const MAX_FLASH_SELECTORS = 100;
 const MAX_SELECTOR_LENGTH = 1000;
+const MAX_PARENT_AUDIO_KEY = 8192;
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -96,6 +129,26 @@ function isGradingTarget(value: unknown): value is HfColorGradingTarget | string
   );
 }
 
+function isScrubTarget(value: unknown): value is PreviewTarget | null {
+  if (value === null) return true;
+  if (typeof value !== "object" || Array.isArray(value)) return false;
+  const target = value as Record<string, unknown>;
+  return (
+    isBoundedString(target.id) &&
+    isOptionalBoundedString(target.hfId) &&
+    isOptionalBoundedString(target.domId) &&
+    isOptionalBoundedString(target.sourceFile)
+  );
+}
+
+function dispatchScrubAudio(data: BridgeControlData, deps: BridgeDeps): void {
+  const target = data.target ?? null;
+  if (!isScrubTarget(target)) return;
+  if (data.time === null) return deps.onScrubAudio?.(target, null, 0);
+  if (!isFiniteNumber(data.time) || !isFiniteNumber(data.volume)) return;
+  deps.onScrubAudio?.(target, Math.max(0, data.time), Math.max(0, Math.min(1, data.volume)));
+}
+
 function dispatchColorGrading(
   target: unknown,
   value: unknown,
@@ -112,7 +165,12 @@ function dispatchColorGrading(
 // message when a field is invalid.
 const CONTROL_HANDLERS = new Map<string, ControlHandler>(
   Object.entries({
-    play: (_d, deps) => deps.onPlay(),
+    play: (data, deps) => {
+      if (data.playSeq == null) return deps.onPlay();
+      if (!isFiniteNumber(data.playSeq) || !Number.isInteger(data.playSeq) || data.playSeq < 1)
+        return;
+      deps.onPlay(data.playSeq);
+    },
     pause: (_d, deps) => deps.onPause(),
     "stop-media": (_d, deps) => deps.onStopMedia(),
     seek: (data, deps) => {
@@ -131,6 +189,20 @@ const CONTROL_HANDLERS = new Map<string, ControlHandler>(
       deps.onSetNativeMediaSyncDisabled(data.disabled === true),
     "set-web-audio-media-disabled": (data, deps) =>
       deps.onSetWebAudioMediaDisabled(data.disabled === true),
+    "set-parent-audio": (data, deps) => {
+      const clips = data.clips;
+      if (!isMessageList(clips)) return;
+      if (!clips.every((clip) => typeof clip === "string" && clip.length <= MAX_PARENT_AUDIO_KEY))
+        return;
+      deps.onSetParentAudio?.(clips);
+    },
+    "audio-clock": (data, deps) => {
+      if (data.time === null) return deps.onAudioClock?.(null);
+      const { time, rate, at } = data;
+      if (!isFiniteNumber(time) || !isFiniteNumber(rate) || !isFiniteNumber(at) || rate <= 0)
+        return;
+      deps.onAudioClock?.({ time: Math.max(0, time), rate, at });
+    },
     "set-playback-rate": (data, deps) => {
       const rate = readNumber(data.playbackRate, 1);
       if (rate !== null) deps.onSetPlaybackRate(rate);
@@ -145,6 +217,7 @@ const CONTROL_HANDLERS = new Map<string, ControlHandler>(
     "set-copies-ahead": (data, deps) => deps.onSetCopiesAhead?.(data.on === true),
     "retry-preview-copies": (_d, deps) => deps.onRetryPreviewCopies?.(),
     "request-preview-facts": (_d, deps) => deps.onRequestPreviewFacts?.(),
+    "announce-timeline": (_d, deps) => deps.onAnnounceTimeline?.(),
     "set-root-duration": (data, deps) => {
       const durationSeconds = readNumber(data.durationSeconds, 0);
       if (durationSeconds !== null) deps.onSetRootDuration(durationSeconds);
@@ -162,6 +235,7 @@ const CONTROL_HANDLERS = new Map<string, ControlHandler>(
     "enable-pick-mode": (_d, deps) => deps.onEnablePickMode(),
     "disable-pick-mode": (_d, deps) => deps.onDisablePickMode(),
     "flash-elements": (data) => handleFlashElements(data),
+    "scrub-audio": dispatchScrubAudio,
     "set-runtime-data": (data, deps) => {
       if (typeof data.channel === "string")
         deps.onSetRuntimeData?.(data.channel, data.payload, data.requestId);
@@ -215,6 +289,10 @@ function handleFlashElements(data: BridgeControlData): void {
   flashElements(selectors, duration);
 }
 
+function isActionTakenHere(action: unknown): action is string {
+  return typeof action === "string" && (!forAnotherSite() || ANOTHER_SITE_DRIVES.has(action));
+}
+
 export function installRuntimeControlBridge(deps: BridgeDeps): (event: MessageEvent) => void {
   const handler = (event: MessageEvent) => {
     if (event.source !== window.parent && event.source !== window) return;
@@ -222,7 +300,7 @@ export function installRuntimeControlBridge(deps: BridgeDeps): (event: MessageEv
     if (!data || data.source !== "hf-parent" || data.type !== "control") return;
     if (rejectUnsupportedProtocol(data)) return;
     const action = data.action;
-    if (typeof action !== "string") return;
+    if (!isActionTakenHere(action)) return;
     const fn = CONTROL_HANDLERS.get(action);
     if (fn) fn(data, deps);
   };

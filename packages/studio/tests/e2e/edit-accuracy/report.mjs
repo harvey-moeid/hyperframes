@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { percentile } from "./geometry.mjs";
 
 export const LIMIT_PX = 0.5;
+// Studio saves crop insets to 0.01 px.
+export const CROP_LIMIT_PX = 0.02;
 /** An undo or redo whose file write lands later than this after its key fails the undo check. */
 export const UNDO_WRITE_MAX_MS = 2000;
 const lateUndo = (r) => Math.max(r.undo.ms ?? 0, r.undo.redoMs ?? 0) > UNDO_WRITE_MAX_MS;
@@ -33,6 +35,7 @@ export const METRICS = [
   "css",
   "renderKey",
   "smooth",
+  "crop",
 ];
 
 /** Worst-first value per metric; undo ranks by box distance, and its byte failures are counted apart. */
@@ -49,6 +52,7 @@ const worstValue = {
   renderKey: (r) => r.renderKey ?? 0,
   undo: (r) => Math.max(r.undo.box, r.undo.redoBox ?? 0),
   smooth: (r) => r.smooth.dropped - r.smooth.control.dropped,
+  crop: (r) => r.crop ?? 0,
 };
 
 /** Dropped frames and the worst frame's main-thread ms, from the raw intervals and trace work a case stores. */
@@ -90,12 +94,15 @@ export function score(spec, r) {
     keys: !r.keys || r.keys.pass,
     css: !r.css || r.css.pass,
     renderKey: r.renderKey === undefined || (r.renderKey !== null && r.renderKey <= LIMIT_PX),
+    // Cropped-target cases only: the saved crop is the first one scaled with the box.
+    crop: r.crop === undefined || r.crop <= CROP_LIMIT_PX,
     drop: r.drop <= LIMIT_PX,
     reload: r.reload <= LIMIT_PX,
     render: r.render !== null && r.render <= LIMIT_PX,
     undo:
       !r.undoTimeout &&
       r.undo.groups !== false &&
+      r.undo.listed !== false &&
       r.undo.bytes &&
       r.undo.redoBytes &&
       Math.max(r.undo.box, r.undo.redoBox) <= LIMIT_PX &&
@@ -179,7 +186,7 @@ function table(summary, meta, results) {
     "",
     `Every metric counts except smoothness, which is reported against the blank-page control: ${summary.perMetric.find((m) => m.metric === "smooth").pass}/${summary.total} pass it, and ${summary.passing}/${summary.total} pass everything including it.`,
     "",
-    `Studio ${meta.studio} (build ${meta.build}), bench ${meta.bench}, grid \`${meta.grid}\`, ${meta.date}, ${summary.seconds}s with ${meta.jobs} jobs, ${summary.errors} harness errors, load ${meta.load}.`,
+    `Studio ${meta.studio} (build ${meta.build}), bench ${meta.bench}, grid \`${meta.grid}\`, ${meta.date}, ${summary.seconds}s with ${meta.jobs} jobs, ${summary.errors} harness errors, load ${meta.load}${meta.frames ? `, frames ${meta.frames} (preview in its own process ${meta.previewInOwnProcess}), cpu ${meta.cpu}x` : ""}.`,
     `Pass: tracking, press jump, teleport, drop, reload and render ≤ ${LIMIT_PX} px; undo and redo byte-identical with the box ≤ ${LIMIT_PX} px; no more frames over ${DROPPED_FRAME_MS} ms than the blank-page control, and no frame over ${WORK_MS} ms of main-thread work.`,
     "",
     `Undo or redo left different bytes in ${summary.bytesDiffer.undo} undo and ${summary.bytesDiffer.redo} redo cases.`,
@@ -219,6 +226,7 @@ export function entry(r) {
     ...(r.keys && { keys: r.keys.pass, css: r.css.pass, renderKey: roundUp(r.renderKey ?? null) }),
     drop: roundUp(r.drop),
     reload: roundUp(r.reload),
+    ...(r.crop !== undefined && { crop: roundUp(r.crop) }),
     render: roundUp(r.render),
     undo: r.checks.undo,
     dropped: r.smooth.dropped,

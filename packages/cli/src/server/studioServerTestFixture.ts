@@ -29,12 +29,30 @@ export function writeStudioIndexHtml(studioDir: string): void {
 }
 
 /** Pairs with makeStudioServerRoot; `onDone` resets caller-local state (e.g. the `hooks.studioDir` mock target). */
-export function cleanupStudioServerRoot(
-  server: { watcher: { close(): void } },
+export async function cleanupStudioServerRoot(
+  server: { watcher: { close(): void }; shutdown(): Promise<void> },
   root: string,
   onDone?: () => void,
-): void {
+): Promise<void> {
   server.watcher.close();
+  await server.shutdown();
   fs.rmSync(root, { recursive: true, force: true });
   onDone?.();
+}
+
+/** Windows refuses to rename a folder while a file in it is open: waits for the server's history there to finish writing. */
+export async function historyWritesSettled(
+  server: { adapter: { history?: (project: never) => unknown } },
+  projectDir: string,
+): Promise<void> {
+  const project = {
+    dir: projectDir,
+    id: path.basename(projectDir),
+    title: path.basename(projectDir),
+  };
+  const history = (await server.adapter.history?.(project as never)) as {
+    flush(): Promise<void>;
+  } | null;
+  if (!history) throw new Error(`No history is open for ${projectDir} to wait for`);
+  await history.flush();
 }

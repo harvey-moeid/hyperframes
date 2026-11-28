@@ -1,6 +1,9 @@
 // The HyperFrames plan and credits the signed-in account holds, and the web pages that change them.
 import { randomUUID } from "node:crypto";
-import { resolveCloudAuthHeaders, resolveCloudBaseUrl } from "../cloud/auth.js";
+import { AuthClient } from "../auth/client.js";
+import { persistFreshOAuth, startAuthorizationCodeFlow } from "../auth/oauth.js";
+import { envCredentialVar, resolveCredential } from "../auth/resolver.js";
+import { refreshIfNeeded, resolveCloudAuthHeaders, resolveCloudBaseUrl } from "../cloud/auth.js";
 import { trackBillingCheckoutReturnRefused } from "../telemetry/events.js";
 import { normalizeSkillSlug } from "../telemetry/skill.js";
 import { readProjectConfig } from "../utils/projectConfig.js";
@@ -74,6 +77,10 @@ export async function readPlan(stop?: AbortSignal): Promise<Plan | null> {
 const webBase = () => "https://hyperframes.studio";
 const plansUrl = () => process.env["HYPERFRAMES_PLANS_URL"] || `${webBase()}/pricing`;
 const creditsUrl = () => process.env["HYPERFRAMES_CREDITS_URL"] || `${webBase()}/pricing`;
+const manageUrl = () => process.env["HYPERFRAMES_BILLING_URL"] || `${webBase()}/billing`;
+const PAGES = { plans: plansUrl, credits: creditsUrl, manage: manageUrl };
+
+export const MANAGE_LABEL = "Manage or cancel your plan:";
 
 async function signedInSpace(): Promise<string | undefined> {
   try {
@@ -90,6 +97,28 @@ async function signedInSpace(): Promise<string | undefined> {
   }
 }
 
+/** Signs in with the person's own space picked; `switching` runs just before the new login is stored. */
+export async function signInToOwnSpace(
+  timeoutMs: number,
+  stop: AbortSignal,
+  switching: () => void,
+): Promise<boolean> {
+  const credential = await refreshIfNeeded(await resolveCredential());
+  if (credential.type !== "oauth" || envCredentialVar(credential.source)) return false;
+  const { username } = await new AuthClient().getCurrentUser(credential);
+  if (!username) return false;
+  const { tokens } = await startAuthorizationCodeFlow({
+    workspaceHint: username,
+    timeoutMs,
+    signal: stop,
+    persist: false,
+  });
+  stop.throwIfAborted();
+  switching();
+  await persistFreshOAuth(tokens);
+  return (await signedInSpace()) === username;
+}
+
 export function checkoutSkill(named?: unknown, projectDir = process.cwd()): string | undefined {
   return normalizeSkillSlug(named) ?? readProjectConfig(projectDir)?.authoringSkill;
 }
@@ -104,9 +133,9 @@ export function cliCheckoutLink(link: string, skill = checkoutSkill()): string {
   return url.toString();
 }
 
-/** A plans or credits page link with what the web side reads, incl. the signed-in `workspace_hint`. */
+/** A plans, credits or plan-management page link with what the web side reads, incl. the signed-in `workspace_hint`. */
 export async function pageUrl(
-  kind: "plans" | "credits",
+  kind: keyof typeof PAGES,
   fields: {
     needed?: number;
     tool?: string;
@@ -116,7 +145,7 @@ export async function pageUrl(
     base?: string;
   } = {},
 ): Promise<string> {
-  const url = new URL(fields.base ?? (kind === "plans" ? plansUrl() : creditsUrl()));
+  const url = new URL(fields.base ?? PAGES[kind]());
   url.searchParams.set("from", "cli");
   url.searchParams.set("utm_source", "cli");
   const skill = checkoutSkill(fields.skill);
@@ -199,7 +228,15 @@ export function stripeCheckoutUrl(value: unknown): string | undefined {
     : undefined;
 }
 
-export type CheckoutFailure = "checkout_unavailable" | "checkout_network" | "checkout_rejected";
+export type CheckoutFailure =
+  | "checkout_unavailable"
+  | "checkout_network"
+  | "checkout_rejected"
+  | "checkout_team_role";
+
+const ROLE_BELOW_ADMIN = 400573;
+const TEAM_ROLE =
+  "Only this team's admin can buy its plan. Run `hyperframes auth login`, pick your own workspace, and try again.";
 
 /** A checkout that could not be opened, tagged with a closed reason for telemetry. */
 export class CheckoutError extends Error {
@@ -284,9 +321,13 @@ async function postCheckout(
   const data = isRecord(reply) && isRecord(reply.data) ? reply.data : reply;
   const url = res.ok && isRecord(data) ? stripeCheckoutUrl(data.url) : undefined;
   if (url) return url;
-  const why =
-    isRecord(reply) && typeof reply.message === "string"
-      ? reply.message.slice(0, 200)
-      : `HTTP ${res.status}`;
-  throw new CheckoutError("checkout_rejected", `HeyGen would not open a checkout: ${why}`);
+  throw checkoutRefusal(res.status, reply);
+}
+
+function checkoutRefusal(status: number, reply: unknown): CheckoutError {
+  const body = isRecord(reply) ? reply : {};
+  if (status === 403 && body.code === ROLE_BELOW_ADMIN)
+    return new CheckoutError("checkout_team_role", TEAM_ROLE);
+  const why = typeof body.message === "string" ? body.message.slice(0, 200) : `HTTP ${status}`;
+  return new CheckoutError("checkout_rejected", `HeyGen would not open a checkout: ${why}`);
 }

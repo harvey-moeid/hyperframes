@@ -16,6 +16,7 @@ import type { GsapAnimation } from "@hyperframes/core/gsap-parser";
 import type { DomEditSelection } from "../components/editor/domEditingTypes";
 import { tryGsapDragIntercept, tryGsapRotationIntercept } from "./gsapRuntimeBridge";
 import { tryGsapResizeIntercept } from "./gsapResizeIntercept";
+import { sealedResizeStartBox } from "../components/editor/resizeStartBox";
 import { computeDraggedGsapPosition, freezeDragStamp } from "./draggedGsapPosition";
 import { whileScriptWrites } from "../player/previewReloading";
 import { readGsapPositionFromIframe } from "./gsapPositionDetection";
@@ -31,7 +32,7 @@ import { logResize, logResizeSettle } from "../utils/resizeDebug";
 import type { MoveCommitOptions } from "../components/editor/domEditOverlayGestures";
 import { runGestureTransaction } from "./gestureTransaction";
 import {
-  editsPlainCss,
+  editsPlainCssSettled,
   hasNonHoldTweenForElement,
   POSITION_CHANNELS,
 } from "./gsapRuntimeKeyframes";
@@ -41,6 +42,7 @@ import { type ElementOffsetStagerDeps } from "./elementOffsetStager";
 import {
   prepareCropResize,
   saveCropResize,
+  gsapResizeLaidOut,
   writeSizeWithCrop,
 } from "../components/editor/cropResize";
 
@@ -150,7 +152,7 @@ export function useGsapAwareEditing({
       modifiers?: MoveCommitOptions,
     ) => {
       const writes = observeGsapGesture(gsapCommitMutation);
-      if (modifiers?.plainTranslate ?? editsPlainCss(selection.element, "move")) {
+      if (modifiers?.plainTranslate ?? (await editsPlainCssSettled(selection.element, "move"))) {
         const result = await stageElementPositionOffset(selection, next, true).save();
         return writes.finish(result?.changed === true);
       }
@@ -211,15 +213,17 @@ export function useGsapAwareEditing({
       next: { width: number; height: number },
       offset?: { x: number; y: number },
       restore: () => void = () => undefined,
-      route?: { plainTranslate: boolean },
+      route?: { plainTranslate: boolean; sizeSavedAsScale?: boolean },
     ) => {
       const writes = observeGsapGesture(gsapCommitMutation);
-      if (route?.plainTranslate ?? editsPlainCss(selection.element, "resize")) {
+      const routed = route?.plainTranslate ?? editsPlainCssSettled(selection.element, "resize");
+      if (typeof routed === "boolean" ? routed : await routed) {
         const result = await handleDomBoxSizeCommit(selection, next, offset, restore);
         return writes.finish(result?.changed === true);
       }
       return whileScriptWrites(async () => {
         const stamp = freezeDragStamp(selection.element);
+        const startBox = sealedResizeStartBox(selection.element);
         let targetAnimations: GsapAnimation[];
         try {
           const ownedAnimations = getGsapAnimationsForSelection(selection);
@@ -249,8 +253,9 @@ export function useGsapAwareEditing({
           animGroups: targetAnimations.map((a) => `${a.propertyGroup}:${a.method}`),
         });
         let anchorMove: ReturnType<typeof stageElementPositionOffset> | null = null;
-        const stageCrop = prepareCropResize(selection.element);
+        const stageCrop = prepareCropResize(selection.element, startBox);
         let cropUndoKey: string | null = null;
+        let cropSizedTo: { width: number; height: number } | null = null;
         const saveResizeAnchor = async (
           ownsDragOffset: boolean,
           commitMutation: CommitMutation,
@@ -268,7 +273,7 @@ export function useGsapAwareEditing({
             );
             // Saved after the size, under its undo key, so the two are one step.
             await saveMove(dragOutcome, async () => {
-              const plainAfterSettle = editsPlainCss(selection.element, "move");
+              const plainAfterSettle = await editsPlainCssSettled(selection.element, "move");
               anchorMove = writes.drawKeepingUndone(() =>
                 stageElementPositionOffset(selection, offset, plainAfterSettle, coalesceKey),
               );
@@ -312,15 +317,21 @@ export function useGsapAwareEditing({
                   offset,
                   writes.drawKeepingUndone,
                   stamp,
+                  startBox,
                 );
                 assertGsapEditPersisted(outcome);
+                if (route)
+                  route.sizeSavedAsScale = outcome.status === "persisted" && !!outcome.savedAsScale;
                 // Saved before the buffered GSAP writes, so their reload stays the gesture's last render.
                 if (outcome.status === "element-size") {
                   const result = await writes.drawKeepingUndone(() =>
                     handleDomBoxSizeCommit(selection, next, undefined, undefined, coalesceKey),
                   );
                   writes.recordDomResult(result);
-                } else cropUndoKey = coalesceKey;
+                } else {
+                  cropUndoKey = coalesceKey;
+                  cropSizedTo = gsapResizeLaidOut(outcome, next);
+                }
                 // What the resize did, not what its tweens suggest: a scale hold still commits a size.
                 const ownsDragOffset =
                   outcome.status === "persisted" && outcome.ownsDragOffset === true;
@@ -347,7 +358,13 @@ export function useGsapAwareEditing({
             // Only now is the size live for every caller, drag or not.
             if (cropUndoKey) {
               const cropResult = await writes.drawKeepingUndone(() =>
-                saveCropResize(stageCrop, selection, commitPositionPatchToHtml, cropUndoKey!),
+                saveCropResize(
+                  stageCrop,
+                  selection,
+                  commitPositionPatchToHtml,
+                  cropUndoKey!,
+                  cropSizedTo,
+                ),
               );
               writes.recordDomResult(cropResult);
             }
@@ -376,7 +393,11 @@ export function useGsapAwareEditing({
   const handleGsapAwareRotationCommit = useCallback(
     async (selection: DomEditSelection, next: RotationCommit) => {
       const writes = observeGsapGesture(gsapCommitMutation);
-      if (next.plain === undefined ? editsPlainCss(selection.element, "rotate") : next.plain) {
+      const plain =
+        next.plain !== undefined
+          ? next.plain
+          : await editsPlainCssSettled(selection.element, "rotate");
+      if (plain) {
         const result = await handleDomRotationCommit(selection, next);
         return writes.finish(result?.changed === true);
       }

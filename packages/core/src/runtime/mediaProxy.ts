@@ -1,4 +1,5 @@
 import { wallClearInterval, wallSetInterval, wallSetTimeout } from "./wallClock";
+import { runtimeLoad } from "./runtimeLoad";
 import { postRuntimeMessage } from "./bridge";
 import { swallow } from "./diagnostics";
 import {
@@ -15,8 +16,12 @@ import {
   deriveCodecMapKey,
   lookupCodecMapEntry,
   sourceFactsOf,
+  sourceFactsOfSrc,
 } from "./mediaSourceLookup";
+import { naturalVideoSize } from "../mediaDisplaySize";
+import { escapeCssString } from "./editingElement";
 import {
+  authoredSrcOf,
   heldForCopy,
   heldPosters,
   inPointOf,
@@ -46,6 +51,12 @@ import {
   type PreviewSourceFacts,
   wantsLighterCopy,
 } from "../previewProxyBox";
+import {
+  CAPTURE_STILL_ATTR,
+  capturePageIn,
+  captureStillsIn,
+  PREVIEW_FILE_SIZE_ATTR,
+} from "../studioPreviewMark";
 
 /**
  * One entry per project-root-relative asset pathname, injected by the
@@ -127,8 +138,8 @@ function shownScale(): Promise<number | null> {
 
 /** The video's box in device pixels, at least the stage so a later zoom or a clip still hidden fits. */
 function shownBox(el: HTMLMediaElement, scale: number): PreviewProxyBox | null {
-  // object-fit: none shows the source at its own size.
-  if (getComputedStyle(el).objectFit === "none") return null;
+  // These show the file at its own size when it fits, so a smaller copy would show smaller.
+  if (["none", "scale-down"].includes(getComputedStyle(el).objectFit)) return null;
   const rect = el.getBoundingClientRect();
   const stage = document.documentElement;
   const pixels = scale * (window.devicePixelRatio || 1);
@@ -233,7 +244,7 @@ function restoreOriginal(el: HTMLMediaElement): void {
     holdShownFrame(el);
     el.setAttribute("src", original);
   }
-  el.load();
+  runtimeLoad(el);
 }
 
 // Wide enough to stand in for the picture for the moment a swap takes; small enough to encode in a few ms.
@@ -249,7 +260,7 @@ function holdShownFrame(el: HTMLMediaElement): void {
   if (!isVideoElement(el) || heldPosters.has(el)) return;
   const still = stillOf(el);
   if (!still) return;
-  heldPosters.set(el, { poster: el.getAttribute("poster"), since: performance.now() });
+  heldPosters.set(el, { poster: pagePoster(el), since: performance.now() });
   el.setAttribute("poster", still);
   const letGo = () => {
     for (const type of RELEASE_EVENTS) el.removeEventListener(type, release);
@@ -298,8 +309,87 @@ function loadProxy(
   evictMediaSyncState(el);
   restartPlaybackHealth();
   holdShownFrame(el);
+  keepFileSize(el, href, originalSrc);
   el.src = href;
-  el.load();
+  runtimeLoad(el);
+}
+
+// Each size this page pinned, keyed by mark and copy address, so a video given any other file is sized as before.
+// ponytail: rules are never removed; at most one per copy and size this page asked for.
+let copySizes: HTMLStyleElement | null = null;
+const sizeRules = new Set<string>();
+const pinnedSizes = new WeakMap<HTMLMediaElement, { href: string; mark: string }>();
+// Read before a hold or a still lays the box out instead of the file.
+const sizedBeforeCopy = new WeakMap<HTMLMediaElement, boolean>();
+const isCopyAddress = (src: string | null) => /[?&]hf-proxy=/.test(src ?? "");
+
+/** While a smaller copy plays, a video the film leaves unsized keeps the size its file gave it. */
+function keepFileSize(el: HTMLMediaElement, href: string, originalSrc: string): void {
+  const decided = sizedBeforeCopy.get(el);
+  sizedBeforeCopy.delete(el);
+  const size =
+    isVideoElement(el) && (decided ?? sizedByItsFile(el)) ? fileSizeOf(el, originalSrc) : null;
+  if (!size) {
+    pinnedSizes.delete(el);
+    el.removeAttribute(PREVIEW_FILE_SIZE_ATTR);
+    return;
+  }
+  const mark = `${size.width}x${size.height}`;
+  pinnedSizes.set(el, { href, mark });
+  el.setAttribute(PREVIEW_FILE_SIZE_ATTR, mark);
+  const rule =
+    `:where(video[${PREVIEW_FILE_SIZE_ATTR}="${mark}"][src="${escapeCssString(href)}"]) ` +
+    `{ width: ${size.width}px; height: ${size.height}px; flex-shrink: 0; }`;
+  if (sizeRules.has(rule)) return;
+  sizeRules.add(rule);
+  copySizes ??= document.createElement("style");
+  copySizes.textContent += `${rule}\n`;
+  if (!copySizes.isConnected) document.head.appendChild(copySizes);
+}
+
+/** The film leaves the video's size to its file: its content box is the file's own size (300x150 with none). */
+function sizedByItsFile(el: HTMLVideoElement): boolean {
+  if (pinnedSizes.get(el)?.href === el.getAttribute("src")) return true;
+  if (el.getClientRects().length === 0) return false;
+  const style = getComputedStyle(el);
+  const px = (value: string) => parseFloat(value) || 0;
+  const width = el.clientWidth - px(style.paddingLeft) - px(style.paddingRight);
+  const height = el.clientHeight - px(style.paddingTop) - px(style.paddingBottom);
+  const [own, ownHeight] = el.videoWidth ? [el.videoWidth, el.videoHeight] : [300, 150];
+  return Math.abs(width - own) < 1 && Math.abs(height - ownHeight) < 1;
+}
+
+/** The video's box at its file's size: the original's decoded size when it has one, else its facts. */
+function fileSizeOf(
+  el: HTMLVideoElement,
+  originalSrc: string,
+): { width: number; height: number } | null {
+  const pinned = pinnedSizes.get(el);
+  if (pinned?.href === el.getAttribute("src")) {
+    const [width = 0, height = 0] = pinned.mark.split("x").map(Number);
+    return { width, height };
+  }
+  if (!isCopyAddress(el.getAttribute("src")) && el.videoWidth > 0) {
+    return withBoxEdges(el, { width: el.videoWidth, height: el.videoHeight });
+  }
+  const facts = sourceFactsOfSrc(originalSrc);
+  return facts && withBoxEdges(el, naturalVideoSize(facts));
+}
+
+/** A border-box video's size with its padding and border added, so its content box stays `size`. */
+function withBoxEdges(el: HTMLVideoElement, size: { width: number; height: number }) {
+  const style = getComputedStyle(el);
+  if (style.boxSizing !== "border-box") return size;
+  const px = (...values: string[]) =>
+    values.reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+  return {
+    width:
+      size.width +
+      px(style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth),
+    height:
+      size.height +
+      px(style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth),
+  };
 }
 
 /**
@@ -313,11 +403,15 @@ function loadProxy(
  * in media.ts).
  */
 export function isRenderMode(el: HTMLMediaElement): boolean {
-  if (window.__HF_EXPORT_RENDER_SEEK_CONFIG) return true;
+  if ((window as { __HF_EXPORT_RENDER_SEEK_CONFIG?: unknown }).__HF_EXPORT_RENDER_SEEK_CONFIG)
+    return true;
   return isVideoElement(el) && !!findInjectedRenderFrame(el);
 }
 
 const stills = new WeakSet<HTMLMediaElement>();
+// The poster each still put up (its URL, or a sealed frame's data URL), and the hold a sealed fetch belongs to.
+const stillPosters = new WeakMap<HTMLMediaElement, string>();
+const stillHolds = new WeakMap<HTMLMediaElement, object>();
 
 /** While a file the browser cannot play is being copied, its own frame at the playhead stands in as the poster. */
 function showStill(
@@ -325,17 +419,55 @@ function showStill(
   originalSrc: string,
   variant: string,
   box: PreviewProxyBox | null,
+  light: boolean,
 ): void {
   const at = sourceTimeAtPlayhead(el);
   if (at === undefined || stills.has(el) || el.hasAttribute("poster")) return;
-  const url = new URL(appendProxyParam(originalSrc, variant, box), document.baseURI);
+  const url = new URL(appendProxyParam(originalSrc, variant, box, light), document.baseURI);
   url.searchParams.set(PREVIEW_PROXY_STILL_PARAM, at.toFixed(1));
   stills.add(el);
-  el.setAttribute("poster", url.href);
+  if (window.origin !== "null") return putUpStill(el, url.href);
+  // A sealed frame's poster load can wait behind its other loads; its fetch goes out at once.
+  const hold = {};
+  stillHolds.set(el, hold);
+  void fetch(url.href)
+    .then((res) => (res.ok ? dataUrlOf(res) : null))
+    .then((still) => {
+      if (still && stillHolds.get(el) === hold && !el.hasAttribute("poster")) putUpStill(el, still);
+    })
+    .catch((err) => swallow("runtime.mediaProxy.still", err));
+}
+
+// A data URL, like the held frame's own still: nothing to release on any way the clip goes. Encoded natively.
+async function dataUrlOf(res: Response): Promise<string> {
+  const type = res.headers.get("content-type") ?? "image/jpeg";
+  const blob = new Blob([await res.arrayBuffer()], { type });
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function putUpStill(el: HTMLMediaElement, poster: string): void {
+  stillPosters.set(el, poster);
+  el.setAttribute("poster", poster);
+}
+
+/** The poster as the page set it: none while the runtime's own still is up. */
+function pagePoster(el: HTMLMediaElement): string | null {
+  const poster = el.getAttribute("poster");
+  return poster !== null && poster === stillPosters.get(el) ? null : poster;
 }
 
 function dropStill(el: HTMLMediaElement): void {
-  if (stills.delete(el)) el.removeAttribute("poster");
+  if (!stills.delete(el)) return;
+  stillHolds.delete(el);
+  const poster = stillPosters.get(el);
+  stillPosters.delete(el);
+  if (poster === undefined) return;
+  if (el.getAttribute("poster") === poster) el.removeAttribute("poster");
 }
 
 function appendProxyParam(
@@ -394,12 +526,13 @@ function emitUnavailableDiagnostic(
 }
 
 /** Holds `el` with no src while its copy is made (readers still see its file); false with no src to hold. */
-function holdForCopy(el: HTMLMediaElement): boolean {
+function holdForCopy(el: HTMLMediaElement, holdsCaptures = true): boolean {
   const authored = unproxiedSrc(el);
   if (authored === null) return false;
   heldForCopy.set(el, inPointOf(el));
   recordOpenedAtInPoint(el, authored, null);
   stopMediaDownload(el);
+  if (!holdsCaptures) return true;
   holdFrameCaptures(
     new Promise((landed) => {
       el.addEventListener("loadeddata", landed, { once: true });
@@ -407,6 +540,46 @@ function holdForCopy(el: HTMLMediaElement): boolean {
     }),
   );
   return true;
+}
+
+// A file deeper than 8 bits plays only where the browser names its codec at that depth; elsewhere it stays held.
+const DEEP_CODEC_MIME: Record<string, string> = {
+  h264: 'video/mp4; codecs="avc1.6E0028"',
+  hevc: 'video/mp4; codecs="hvc1.2.4.L120.B0"',
+  vp9: 'video/webm; codecs="vp09.02.10.10"',
+  av1: 'video/mp4; codecs="av01.0.08M.10"',
+};
+
+function decodesItsFile(el: HTMLMediaElement, file: string): boolean {
+  const facts = sourceFactsOfSrc(file);
+  if (!facts || facts.bitDepth <= 8) return true;
+  const mime = facts.codec === undefined ? undefined : DEEP_CODEC_MIME[facts.codec];
+  return mime !== undefined && el.canPlayType(mime) !== "";
+}
+
+let playingItsFile: HTMLMediaElement | null = null;
+
+const copyStillComing = (el: HTMLMediaElement) =>
+  el.isConnected && !swappedElements.has(el) && proxyRequested.has(el);
+
+/** Each media tick re-decides a clip whose copy is still being made: the one on screen plays its own file, and every
+ * other, one that played its file and left the screen included, is held, so at most one oversized file decodes. */
+export function decideFileTurn(el: HTMLMediaElement, onScreen: boolean): void {
+  if (el === playingItsFile && !(onScreen && copyStillComing(el))) {
+    playingItsFile = null;
+    if (copyStillComing(el)) holdForCopy(el);
+  }
+  if (playingItsFile && !playingItsFile.isConnected) playingItsFile = null;
+  if (!onScreen || playingItsFile || !heldForCopy.has(el) || el.getAttribute("src") !== null)
+    return;
+  if (captureStills.has(el)) return; // a capture page shows the server's still, never decodes the original
+  const before = heldForCopy.get(el);
+  const src = before ? before.written : authoredSrcOf(el);
+  if (src === null || !decodesItsFile(el, src)) return;
+  playingItsFile = el;
+  heldForCopy.delete(el);
+  recordOpenedAtInPoint(el, before?.authored ?? src, src, before?.holdsWhenIdle);
+  el.setAttribute("src", src);
 }
 
 /** Without a copy (`giveBack` set), a clip held until due stays held; any other gets its src back as the runtime's. */
@@ -446,6 +619,7 @@ async function makeCopy(el: HTMLMediaElement, job: CopyJob, scale: number | null
     if (proxyRequested.get(el) === originalAttr) proxyRequested.delete(el);
     return;
   }
+  if (isVideoElement(el)) sizedBeforeCopy.set(el, sizedByItsFile(el));
   const held = lightFacts && box && isOversizedForPreview(lightFacts, box) && holdForCopy(el);
   const proxiedSrc = appendProxyParam(
     originalSrc,
@@ -462,9 +636,10 @@ async function makeCopy(el: HTMLMediaElement, job: CopyJob, scale: number | null
     (fraction) => noteCopy(el, "making", fraction, light),
     () => isActiveAtPlayhead(el),
     false,
-    light && !held ? undefined : () => showStill(el, originalSrc, variant, box),
+    light && !held ? undefined : () => showStill(el, originalSrc, variant, box, light),
   );
   const wanted = live();
+  if (!served || !wanted) sizedBeforeCopy.delete(el);
   if (held) endCopyHold(el, served && wanted ? null : originalAttr);
   if (!wanted) {
     dropStill(el);
@@ -485,10 +660,35 @@ async function makeCopy(el: HTMLMediaElement, job: CopyJob, scale: number | null
   loadProxy(el, proxiedSrc, originalSrc, variant, box, lightFacts !== undefined);
   // The shown size may have grown while this copy was being made.
   if (displayScale !== null) keepSized(el, displayScale);
-  return new Promise((landed) => {
-    el.addEventListener("loadeddata", landed, { once: true });
-    el.addEventListener("error", landed, { once: true });
-  }).then(() => dropStill(el));
+  return copyLoadEnds(el, proxiedSrc).then(() => dropStill(el));
+}
+
+const ENDS_A_LOAD = ["loadeddata", "error", "abort", "emptied"] as const;
+const leaving = new Map<HTMLMediaElement, () => void>();
+let leavingObserver: MutationObserver | null = null;
+
+/** Settles once the copy draws or fails, the clip loads something else, or it leaves the page. */
+function copyLoadEnds(el: HTMLMediaElement, href: string): Promise<void> {
+  return new Promise((ended) => {
+    const end = (event?: Event) => {
+      const restarted = event?.type === "abort" || event?.type === "emptied";
+      if (restarted && el.getAttribute("src") === href) return;
+      for (const type of ENDS_A_LOAD) el.removeEventListener(type, end);
+      if (leaving.get(el) === end) leaving.delete(el);
+      if (leaving.size === 0) {
+        leavingObserver?.disconnect();
+        leavingObserver = null;
+      }
+      ended();
+    };
+    for (const type of ENDS_A_LOAD) el.addEventListener(type, end);
+    leaving.set(el, end);
+    if (leavingObserver || typeof MutationObserver === "undefined") return;
+    leavingObserver = new MutationObserver(() => {
+      for (const [clip, left] of leaving) if (!clip.isConnected) left();
+    });
+    leavingObserver.observe(document, { childList: true, subtree: true });
+  });
 }
 
 /**
@@ -574,8 +774,76 @@ export function maybeProxyProactively(el: HTMLMediaElement): void {
 
 function lightenIfHeavy(el: HTMLMediaElement, entry: MediaCodecMapEntry | null): void {
   if (swappedElements.has(el) || proxyRequested.has(el)) return;
+  if (capturePageIn(document)) return holdForCaptureStill(el);
   const facts = sourceFactsOf(el);
   if (facts) swapToProxy(el, entry, "light", facts);
+}
+
+// Each held clip's own poster, given back with its file; and the one still ask whose answer counts.
+const captureStills = new WeakMap<HTMLMediaElement, string | null>();
+const stillAsks = new WeakMap<HTMLMediaElement, HTMLImageElement>();
+
+/** At least twice the pixels it is drawn at (#7723's rule), and opaque: a JPEG still has no alpha. */
+function stillStandsIn(el: HTMLMediaElement): boolean {
+  const facts = isVideoElement(el) ? sourceFactsOf(el) : null;
+  if (!facts || facts.hasAlpha || codecEntryOf(el)?.hasAlpha) return false;
+  const box = shownBox(el, 1);
+  return box !== null && isOversizedForPreview(facts, box);
+}
+
+/** On a one-shot capture, such a file is never decoded. */
+function holdForCaptureStill(el: HTMLMediaElement): void {
+  const poster = el.getAttribute("poster");
+  if (captureStillsIn(document) && stillStandsIn(el) && holdForCopy(el, false))
+    captureStills.set(el, poster);
+}
+
+/** Each media pass: such a clip on screen shows the server's frame at the playhead; a capture waits for it. */
+export function standInCaptureStill(el: HTMLMediaElement, onScreen: boolean): void {
+  const file = onScreen && captureStills.has(el) ? unproxiedSrc(el) : null;
+  const at = file === null ? undefined : sourceTimeAtPlayhead(el);
+  if (file === null || at === undefined) return;
+  const url = new URL(
+    appendProxyParam(file, copyVariant(codecEntryOf(el)), shownBox(el, 1), true),
+    document.baseURI,
+  );
+  url.searchParams.set(PREVIEW_PROXY_STILL_PARAM, at.toFixed(3));
+  if (el.getAttribute("poster") === url.href) return;
+  el.setAttribute("poster", url.href);
+  el.removeAttribute(CAPTURE_STILL_ATTR);
+  const drawn = new Image();
+  stillAsks.set(el, drawn);
+  // The page may set its own poster meanwhile: an answer acts only on the poster its own ask put there.
+  const ours = () => stillAsks.get(el) === drawn && el.getAttribute("poster") === url.href;
+  holdFrameCaptures(
+    new Promise<void>((landed) => {
+      drawn.onload = () => {
+        if (ours()) el.setAttribute(CAPTURE_STILL_ATTR, "");
+        landed();
+      };
+      drawn.onerror = () => {
+        if (ours()) decodeItsFile(el, file);
+        landed();
+      };
+    }),
+  );
+  drawn.src = url.href;
+}
+
+/** A frame the server could not cut: the clip decodes its own file, as on any capture page, and the capture waits. */
+function decodeItsFile(el: HTMLMediaElement, file: string): void {
+  const poster = captureStills.get(el);
+  captureStills.delete(el);
+  el.removeAttribute(CAPTURE_STILL_ATTR);
+  if (poster) el.setAttribute("poster", poster);
+  else el.removeAttribute("poster");
+  holdFrameCaptures(
+    new Promise((landed) => {
+      el.addEventListener("loadeddata", landed, { once: true });
+      el.addEventListener("error", landed, { once: true });
+    }),
+  );
+  endCopyHold(el, file);
 }
 
 function applyPreviewQuality(el: HTMLMediaElement): void {

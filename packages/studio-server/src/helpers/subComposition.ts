@@ -1,6 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { parseHTML } from "linkedom";
+import { parseHTML } from "@hyperframes/parsers/linkedom";
+import { firstHtmlTemplate } from "@hyperframes/parsers/sub-composition-validity";
+import { decodedUrlPath } from "@hyperframes/parsers/asset-paths";
 import {
   rewriteAssetPaths,
   rewriteCssAssetUrls,
@@ -8,14 +10,21 @@ import {
 } from "@hyperframes/core";
 import {
   deferScriptsUntilFonts,
+  dropAuthoredCompositionFiles,
   RUNTIME_BOOTSTRAP_ATTR,
   stripEmbeddedRuntimeScripts,
 } from "@hyperframes/core/compiler";
 import { findStartTags, isFullHtmlDocument } from "@hyperframes/core/compiler/html-document";
 import { gsapCdnDist } from "@hyperframes/core/gsap-cdn";
 import { resolveWithinProject } from "@hyperframes/core/safe-path";
+import {
+  assertCompositionFileSize,
+  CompositionExpansionBudget,
+} from "@hyperframes/core/compiler/composition-size-limit";
+import { TIMELINE_REGISTRY_SCRIPT } from "./authoredCode.js";
 import { htmlHasGsapCore, insertGsapCoreBeforeHeadPlugin } from "./gsapCoreScript.js";
 import { withRootPathsRelative } from "./rootPaths.js";
+import { isCompositionPath, isCompositionSource } from "./hfIdPersist.js";
 
 /**
  * Rewrite relative asset paths in a parsed DOM tree. Shared across all
@@ -127,6 +136,8 @@ function extractFullDocumentParts(
   bodyAttrs: string;
 } {
   const { document: doc } = parseHTML(rawHtml);
+  // Its <html> and <body> attributes are copied onto the page as text below, past the content-only drop.
+  dropAuthoredCompositionFiles(doc as unknown as Document);
 
   const rewriteTargets = [doc.head, doc.body].filter(Boolean);
   for (const target of rewriteTargets) {
@@ -160,10 +171,16 @@ function extractFullDocumentParts(
  * renders blank. `querySelector("template")` only ever matches a real element
  * node, so comment text can't fool it.
  */
-function extractTemplateInnerHtml(rawComp: string): string | null {
+function extractTemplate(
+  rawComp: string,
+): { innerHtml: string; compositionId: string | null } | null {
   const { document: doc } = parseHTML(rawComp);
-  const template = doc.querySelector("template");
-  return template ? template.innerHTML : null;
+  const template = firstHtmlTemplate(doc.querySelectorAll("template"));
+  if (!template) return null;
+  return {
+    innerHtml: template.innerHTML,
+    compositionId: template.getAttribute("data-composition-id"),
+  };
 }
 
 /** Attribute values read from the DOM are decoded — re-escape on rebuild or
@@ -207,19 +224,7 @@ const NON_RENDERED_TAGS = new Set(["SCRIPT", "STYLE", "LINK", "META", "TEMPLATE"
  * element (e.g. the id is authored on the root div), so compositions that
  * already render correctly are untouched.
  */
-function promoteTemplateCompositionId(rawComp: string, body: Element): void {
-  // Two-step match instead of one `[^>]*\s…` regex: the single-pattern form
-  // backtracks polynomially on crafted input (CodeQL js/polynomial-redos).
-  // Step 1 grabs each <template …> open tag (linear); step 2 finds the attr
-  // within that short tag text.
-  let templateCompositionId: string | undefined;
-  for (const tag of rawComp.matchAll(/<template\b[^>]*/gi)) {
-    const id = /\bdata-composition-id\s*=\s*["']([^"']+)["']/i.exec(tag[0] ?? "")?.[1];
-    if (id) {
-      templateCompositionId = id;
-      break;
-    }
-  }
+function promoteTemplateCompositionId(templateCompositionId: string | null, body: Element): void {
   if (!templateCompositionId) return;
   if (body.querySelector("[data-composition-id]")) return;
 
@@ -322,29 +327,32 @@ export function buildSubCompositionHtml(
   rawOverride?: string,
   gsapBaseUrl?: string,
 ): string | null {
+  if (!isCompositionPath(compPath)) return null;
   const compFile = resolveWithinProject(projectDir, compPath);
   if (!compFile || !existsSync(compFile)) return null;
 
-  // rawOverride lets the preview route thread the hf-id-stamped content in
-  // directly, so the build uses ids minted from the raw file, which is never
-  // written by serving.
-  const rawComp = rawOverride ?? readFileSync(compFile, "utf-8");
+  // rawOverride is the preview route's hf-id-stamped content, so the build uses ids minted from the
+  // raw file, which serving never writes. Stamping parses and rewrites the page, so the file's own
+  // text decides whether it is a composition.
+  const fileText = readFileSync(compFile, "utf-8");
+  if (!isCompositionSource(fileText)) return null;
+  const rawComp = rawOverride ?? fileText;
 
   let compHeadContent = "";
   let rewrittenContent: string;
   let htmlAttrs = "";
   let bodyAttrs = "";
 
-  const templateInner = extractTemplateInnerHtml(rawComp);
+  const template = extractTemplate(rawComp);
 
-  if (templateInner != null) {
+  if (template) {
     const { document: contentDoc } = parseHTML(
-      `<!DOCTYPE html><html><head></head><body>${templateInner}</body></html>`,
+      `<!DOCTYPE html><html><head></head><body>${template.innerHtml}</body></html>`,
     );
     rewriteRelativePaths(contentDoc, compPath, projectDir);
     fixDigitLeadingIdSelectors(contentDoc);
-    promoteTemplateCompositionId(rawComp, contentDoc.body);
-    rewrittenContent = contentDoc.body.innerHTML || templateInner;
+    promoteTemplateCompositionId(template.compositionId, contentDoc.body);
+    rewrittenContent = contentDoc.body.innerHTML || template.innerHtml;
   } else if (isFullHtmlDocument(rawComp)) {
     const parts = extractFullDocumentParts(rawComp, compPath, projectDir);
     compHeadContent = parts.headContent;
@@ -370,6 +378,8 @@ export function buildSubCompositionHtml(
     `<!DOCTYPE html><html><head></head><body>${rewrittenContent}</body></html>`,
   );
   deferScriptsUntilFonts(scriptsDoc as unknown as Document);
+  chargeMountsTheBrowserFetches(projectDir, scriptsDoc as unknown as Document);
+  dropAuthoredCompositionFiles(scriptsDoc as unknown as Document);
   rewrittenContent = scriptsDoc.body.innerHTML;
 
   // The comp's root carries data-composition-id but (unlike inlined sub-comps,
@@ -423,10 +433,36 @@ ${htmlOpen}
 ${headContent}
 </head>
 ${bodyOpen}
-<script>window.__timelines=window.__timelines||{};</script>
+${TIMELINE_REGISTRY_SCRIPT}
 ${rewrittenContent}
 </body>
 </html>`;
+}
+
+function mountedFileBytes(projectDir: string, src: string): number {
+  const file = resolveWithinProject(projectDir, decodedUrlPath(src));
+  if (!file) return 0;
+  assertCompositionFileSize(file, src);
+  try {
+    const stats = statSync(file);
+    return stats.isFile() ? stats.size : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function chargeMountsTheBrowserFetches(projectDir: string, doc: Document): void {
+  const budget = new CompositionExpansionBudget();
+  const bytesBySrc = new Map<string, number>();
+  for (const host of doc.querySelectorAll("[data-composition-src]")) {
+    const src = host.getAttribute("data-composition-src") ?? "";
+    let bytes = bytesBySrc.get(src);
+    if (bytes === undefined) {
+      bytes = mountedFileBytes(projectDir, src);
+      bytesBySrc.set(src, bytes);
+    }
+    budget.charge(src, bytes);
+  }
 }
 
 /** True for a real `<base>` element; the text "<base" inside a script or comment does not count. */

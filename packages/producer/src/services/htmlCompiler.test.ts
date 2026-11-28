@@ -1,13 +1,22 @@
 // fallow-ignore-file code-duplication
-import { describe, expect, it, mock, beforeAll } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { runInThisContext } from "node:vm";
 import { parseHTML } from "linkedom";
 import { interpolateVolumeGain } from "@hyperframes/core/media-volume-envelope";
 import { redactTelemetryString } from "@hyperframes/core";
+import { _clearGoogleFontCssCacheForTests } from "@hyperframes/core/fonts/embed";
 import { defaultLogger } from "../logger.js";
 import { NotMediaPayloadError, _setDownloadFetchForTests } from "@hyperframes/engine";
 import {
@@ -292,6 +301,20 @@ describe("collectExternalAssets", () => {
     const result = collectExternalAssets(html, projectDir);
     expect(result.externalAssets.size).toBe(0);
     expect(result.html).toBe(html); // unchanged
+  });
+
+  it("leaves out a private project file named by a path spelled outside the project", () => {
+    const alias = `${projectDir}-alias`;
+    symlinkSync(projectDir, alias);
+    mkdirSync(join(projectDir, ".git"), { recursive: true });
+    writeFileSync(join(projectDir, ".git", "clip.png"), "fake-private");
+    const warnings: string[] = [];
+    const log = { ...defaultLogger, warn: (message: string) => warnings.push(message) };
+    const html = `<html><body><img src="../project-alias/.git/clip.png"><img src="../project-alias/logo.png"></body></html>`;
+    const result = collectExternalAssets(html, projectDir, log);
+    rmSync(alias, { force: true });
+    expect([...result.externalAssets.values()]).toEqual([join(alias, "logo.png")]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("collects and rewrites assets outside projectDir via src attribute", () => {
@@ -664,8 +687,8 @@ describe("inlineExternalScripts", () => {
         <script src="https://cdn.example.com/gsap.min.js"></script>
       </body></html>`;
       const result = await inlineExternalScripts(html);
-      // Both identical script tags should be fetched and replaced independently.
-      expect(fetchCount).toBe(2);
+      // The URL is fetched once and both tags are replaced.
+      expect(fetchCount).toBe(1);
       expect(
         result.match(/\/\* inlined: https:\/\/cdn\.example\.com\/gsap\.min\.js \*\//g)?.length,
       ).toBe(2);
@@ -1432,6 +1455,71 @@ describe("detectAncestorBackgroundImage", () => {
     expect(detectAncestorBackgroundImage(wrap("html, body { background: #0d1117; }"))).toBe(false);
   });
 
+  it("checks 5,000 background rules against a 50,000-element page in one pass", () => {
+    // Main matched each selector against the whole page: about 9 s for this one.
+    const css = Array.from(
+      { length: 5_000 },
+      (_, i) => `.c${i} div { background-image: url(x.png); }`,
+    ).join("\n");
+    const page = wrap(css, "", "<div></div>".repeat(50_000));
+    const started = performance.now();
+    expect(detectAncestorBackgroundImage(page)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("answers yes for a root nested deeper than any real page, without matching", () => {
+    const deep = `${"<div>".repeat(300)}<div data-composition-id="main"></div>${"</div>".repeat(300)}`;
+    const html = `<html><head><style>.x { background-image: url(x.png); }</style></head><body>${deep}</body></html>`;
+    expect(detectAncestorBackgroundImage(html)).toBe(true);
+  });
+
+  it("answers yes once background rules would take over 100,000 selector checks", () => {
+    // 3 ancestors (wrapper, body, html): 40,000 selectors is 120,000 checks.
+    const css = Array.from({ length: 40_000 }, (_, i) => `.c${i}`).join(",");
+    const html =
+      `<html><head><style>${css} { background-image: url(x.png); }</style></head>` +
+      '<body><div><div data-composition-id="main"></div></div></body></html>';
+    expect(detectAncestorBackgroundImage(html)).toBe(true);
+    const fewer = html.replace(css, Array.from({ length: 30_000 }, (_, i) => `.c${i}`).join(","));
+    expect(detectAncestorBackgroundImage(fewer)).toBe(false);
+  });
+
+  it("decides :has() rules without letting one match scan the page", () => {
+    // Main ran each :has() over the whole 50,000-element page per ancestor; stripped, it widens to a yes.
+    const css = Array.from(
+      { length: 1_000 },
+      (_, i) => `:has(.n${i}) { background-image: url(x.png); }`,
+    );
+    const page = wrap(css.join("\n"), "", "<i></i>".repeat(50_000));
+    const started = performance.now();
+    expect(detectAncestorBackgroundImage(page)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("still reads combinators exactly and pseudo parts only widening", () => {
+    const page = (css: string) =>
+      `<html><head><style>${css} { background-image: url(x.png); }</style></head><body>` +
+      '<div class="page"><div class="mid"><div class="wrap">' +
+      '<div data-composition-id="main"><div class="tile card"></div></div></div></div></div></body></html>';
+    expect(detectAncestorBackgroundImage(page(".page .wrap"))).toBe(true);
+    expect(detectAncestorBackgroundImage(page(".mid > .wrap"))).toBe(true);
+    expect(detectAncestorBackgroundImage(page(".page > .wrap"))).toBe(false);
+    expect(detectAncestorBackgroundImage(page(".tile::before, .card:hover"))).toBe(false);
+    expect(detectAncestorBackgroundImage(page(":is(.a, .b) .tile"))).toBe(false);
+    expect(detectAncestorBackgroundImage(page(".other ~ .wrap"))).toBe(true);
+    expect(detectAncestorBackgroundImage(page('.page[data-x="a]b"] .wrap:not(.z)'))).toBe(false);
+    expect(detectAncestorBackgroundImage(page(".page:not(.z"))).toBe(true);
+  });
+
+  it("reads CSS escapes in a wrapper's selector, hex escapes with their closing space included", () => {
+    const page = (css: string, cls: string) =>
+      `<html><head><style>${css} { background-image: url(x.png); }</style></head><body>` +
+      `<div class="${cls}"><div data-composition-id="main"></div></div></body></html>`;
+    expect(detectAncestorBackgroundImage(page(".\\31 23", "123"))).toBe(true);
+    expect(detectAncestorBackgroundImage(page(".md\\:bg", "md:bg"))).toBe(true);
+    expect(detectAncestorBackgroundImage(page(".\\31 23 .x", "123"))).toBe(false);
+  });
+
   it("returns false without a composition root", () => {
     expect(
       detectAncestorBackgroundImage(
@@ -1472,6 +1560,32 @@ describe("detectShaderTransitionUsage", () => {
 });
 
 describe("system-primary font normalization", () => {
+  // Google Fonts answers from a stub and a fresh cache, so a cold cache never waits on the network.
+  const FACE = "https://fonts.gstatic.com/s/stub/face.woff2";
+  let restore = () => {};
+  beforeEach(() => {
+    const previousFetch = globalThis.fetch;
+    const previousCacheDir = process.env.HYPERFRAMES_FONT_CACHE_DIR;
+    process.env.HYPERFRAMES_FONT_CACHE_DIR = mkdtempSync(join(tmpdir(), "hf-font-cache-"));
+    _clearGoogleFontCssCacheForTests();
+    globalThis.fetch = (async (input: unknown) => {
+      const url = new URL(String(input));
+      if (url.href === FACE) return new Response(new Uint8Array(64));
+      if (url.hostname !== "fonts.googleapis.com") throw new TypeError(`offline: ${url.href}`);
+      const family = (url.searchParams.get("family") ?? "").split(":")[0];
+      return new Response(
+        `@font-face { font-family: '${family}'; src: url(${FACE}) format('woff2'); }`,
+      );
+    }) as unknown as typeof fetch;
+    restore = () => {
+      _clearGoogleFontCssCacheForTests();
+      globalThis.fetch = previousFetch;
+      if (previousCacheDir === undefined) delete process.env.HYPERFRAMES_FONT_CACHE_DIR;
+      else process.env.HYPERFRAMES_FONT_CACHE_DIR = previousCacheDir;
+    };
+  });
+  afterEach(() => restore());
+
   it("promotes Inter before system/generic primary stacks before distributed plan validation", async () => {
     const projectDir = mkdtempSync(join(tmpdir(), "hf-system-primary-font-"));
     writeFileSync(
@@ -2625,6 +2739,51 @@ h1 { font-size: 2rem; }`;
     }
   });
 
+  // fails without the fix: the embed looked for _remote_media/ in the project, logged ENOENT and kept the file URL.
+  it("inlines a downloaded remote font as a data URI instead of warning it is missing", async () => {
+    const font = readFileSync(
+      join(
+        import.meta.dirname,
+        "../../../../docs/public/catalog/items/frost-sequence-camera-orbit/assets/fonts/Geist-Regular.ttf",
+      ),
+    );
+    stubDownloadFetch.fetch = async () => new Response(font, { status: 200 });
+    const projectDir = mkdtempSync(join(tmpdir(), "hf-remote-font-embed-"));
+    const downloadDir = mkdtempSync(join(tmpdir(), "hf-remote-font-dl-"));
+    writeFileSync(
+      join(projectDir, "index.html"),
+      `<!DOCTYPE html>
+<html><head><style>
+  @font-face { font-family: "Remote"; src: url("https://fonts.example.com/remote.ttf"); }
+</style></head><body>
+  <div data-composition-id="root" data-width="640" data-height="360" data-duration="1">Text</div>
+</body></html>`,
+    );
+    const originalWarn = defaultLogger.warn;
+    const warnings: string[] = [];
+    defaultLogger.warn = (message) => {
+      warnings.push(message);
+    };
+    try {
+      const { html } = await compileForRender(
+        projectDir,
+        join(projectDir, "index.html"),
+        downloadDir,
+      );
+      const inlined = html.match(/data:font\/ttf;base64,([A-Za-z0-9+/=]+)/)?.[1] ?? "";
+      expect(Buffer.from(inlined, "base64").equals(font)).toBe(true);
+      expect(html).not.toContain('url("_remote_media/');
+      expect(warnings.filter((message) => message.includes("Could not embed local font"))).toEqual(
+        [],
+      );
+    } finally {
+      defaultLogger.warn = originalWarn;
+      _setDownloadFetchForTests();
+      rmSync(projectDir, { recursive: true, force: true });
+      rmSync(downloadDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps <link> tag when external stylesheet fetch fails (graceful degradation)", async () => {
     const STYLESHEET_URL = "https://down.example.com/fonts.css";
     stubDownloadFetch.fetch = async () => new Response(null, { status: 503 });
@@ -3100,6 +3259,37 @@ describe("sub-composition variable injection (render path, #2064)", () => {
     expect(compiled.html).toContain('"card-1":{"color":"#000000"}');
   });
 
+  it("renders without the data-composition-file marks the entry file authored", async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), "hf-entry-file-marks-"));
+    mkdirSync(join(projectDir, "compositions"), { recursive: true });
+    writeFileSync(
+      join(projectDir, "compositions", "card.html"),
+      `<div data-composition-id="card" data-width="320" data-height="240"><p id="inside">in</p></div>`,
+    );
+    writeFileSync(
+      join(projectDir, "index.html"),
+      `<!DOCTYPE html>
+<html>
+  <body>
+    <div id="root" data-composition-id="host" data-start="0" data-duration="3" data-width="640" data-height="240">
+      <p id="claim" data-composition-file="compositions/card.html">claim</p>
+      <div data-composition-id="card" data-composition-src="compositions/card.html" data-start="0" data-duration="3"></div>
+    </div>
+  </body>
+</html>`,
+    );
+    const compiled = await compileForRender(projectDir, join(projectDir, "index.html"), projectDir);
+    const { document } = parseHTML(compiled.html);
+    const fileOf = (id: string) =>
+      document
+        .getElementById(id)
+        ?.closest("[data-composition-file]")
+        ?.getAttribute("data-composition-file") ?? null;
+
+    expect(fileOf("claim")).toBeNull();
+    expect(fileOf("inside")).toBe("compositions/card.html");
+  });
+
   it("scopes per-instance values when one sub-comp is mounted multiple times (template reuse)", async () => {
     // #2066 fixed the single-instance case but left a preview/render divergence:
     // two mounts of the SAME sub-comp (same authored data-composition-id) with
@@ -3446,6 +3636,33 @@ describe("compileForRender non-media payload sniff (STUDIO-5433)", () => {
       rmSync(projectDir, { recursive: true, force: true });
     },
   );
+
+  it("never probes a private project file named by a path spelled outside the project", async () => {
+    const projectDir = writeProject("<!--media-->");
+    const alias = `${projectDir}-alias`;
+    symlinkSync(projectDir, alias);
+    const src = join(alias, ".git", "clip.mp4");
+    writeFileSync(
+      join(projectDir, "index.html"),
+      readFileSync(join(projectDir, "index.html"), "utf8").replace(
+        "<!--media-->",
+        `<video id="v1" src="${src}" data-start="0" muted></video>`,
+      ),
+    );
+    mkdirSync(join(projectDir, ".git"), { recursive: true });
+    writeFileSync(src, readFileSync(join(projectDir, "assets", "nested.html")));
+    const warnings: string[] = [];
+    const log = { ...defaultLogger, warn: (message: string) => warnings.push(message) };
+
+    await compileForRender(projectDir, join(projectDir, "index.html"), projectDir, {
+      log,
+      allowOutsideProjectAssets: true,
+    });
+
+    expect(warnings.join("\n")).not.toContain("text document");
+    rmSync(alias, { force: true });
+    rmSync(projectDir, { recursive: true, force: true });
+  });
 });
 
 describe("duplicate media ids across nested compositions", () => {

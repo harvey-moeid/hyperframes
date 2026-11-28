@@ -11,6 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer, isIP, type AddressInfo } from "node:net";
+import { publicRequest } from "@hyperframes/engine/public-network";
 import type { RegistryItem, RegistryManifest } from "@hyperframes/core";
 import { lintHyperframeHtml } from "@hyperframes/lint";
 import type { RunAddResult } from "./add.js";
@@ -45,6 +47,19 @@ vi.mock("../registry/publication.js", async (importOriginal) => {
         throw new Error(`could not write ${args[1]}`);
       return actual.publishRegistryFile(...args);
     },
+  };
+});
+
+// The stubbed fetch stands in for public hosts; a numeric host meets the real public-address check.
+vi.mock("@hyperframes/engine/public-network", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@hyperframes/engine/public-network")>();
+  return {
+    ...actual,
+    publicRequest: vi.fn((url: string | URL, init?: RequestInit) =>
+      isIP(new URL(url).hostname)
+        ? actual.publicRequest(url, init)
+        : fetch(url, { ...init, redirect: "manual" }),
+    ),
   };
 });
 
@@ -306,6 +321,15 @@ describe("add command pure helpers", () => {
         ),
       ).toBe("templated");
       expect(compositionRootId(`<div>no root</div>`)).toBeUndefined();
+    });
+
+    // fails without the fix: an SVG element named template came first and has no content.
+    it("reads the root inside the HTML template after an SVG element named template", () => {
+      expect(
+        compositionRootId(
+          `<svg><template></template></svg><template id="t"><div data-composition-id="templated"></div></template>`,
+        ),
+      ).toBe("templated");
     });
 
     it("gives the block host the composition id that check requires", async () => {
@@ -606,6 +630,43 @@ describe("add command run() — several names", () => {
     expect(existsSync(join(dir, "compositions", "deprecated-block.html"))).toBe(true);
   });
 
+  it("prints a deprecation note from the registry with control characters escaped", async () => {
+    // Built rather than written: a literal control character in the source is a lint error.
+    const esc = String.fromCharCode(27);
+    const note = DEPRECATED_BLOCK_ITEM.deprecated;
+    DEPRECATED_BLOCK_ITEM.deprecated = `gone${esc}]52;c;cA==${String.fromCharCode(7)}`;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await runWrapped(["deprecated-block", "--dir", dir, "--no-clipboard"]);
+    } finally {
+      DEPRECATED_BLOCK_ITEM.deprecated = note;
+    }
+
+    const printed = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(printed.replace(new RegExp(`${esc}\\[[0-9;]*m`, "g"), "")).not.toContain(esc);
+    expect(printed).toContain("is deprecated: gone\\x1b]52;c;cA==\\x07");
+  });
+
+  // fails without the fix: a name the registry does not have is repeated as it was typed.
+  it("shows control characters in a skipped name as text", async () => {
+    const esc = String.fromCharCode(27);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await expect(
+      runWrapped(["my-block", `no-${esc}[2Jsuch\x07`, "--dir", dir, "--no-clipboard"]),
+    ).rejects.toMatchObject({ result: { exitCode: 1 } });
+
+    const printed = log.mock.calls
+      .map((call) => call.join(" "))
+      .join("\n")
+      .replace(new RegExp(`${esc}\\[[0-9;]*m`, "g"), "");
+    expect(printed).toContain("✓ my-block");
+    expect(printed).toContain("✗ no-\\x1b[2Jsuch\\x07 (skipped: ");
+    expect(printed).not.toContain(esc);
+    expect(printed).not.toContain("\x07");
+  });
+
   it("keeps the installs that worked when one name is unknown, and fails the call", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -842,6 +903,51 @@ describe("installs from the registry a received hyperframes.json names", () => {
     const staged = stagePublishFiles(project, Infinity, () => {});
     expect([...staged.keys()].filter((key) => key.startsWith("_ext/"))).toEqual([]);
   });
+
+  // fails without the fix: a received registry's file was fetched from whatever host its manifest named
+  it.each(["directly", "through a redirect"])(
+    "reaches no private address %s for a received registry, and writes nothing",
+    async (how) => {
+      let connections = 0;
+      const server = createServer((socket) => {
+        connections += 1;
+        socket.destroy();
+      });
+      await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+      const internal = `https://127.0.0.1:${(server.address() as AddressInfo).port}/secret`;
+      const base = uniqueBase();
+      writeConfig(base);
+      receive(["hyperframes.json"]);
+      const fileUrl = how === "directly" ? internal : `${base}/redirect`;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string | URL) => {
+          const url = new URL(input);
+          if (url.pathname.endsWith("/registry.json")) return Response.json(MANIFEST);
+          if (url.pathname.endsWith("/blocks/my-block/registry-item.json"))
+            return Response.json({
+              ...BLOCK_ITEM,
+              files: [{ ...BLOCK_ITEM.files[0]!, url: fileUrl }],
+            });
+          if (url.pathname.endsWith("/redirect"))
+            return new Response(null, { status: 302, headers: { location: internal } });
+          return new Response("internal answer");
+        }),
+      );
+      try {
+        await expect(
+          runAdd({ name: "my-block", projectDir: dir, skipClipboard: true }),
+        ).rejects.toThrow("not a public address");
+        expect(connections).toBe(0);
+        expect(existsSync(join(dir, "compositions"))).toBe(false);
+        expect(vi.mocked(publicRequest).mock.calls.map(([url]) => String(url))).toContain(
+          `${base}/registry.json`,
+        );
+      } finally {
+        server.close();
+      }
+    },
+  );
 
   it("lists what an install by tag writes", async () => {
     writeConfig(uniqueBase());

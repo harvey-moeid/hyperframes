@@ -1,15 +1,17 @@
 import { buildProjectApiPath } from "../../utils/projectRouting";
 import { forwardRef, useEffect, useRef, useState } from "react";
-import { isLottieAnimationLoaded } from "@hyperframes/core/runtime/lottie-readiness";
 import { installAcceleratedCanvasTracker } from "@hyperframes/core/page-motion-blur";
 import { useMountEffect } from "../../hooks/useMountEffect";
 import { applyPreviewVariablesToUrl } from "../../hooks/previewVariablesStore";
 import { HyperframesLoader } from "../../components/ui";
 import { usePlayerStore } from "../store/playerStore";
-import { announcePreviewDocumentLoaded } from "../sceneSwap";
+import { announcePreviewDocumentLoaded, announcePreviewPromoted } from "../sceneSwap";
+import { handFrameToRef, hideWhileLoading, staleTokenSwap } from "./playerSwap";
 import type { IframeWindow } from "../lib/playbackTypes";
 import { watchPreviewFrame } from "../lib/bridgePlayback";
-import { previewUnderFrameToken } from "../lib/frameToken";
+import { previewUnderFrameToken, underCurrentFrameToken } from "../lib/frameToken";
+import { retirePreviewEditingClient, watchStudioNavigations } from "../lib/previewChannel";
+import { type AssetWaitState, waitForPreviewAssets } from "./previewAssetWait";
 // Importing "@hyperframes/player" registers a class extending HTMLElement at
 // module load, which throws under SSR, hence the dynamic import behind a
 // `typeof window` guard. Kicking it here rather than in the mount effect puts
@@ -53,9 +55,6 @@ interface HyperframesPlayerElement extends HTMLElement {
   painted?: boolean;
 }
 
-const MEDIA_HAVE_FUTURE_DATA = 3;
-const MEDIA_NETWORK_NO_SOURCE = 3;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -98,54 +97,15 @@ function enableInteractiveIframe(player: HyperframesPlayerElement): void {
 const studioDraws = (wait: boolean, loadingUi: PlayerProps["loadingUi"]) =>
   wait && loadingUi !== "host";
 
-function isPreviewMediaElement(el: Element): el is HTMLMediaElement {
-  const tagName = el.tagName.toLowerCase();
-  return tagName === "video" || tagName === "audio";
-}
-
-// Assets are considered ready when every `<video>`/`<audio>` has enough data
-// to play through without buffering, and every registered Lottie animation has
-// finished loading.
-//
-// Returns whichever value was returned last on cross-origin / transient DOM
-// races so a brief access failure (e.g. an iframe that just swapped src)
-// doesn't flicker the overlay state — we keep showing whatever was most
-// recently true.
-export function hasUnloadedAssets(iframe: HTMLIFrameElement, lastResult: boolean): boolean {
-  try {
-    const win = iframe.contentWindow as unknown as (Window & { __hfLottie?: unknown[] }) | null;
-    const doc = iframe.contentDocument;
-    if (!win || !doc) return lastResult;
-
-    for (const el of doc.querySelectorAll("video, audio")) {
-      if (
-        isPreviewMediaElement(el) &&
-        !el.error &&
-        el.networkState !== MEDIA_NETWORK_NO_SOURCE &&
-        el.readyState < MEDIA_HAVE_FUTURE_DATA
-      ) {
-        return true;
-      }
-    }
-
-    const lotties = win.__hfLottie;
-    if (lotties?.length) {
-      for (const anim of lotties) {
-        if (!isLottieAnimationLoaded(anim)) return true;
-      }
-    }
-
-    return false;
-  } catch {
-    return lastResult;
-  }
-}
-
-async function playerSrc(previewSource: string, opaque: boolean): Promise<string> {
+async function playerSrc(
+  previewSource: string,
+  opaque: boolean,
+  onStale: (fresh: string) => void,
+): Promise<string> {
   const url = new URL(previewSource, window.location.origin);
   applyPreviewVariablesToUrl(url);
   const src = url.pathname + url.search;
-  return opaque ? previewUnderFrameToken(src) : src;
+  return opaque ? previewUnderFrameToken(src, onStale) : src;
 }
 
 const runtimeBootedIn = (iframe: HTMLIFrameElement) =>
@@ -194,7 +154,7 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
     const onPreviewErrorRef = useRef(onPreviewError);
     onPreviewErrorRef.current = onPreviewError;
     const [loaded, setLoaded] = useState(false);
-    const [assetsLoading, setAssetsLoading] = useState(false);
+    const [assetsLoading, setAssetsLoading] = useState<AssetWaitState>(false);
     const [assetOverlayVisible, setAssetOverlayVisible] = useState(false);
     const [assetOverlayFading, setAssetOverlayFading] = useState(false);
     const [assetWaitLong, setAssetWaitLong] = useState(false);
@@ -224,186 +184,217 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
       const previewSource =
         directUrl || (projectId ? buildProjectApiPath(projectId, "/preview") : null);
       if (!previewSource) return;
+      // The Studio server puts the runtime in every page it answers a project preview frame with; a direct URL may be any page.
+      const carriesRuntime = !directUrl;
 
       let canceled = false;
       let cleanup: (() => void) | undefined;
+      let replacement: (() => void) | null = null;
 
       const opaque = host.sandboxOrigin === "opaque";
 
-      void Promise.all([loadPlayerModule(), playerSrc(previewSource, opaque)]).then(([, src]) => {
-        if (canceled) return;
+      const swap = staleTokenSwap(() => canceled);
+      const source = playerSrc(previewSource, opaque, swap.onStale);
 
-        // Create the web component imperatively to avoid JSX custom-element typing.
-        const player = document.createElement("hyperframes-player") as HyperframesPlayerElement;
-        const retryPreview = () => {
-          retryCountRef.current += 1;
-          const retryUrl = new URL(src, window.location.origin);
-          retryUrl.searchParams.set("_hfStudioRetry", String(retryCountRef.current));
-          setPreviewError(null);
-          setCompositionLoading(true);
+      void Promise.all([loadPlayerModule(), source]).then(([, primed]) => {
+        if (canceled) return;
+        let shownIframe: HTMLIFrameElement | null = null;
+        // A new player loads beside the shown one and takes its place once loaded, as a shadow reload does.
+        const remount = (src: string, retrying = false) => {
+          if (canceled) return;
+          replacement?.();
+          const retired = { iframe: shownIframe, unmount: cleanup };
+          const unmount = mount(src, retrying, (live) => {
+            retired.unmount?.();
+            cleanup = unmount;
+            replacement = null;
+            shownIframe = live;
+            if (retired.iframe) announcePreviewPromoted({ retired: retired.iframe, live });
+          });
+          replacement = unmount;
+        };
+        const mount = (
+          src: string,
+          retrying: boolean,
+          takeOver?: (live: HTMLIFrameElement) => void,
+        ): (() => void) => {
+          // Create the web component imperatively to avoid JSX custom-element typing.
+          const player = document.createElement("hyperframes-player") as HyperframesPlayerElement;
+          const retryPreview = () => {
+            retryCountRef.current += 1;
+            const attempt = retryCountRef.current;
+            setPreviewError(null);
+            setCompositionLoading(true);
+            const load = (current: string) => {
+              const retryUrl = new URL(current, window.location.origin);
+              retryUrl.searchParams.set("_hfStudioRetry", String(attempt));
+              remount(retryUrl.pathname + retryUrl.search, true);
+            };
+            const askAgain = () => underCurrentFrameToken(swap.src(primed));
+            swap.retry(primed, load, opaque ? askAgain : undefined);
+          };
+          retryPreviewRef.current = retryPreview;
+          const iframe = player.iframeElement;
+          const stopWatchingLoads = watchStudioNavigations(iframe);
+          const preventToggle = (e: Event) => e.stopImmediatePropagation();
+          const handleShaderTransitionState = (event: Event) => {
+            const loading = getShaderTransitionLoading(event);
+            if (loading !== null) setShaderTransitionLoading(loading);
+          };
+          let loadedDocument: Document | null = null;
+          const handleReady = () => {
+            setPreviewError(null);
+            setCompositionLoading(false);
+            if (iframe.contentDocument && runtimeBootedIn(iframe)) handleLoad();
+          };
+          const handlePainted = () => {
+            setPainted(true);
+            onPainted?.({ iframe, startedAt: loadStartedAtRef.current, loadId: loadIdRef.current });
+          };
+          const handleError = (event: Event) => {
+            const message = readPreviewErrorMessage(event);
+            onPreviewErrorRef.current?.(message);
+            setPreviewError(message);
+            setCompositionLoading(false);
+          };
+          let takeOverOnLoad =
+            takeOver &&
+            (() => {
+              hideWhileLoading(player, false);
+              handFrameToRef(ref, iframe);
+              takeOver(iframe);
+            });
+          const handleLoad = () => {
+            takeOverOnLoad?.();
+            takeOverOnLoad = undefined;
+            const doc = iframe.contentDocument;
+            if (doc && doc === loadedDocument) return;
+            loadedDocument = doc;
+            loadCountRef.current++;
+            setLoaded(true);
+            setPreviewError(null);
+            setShaderTransitionLoading(false);
+            setCompositionLoading(!player.ready);
+            setPainted(Boolean(player.painted));
+            // Reveal animation on reload (hot-reload, composition switch)
+            if (loadCountRef.current > 1) {
+              container.classList.remove("preview-revealing");
+              void container.offsetWidth;
+              container.classList.add("preview-revealing");
+              const onEnd = () => container.classList.remove("preview-revealing");
+              container.addEventListener("animationend", onEnd, { once: true });
+            }
+            onLoadRef.current();
+            announcePreviewDocumentLoaded(iframe);
+
+            // Show a loading overlay until every `<video>`/`<audio>` and Lottie
+            // asset is ready. Without this users can click play before audio has
+            // buffered — the runtime is resilient (queued play() resolves once
+            // data arrives), but the overlay communicates why the first frame
+            // or first audio beat may lag.
+            //
+            // Skip the overlay on subsequent loads (content refreshes via
+            // refreshPlayer). The browser has already cached the assets from
+            // the first load, so they resolve near-instantly and the overlay
+            // just creates a disruptive flash.
+            //
+            // Poll with a 10 s safety cap (100 ticks × 100 ms). If the cap
+            // trips we hide the overlay so the UI doesn't appear stuck forever,
+            // but we log a debug warning so the case is diagnosable — a long
+            // cold video or a broken asset can legitimately exceed 10 s on a
+            // slow network.
+            if (assetPollRef.current) clearInterval(assetPollRef.current);
+            assetPollRef.current = null;
+            const load = loadCountRef.current;
+            waitForPreviewAssets(iframe, {
+              refresh: load > 1,
+              pollRef: assetPollRef,
+              isCurrent: () => loadCountRef.current === load,
+              setLoading: setAssetsLoading,
+            });
+          };
+
+          // Attach lifecycle listeners before assigning src or connecting the
+          // custom element. A warm local iframe can otherwise finish before
+          // Studio observes its load and never initialize the timeline.
+          iframe.addEventListener("load", handleLoad);
+          player.addEventListener("click", preventToggle, { capture: true });
+          player.addEventListener("shadertransitionstate", handleShaderTransitionState);
+          player.addEventListener("ready", handleReady);
+          player.addEventListener("painted", handlePainted);
+          player.addEventListener("error", handleError);
+
+          // Sealed before the ref (useTimelinePlayer's bridge) sees the frame, never unsealed: a host may seal it too.
+          if (opaque) player.toggleAttribute("sandbox-origin", true);
+          if (opaque && carriesRuntime) player.toggleAttribute("src-carries-runtime", true);
+          if (!takeOver) {
+            shownIframe = iframe;
+            handFrameToRef(ref, iframe);
+          }
+
+          player.setAttribute("shader-capture-scale", "1");
+          player.setAttribute("shader-loading", "player");
+          player.setAttribute("low-power-idle", "");
+          player.toggleAttribute("no-load-timeout", noLoadTimeout === true && !retrying);
+          player.setAttribute("width", String(portrait ? 1080 : 1920));
+          player.setAttribute("height", String(portrait ? 1920 : 1080));
+          player.style.width = "100%";
+          player.style.height = "100%";
+          player.style.display = "block";
+          player.style.background = "transparent";
           loadStartedAtRef.current = performance.now();
           loadIdRef.current += 1;
-          player.removeAttribute("no-load-timeout");
-          player.setAttribute("src", retryUrl.pathname + retryUrl.search);
-        };
-        retryPreviewRef.current = retryPreview;
-        const iframe = player.iframeElement;
-        const preventToggle = (e: Event) => e.stopImmediatePropagation();
-        const handleShaderTransitionState = (event: Event) => {
-          const loading = getShaderTransitionLoading(event);
-          if (loading !== null) setShaderTransitionLoading(loading);
-        };
-        let loadedDocument: Document | null = null;
-        const handleReady = () => {
-          setPreviewError(null);
-          setCompositionLoading(false);
-          if (iframe.contentDocument && runtimeBootedIn(iframe)) handleLoad();
-        };
-        const handlePainted = () => {
-          setPainted(true);
-          onPainted?.({ iframe, startedAt: loadStartedAtRef.current, loadId: loadIdRef.current });
-        };
-        const handleError = (event: Event) => {
-          const message = readPreviewErrorMessage(event);
-          onPreviewErrorRef.current?.(message);
-          setPreviewError(message);
-          setCompositionLoading(false);
-        };
-        const handleLoad = () => {
-          const doc = iframe.contentDocument;
-          if (doc && doc === loadedDocument) return;
-          loadedDocument = doc;
-          loadCountRef.current++;
-          setLoaded(true);
-          setPreviewError(null);
-          setShaderTransitionLoading(false);
-          setCompositionLoading(!player.ready);
-          setPainted(Boolean(player.painted));
-          // Reveal animation on reload (hot-reload, composition switch)
-          if (loadCountRef.current > 1) {
-            container.classList.remove("preview-revealing");
-            void container.offsetWidth;
-            container.classList.add("preview-revealing");
-            const onEnd = () => container.classList.remove("preview-revealing");
-            container.addEventListener("animationend", onEnd, { once: true });
-          }
-          onLoadRef.current();
-          announcePreviewDocumentLoaded(iframe);
+          player.setAttribute("src", src);
+          hideWhileLoading(player, !!takeOver);
+          container.appendChild(player);
+          watchPreviewFrame(iframe);
 
-          // Show a loading overlay until every `<video>`/`<audio>` and Lottie
-          // asset is ready. Without this users can click play before audio has
-          // buffered — the runtime is resilient (queued play() resolves once
-          // data arrives), but the overlay communicates why the first frame
-          // or first audio beat may lag.
-          //
-          // Skip the overlay on subsequent loads (content refreshes via
-          // refreshPlayer). The browser has already cached the assets from
-          // the first load, so they resolve near-instantly and the overlay
-          // just creates a disruptive flash.
-          //
-          // Poll with a 10 s safety cap (100 ticks × 100 ms). If the cap
-          // trips we hide the overlay so the UI doesn't appear stuck forever,
-          // but we log a debug warning so the case is diagnosable — a long
-          // cold video or a broken asset can legitimately exceed 10 s on a
-          // slow network.
-          if (assetPollRef.current) clearInterval(assetPollRef.current);
-          const isContentRefresh = loadCountRef.current > 1;
-          let lastUnloaded = isContentRefresh ? false : hasUnloadedAssets(iframe, false);
-          if (lastUnloaded) {
-            setAssetsLoading(true);
-            let attempts = 0;
-            assetPollRef.current = setInterval(() => {
-              attempts += 1;
-              lastUnloaded = hasUnloadedAssets(iframe, lastUnloaded);
-              if (!lastUnloaded || attempts > 100) {
-                if (lastUnloaded && attempts > 100) {
-                  console.debug(
-                    "[studio] asset readiness poll hit the 10s cap, continuing with unloaded assets",
-                  );
-                }
-                if (assetPollRef.current) clearInterval(assetPollRef.current);
-                assetPollRef.current = null;
-                setAssetsLoading(false);
+          enableInteractiveIframe(player);
+
+          const unmount = () => {
+            iframe.removeEventListener("load", handleLoad);
+            player.removeEventListener("click", preventToggle, { capture: true });
+            player.removeEventListener("shadertransitionstate", handleShaderTransitionState);
+            player.removeEventListener("ready", handleReady);
+            player.removeEventListener("painted", handlePainted);
+            player.removeEventListener("error", handleError);
+            if (assetPollRef.current) clearInterval(assetPollRef.current);
+            assetPollRef.current = null;
+            retirePreviewEditingClient(iframe);
+            stopWatchingLoads();
+            // `remove()` rather than `container.removeChild(player)`: by the time
+            // this cleanup runs the element may already be detached — React can
+            // re-render the container, a crossfade refresh can swap it, or a
+            // translation/extension can reparent it. `removeChild` then throws
+            // NotFoundError, which the error boundary turns into a full-screen
+            // "Something went wrong". `remove()` is a no-op when already detached.
+            player.remove();
+            if (retryPreviewRef.current === retryPreview) retryPreviewRef.current = null;
+            // Clear the forwarded ref only if it still points to THIS iframe.
+            // During crossfade refreshes the retiring Player unmounts after the
+            // new Player has already assigned its iframe to the same ref — blindly
+            // nulling it would break seeking in the new Player.
+            // Callback refs are left alone: a shadow reload's promotion repoints
+            // the live frame without calling them, so a null here would wipe it.
+            // Their owners check `isConnected` instead (useShadowPreviewReload).
+            if (typeof ref === "function") {
+              // no-op
+            } else if (ref) {
+              const mutableRef = ref as React.MutableRefObject<HTMLIFrameElement | null>;
+              if (mutableRef.current === iframe) {
+                mutableRef.current = null;
               }
-            }, 100);
-          } else {
-            setAssetsLoading(false);
-          }
-        };
-
-        // Attach lifecycle listeners before assigning src or connecting the
-        // custom element. A warm local iframe can otherwise finish before
-        // Studio observes its load and never initialize the timeline.
-        iframe.addEventListener("load", handleLoad);
-        player.addEventListener("click", preventToggle, { capture: true });
-        player.addEventListener("shadertransitionstate", handleShaderTransitionState);
-        player.addEventListener("ready", handleReady);
-        player.addEventListener("painted", handlePainted);
-        player.addEventListener("error", handleError);
-
-        // Sealed before the ref (useTimelinePlayer's bridge) sees the frame, never unsealed: a host may seal it too.
-        if (opaque) player.toggleAttribute("sandbox-origin", true);
-        if (typeof ref === "function") {
-          ref(iframe);
-        } else if (ref) {
-          (ref as React.MutableRefObject<HTMLIFrameElement | null>).current = iframe;
-        }
-
-        player.setAttribute("shader-capture-scale", "1");
-        player.setAttribute("shader-loading", "player");
-        player.setAttribute("low-power-idle", "");
-        player.toggleAttribute("no-load-timeout", noLoadTimeout === true);
-        player.setAttribute("width", String(portrait ? 1080 : 1920));
-        player.setAttribute("height", String(portrait ? 1920 : 1080));
-        player.style.width = "100%";
-        player.style.height = "100%";
-        player.style.display = "block";
-        player.style.background = "transparent";
-        loadStartedAtRef.current = performance.now();
-        loadIdRef.current += 1;
-        player.setAttribute("src", src);
-        container.appendChild(player);
-        watchPreviewFrame(iframe);
-
-        enableInteractiveIframe(player);
-
-        cleanup = () => {
-          iframe.removeEventListener("load", handleLoad);
-          player.removeEventListener("click", preventToggle, { capture: true });
-          player.removeEventListener("shadertransitionstate", handleShaderTransitionState);
-          player.removeEventListener("ready", handleReady);
-          player.removeEventListener("painted", handlePainted);
-          player.removeEventListener("error", handleError);
-          if (assetPollRef.current) clearInterval(assetPollRef.current);
-          assetPollRef.current = null;
-          // `remove()` rather than `container.removeChild(player)`: by the time
-          // this cleanup runs the element may already be detached — React can
-          // re-render the container, a crossfade refresh can swap it, or a
-          // translation/extension can reparent it. `removeChild` then throws
-          // NotFoundError, which the error boundary turns into a full-screen
-          // "Something went wrong". `remove()` is a no-op when already detached.
-          player.remove();
-          if (retryPreviewRef.current === retryPreview) retryPreviewRef.current = null;
-          // Clear the forwarded ref only if it still points to THIS iframe.
-          // During crossfade refreshes the retiring Player unmounts after the
-          // new Player has already assigned its iframe to the same ref — blindly
-          // nulling it would break seeking in the new Player.
-          // Callback refs are left alone: a shadow reload's promotion repoints
-          // the live frame without calling them, so a null here would wipe it.
-          // Their owners check `isConnected` instead (useShadowPreviewReload).
-          if (typeof ref === "function") {
-            // no-op
-          } else if (ref) {
-            const mutableRef = ref as React.MutableRefObject<HTMLIFrameElement | null>;
-            if (mutableRef.current === iframe) {
-              mutableRef.current = null;
             }
-          }
+          };
+          return unmount;
         };
+        cleanup = mount(swap.src(primed), false);
+        swap.show((fresh) => remount(fresh));
       });
 
       return () => {
         canceled = true;
+        replacement?.();
         cleanup?.();
       };
     });
@@ -411,7 +402,7 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
     // Surface a "Continue anyway" escape hatch once the asset wait drags on.
     // eslint-disable-next-line no-restricted-syntax
     useEffect(() => {
-      if (!assetsLoading) {
+      if (assetsLoading !== true) {
         setAssetWaitLong(false);
         return;
       }
@@ -425,7 +416,7 @@ export const Player = forwardRef<HTMLIFrameElement, PlayerProps>(
         assetFadeRef.current = null;
       }
 
-      if (assetsLoading) {
+      if (assetsLoading === true) {
         setAssetOverlayVisible(true);
         setAssetOverlayFading(false);
         return;

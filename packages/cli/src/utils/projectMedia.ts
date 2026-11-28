@@ -5,6 +5,8 @@ import {
   type AudioElement,
   type VideoElement,
 } from "@hyperframes/engine";
+import { resolve } from "node:path";
+import { fromEmptyFolder } from "@hyperframes/parsers/ff-binaries";
 import { loadProducer } from "./producer.js";
 
 /** The render's own media list for a project: what it extracts, probes and mixes. */
@@ -27,9 +29,13 @@ export async function collectProjectMedia(projectDir: string): Promise<ProjectMe
   return { ...producer.collectRenderMedia(html), html };
 }
 
-/** The path the render reads a media `src` from, resolved like render; null for a local file it never opens. */
+export function isRemoteMediaSrc(src: string): boolean {
+  return /^https?:\/\//i.test(src);
+}
+
+/** The local file the render reads a media `src` from, resolved like render; null for a remote source or a local file it never opens. */
 export function mediaPath(src: string, projectDir: string): string | null {
-  if (/^https?:\/\//i.test(src)) return src;
+  if (isRemoteMediaSrc(src)) return null;
   const path = resolveProjectRelativeSrc(src, projectDir, projectDir);
   return assetRootsRefusal(path, [projectDir]) === null ? path : null;
 }
@@ -50,10 +56,11 @@ const PROBE: HeardProbe = {
 
 /** Every clip the render mixes, read as the render reads them (scenes inlined, on the film's clock), each ended where
  * its media runs out if sooner, and left out if it starts past that; a ramped rate or a loop keeps its end. */
-export async function heardClips(
-  projectDir: string,
-  probe: HeardProbe = PROBE,
-): Promise<HeardClip[]> {
+export function heardClips(projectDir: string, probe: HeardProbe = PROBE): Promise<HeardClip[]> {
+  return fromEmptyFolder(() => heardClipsIn(resolve(projectDir), probe));
+}
+
+async function heardClipsIn(projectDir: string, probe: HeardProbe): Promise<HeardClip[]> {
   const { audios } = await collectProjectMedia(projectDir);
   const lengths = new Map<string, Promise<number | null>>();
   const length = (src: string): Promise<number | null> => {

@@ -2,6 +2,11 @@ import type { TimelineRequest } from "../../core/src/runtime/timelineInspection"
 import { withHyperframesBrowserMarker } from "../../core/src/browserMarker";
 import { buildChromeLaunchEnv } from "../../core/src/chromeEnv";
 import {
+  chromeSandboxArgs,
+  chromeSandboxEnabled,
+  launchWithChromeSandboxFallback,
+} from "../../core/src/chromeSandbox";
+import {
   inspectComponents,
   inspectElementMap,
   inspectTimeline,
@@ -30,10 +35,21 @@ import {
   bundleToSingleHtml,
   type BundleScriptProvenance,
 } from "../../core/src/compiler/htmlBundler";
-import { closeServer, isLoopbackHost, servableProjectFile } from "./pageServer";
+import {
+  closeServer,
+  fromAnotherSite,
+  isOwnPageHost,
+  NO_FRAMING_HEADERS,
+  servableProjectFile,
+} from "./pageServer";
+import {
+  PREVIEW_FOR_ANOTHER_SITE_META,
+  serviceWorkerScriptFetch,
+} from "../../core/src/studioPreviewMark";
+import { injectTagsAtHeadStart } from "../../core/src/compiler/htmlDocument";
 import { Sources, fingerprint } from "./sources";
 import type { InspectRequest, Snippet } from "./types";
-import { hyperframesCacheDir } from "../../core/src/cacheDir";
+import { foreignWritablePath, trustedCacheRoot } from "../../core/src/cacheDir";
 import {
   browserProxyArgs,
   createPublicOnlyProfile,
@@ -72,6 +88,39 @@ async function releaseEach(steps: ReadonlyArray<() => unknown>): Promise<void> {
   }
 }
 
+export function inspectorChromeArgs(
+  proxyArgs: readonly string[],
+  sandbox = chromeSandboxEnabled(),
+): string[] {
+  return [
+    ...chromeSandboxArgs(sandbox),
+    "--disable-dev-shm-usage",
+    "--enable-webgl",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    ...proxyArgs,
+  ];
+}
+
+export function launchInspectorChrome(options: {
+  executablePath: string;
+  userDataDir: string;
+  proxyArgs: readonly string[];
+  sandbox?: boolean;
+}): Promise<Browser> {
+  return launchWithChromeSandboxFallback(
+    inspectorChromeArgs(options.proxyArgs, options.sandbox),
+    (args) =>
+      puppeteer.launch({
+        executablePath: options.executablePath,
+        env: buildChromeLaunchEnv(),
+        headless: true,
+        userDataDir: options.userDataDir,
+        args: withHyperframesBrowserMarker(args),
+      }),
+  );
+}
+
 export interface InspectorOptions {
   executablePath?: string;
   idleMs?: number;
@@ -85,7 +134,8 @@ function chromePath() {
       "Set HF_INSPECT_CHROME to an installed Chrome executable; inspection does not download a browser.",
     );
   }
-  const root = hyperframesCacheDir("chrome", "chrome-headless-shell");
+  const cacheRoot = trustedCacheRoot();
+  const root = join(cacheRoot, "chrome", "chrome-headless-shell");
   if (existsSync(root))
     for (const version of readdirSync(root).sort().reverse()) {
       const dir = join(root, version);
@@ -95,7 +145,7 @@ function chromePath() {
           platform,
           process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell",
         );
-        if (existsSync(file)) return file;
+        if (existsSync(file) && !foreignWritablePath(file, cacheRoot)) return file;
       }
     }
   throw new Error(
@@ -147,18 +197,10 @@ export class Inspector {
       const started = await startCaptureProxy();
       proxy = started;
       profile = await createPublicOnlyProfile("hf-inspect-profile-");
-      const browser = await puppeteer.launch({
+      const browser = await launchInspectorChrome({
         executablePath: this.options.executablePath ?? chromePath(),
-        env: buildChromeLaunchEnv(),
-        headless: true,
         userDataDir: profile,
-        args: withHyperframesBrowserMarker([
-          "--disable-dev-shm-usage",
-          "--enable-webgl",
-          "--use-gl=angle",
-          "--use-angle=swiftshader",
-          ...browserProxyArgs(started.url, `127.0.0.1:${address.port}`),
-        ]),
+        proxyArgs: browserProxyArgs(started.url, `127.0.0.1:${address.port}`),
       });
       this.stats.browserStarts++;
       this.host = { browser, server, port: address.port, proxy: started, profile };
@@ -199,18 +241,26 @@ export class Inspector {
     });
     if (fingerprint(this.project) !== digest)
       throw new Error("source_changed_during_load: retry against a stable project");
+    const servedHtml = injectTagsAtHeadStart(
+      html.replace(
+        'data-hyperframes-preview-runtime="1" src=""',
+        'data-hyperframes-preview-runtime="1" src="/__hf-runtime.js"',
+      ),
+      `<meta name="${PREVIEW_FOR_ANOTHER_SITE_META}">`,
+    );
     const serve: PageHandler = (req, res) => {
-      if (!isLoopbackHost(req.headers.host)) return void res.writeHead(403).end();
+      if (!this.host || !isOwnPageHost(req.headers.host, this.host.port))
+        return void res.writeHead(403).end();
+      const { "service-worker": serviceWorker, "sec-fetch-dest": fetchDest } = req.headers;
+      if (serviceWorkerScriptFetch({ serviceWorker, fetchDest }))
+        return void res.writeHead(403).end();
+      if (fromAnotherSite(req.headers["sec-fetch-site"])) return void res.writeHead(403).end();
+      for (const [name, value] of Object.entries(NO_FRAMING_HEADERS)) res.setHeader(name, value);
       try {
         const path = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname);
         if (path === "/" || path === "/index.html") {
           res.setHeader("Content-Type", "text/html");
-          res.end(
-            html.replace(
-              'data-hyperframes-preview-runtime="1" src=""',
-              'data-hyperframes-preview-runtime="1" src="/__hf-runtime.js"',
-            ),
-          );
+          res.end(servedHtml);
           return;
         }
         if (path === "/__hf-runtime.js") {
